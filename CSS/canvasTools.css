@@ -1,0 +1,64 @@
+
+.toolbar {
+    position: absolute;
+    top: 2%;
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    border-radius: 25px;
+    display: flex;
+    justify-content: center; /* Center the icons horizontally */
+    height: 60px;
+    background: #232329;
+    width: 60%;
+    align-items: center;
+}
+
+.toolbar i {
+    font-size: 30px;
+    color: #ffffffad;
+    margin: 0 20px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.toolbar i:hover 
+{
+    background: #343448;
+    padding: 5px 5px;
+    border-radius: 8px;
+    transition: 0.25s;
+}
+
+.toolbar i.selected 
+{
+    background: #444480;
+    padding: 5px 5px;
+    border-radius: 8px;
+    transition: 0.25s;
+}
+
+.stackControls 
+{
+    position: absolute;
+    top: 93%;
+    left: 5%;
+    display: flex;
+    background: #343448;
+    height: 40px;
+    width: 100px;
+    border-radius: 10px;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+.stackControls i 
+{ 
+    color: #fff;
+    font-size: 2em;
+    cursor: pointer;
+}
+.stackControls i.disabled 
+{
+    opacity: 0.4;
+    pointer-events: none;
+}

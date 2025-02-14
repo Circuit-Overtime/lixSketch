@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freehand Drawing</title>
+    <script src="https://unpkg.com/boxicons@2.1.4/dist/boxicons.js"></script>
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="stylesheet" href="/CSS/canvasStroke.css">
+    <link rel="stylesheet" href="/CSS/canvasTools.css">
+    <link rel="stylesheet" href="/CSS/paintbrushSidebar.css">
+    
+</head>
+<body>
+    <div class="container">
+        <div class="paintBrushSideBar hidden" id="paintBrushSideBar">
+            <p class="strokeColorLabel">Stroke Color</p>
+            <div class="strokeColors">
+                <span class="white selected" data-id="#fff"></span>
+                <span class="red" data-id="#FF8383"></span>
+                <span class="green" data-id="#3A994C"></span>
+                <span class="skyBlue" data-id="#56A2E8"></span>
+                <span class="darkYellow" data-id="#FFD700"></span>
+            </div>
+            <p class="strokeThicknessLabel"> Stroke Thickness </p>
+                <div class="strokeThickness">
+                    <span class="thin" data-id="2"> - </span>
+                    <span class="medium selected" data-id="5"> - </span>
+                    <span class="thick" data-id="7"> - </span>
+                </div>
+            
+        </div>
+        <div class="toolbar">
+            <i class='bx bxs-hand' ></i>
+            <i class='bx bxs-pointer'></i>
+            <i class='bx bx-square' ></i>
+            <i class='bx bx-square' style="transform: rotate(45deg);"></i>
+            <i class='bx bx-circle'></i>
+            <i class='bx bx-right-arrow-alt' ></i>
+            <i class='bx bx-dots-horizontal-rounded'></i>
+            <i class='bx bxs-paint selected'></i>
+            <i class='bx bx-text' ></i>
+            <i class='bx bx-image-alt' ></i>
+            <i class='bx bxs-eraser' ></i>
+        </div>
+        <svg id="freehand-canvas">
+            <path />
+        </svg>
+
+        <div class="stackControls">
+            <i class='bx bx-undo' id="undo"></i>
+            <i class='bx bx-redo' id="redo"></i>
+        </div>
+    </div>
+    
+    <script src="JS/sketchGeneric.js"></script>
+    <script src="JS/sketch.js" type="module"></script>
+</body>
+</html>
