@@ -3,7 +3,7 @@
 // --- State Variables ---
 let strokeColor = "#fff";
 let strokeThickness = 2;
-let selectedTool = document.querySelector(".bx-right-arrow-alt");
+let selectedTool = document.querySelector(".bxs-pointer");
 let currentPath = null;
 let points = [];
 let history = [];
@@ -59,7 +59,7 @@ let arrowStartX, arrowStartY;
 let arrowElementGroup = null;
 
 
-let arrowStrokeColor = "#ff00ff";
+let arrowStrokeColor = "#fff";
 let arrowStrokeThickness = 2;
 let arrowOutlineStyle = "solid"; 
 let arrowCurved = false;         
@@ -76,6 +76,20 @@ let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
 let arrowTypeStyleValue = document.querySelectorAll(".arrowTypeStyle");
 let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyleSpan");
 
+
+//selection tool 
+
+let selectedElements = [];  
+let selectionAnchors = [];
+let isDraggingSelected = false;
+let dragStartPoint = null;
+let initialPositions = [];  
+let isBoxSelecting = false;
+let selectionStartPoint = null;
+let selectionRect = null;
+
+
+
 //utils controls 
 const undoButton = document.getElementById("undo");
 const redoButton = document.getElementById("redo");
@@ -90,12 +104,14 @@ const roughGenerator = roughCanvas.generator;
 
 function toolExtraPopup() {
     if (selectedTool.classList.contains("bxs-paint")) {
+        svg.style.cursor = "crosshair"
         paintBrushSideBar.classList.remove("hidden");
         squareSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
     }
     else if (selectedTool.classList.contains("bx-square")) {
+        svg.style.cursor = "crosshair"
         isSquareToolActive = true;
         squareSideBar.classList.remove("hidden");
         paintBrushSideBar.classList.add("hidden");
@@ -104,6 +120,7 @@ function toolExtraPopup() {
     }
     else if(selectedTool.classList.contains("bx-circle"))
     {
+        svg.style.cursor = "crosshair"
         isCircleToolActive = true;
         squareSideBar.classList.add("hidden");
         paintBrushSideBar.classList.add("hidden");
@@ -119,12 +136,22 @@ function toolExtraPopup() {
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.remove("hidden");
     }
+    else if(selectedTool.classList.contains("bxs-pointer"))
+    {
+        svg.style.cursor = "all-scroll";
+        squareSideBar.classList.add("hidden");
+        paintBrushSideBar.classList.add("hidden");
+        circleSideBar.classList.add("hidden");
+        arrowSideBar.classList.add("hidden");
+    }
     else {
+        svg.style.cursor = "crosshair"
         paintBrushSideBar.classList.add("hidden");
         squareSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
     }
+
 }
 
 
@@ -334,7 +361,9 @@ function getSnapPoint(x, y) {
     return arrowHeadElement;
   }
 
-  
+// ===============================================================================================================
+//for selection tool 
+
 
 undoButton.addEventListener("click", undo);
 redoButton.addEventListener("click", redo);

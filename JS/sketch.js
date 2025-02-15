@@ -259,6 +259,9 @@ function handlePointerDown(e) {
       points.push([e.clientX, e.clientY, e.pressure]);
       renderStroke();
     }
+
+
+    
   }
   
   function handlePointerUp(e) {
@@ -297,6 +300,8 @@ function handlePointerDown(e) {
       history.push(currentPath);
       currentPath = null;
     }
+
+    
   
     // Reset points for freehand drawing and clear redo stack
     points = [];

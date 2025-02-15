@@ -31,3 +31,8 @@ path {
     stroke-linejoin: round;
 }
 
+#freehand-canvas g,
+#freehand-canvas path {
+    pointer-events: all;
+    z-index: 1000;
+}   
