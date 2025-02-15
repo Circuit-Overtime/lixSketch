@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="/CSS/canvasTools.css">
     <link rel="stylesheet" href="/CSS/paintbrushSidebar.css">
     <link rel="stylesheet" href="/CSS/squareSidebar.css">
+    <link rel="stylesheet" href="/CSS/arrowSidebar.css">
+    <link rel="stylesheet" href="/CSS/circleSidebar.css">
     
 </head>
 <body>
@@ -32,7 +34,7 @@
             
         </div>
 
-        <div class="squareSideBar" id="squareSideBar">
+        <div class="squareSideBar hidden" id="squareSideBar">
             <p class="squareColorLabel">Square Stroke</p>
             <div class="squareColorsSquare">
                 <span class="squareStrokeSpan white selected" data-id="#fff"></span>
@@ -45,11 +47,11 @@
         
             <p class="squareBackgroundLabel">Square Background</p>
             <div class="squareBackground">
-                <span class="squareBackgroundSpan white selected" data-id="#fff"></span>
-                <span class="squareBackgroundSpan brown" data-id="#5B2D2D"></span>
-                <span class="squareBackgroundSpan darkGreen" data-id="#043B0C"></span>
-                <span class="squareBackgroundSpan darkBlue" data-id="#154163"></span>
-                <span class="squareBackgroundSpan darkOrange" data-id="#362600"></span>
+                <span class="squareBackgroundSpan white selected" data-id="#f0f0f096"></span>
+                <span class="squareBackgroundSpan brown" data-id="#ffcccb96"></span>
+                <span class="squareBackgroundSpan darkGreen" data-id="#90ee9096"></span>
+                <span class="squareBackgroundSpan darkBlue" data-id="#add8e696"></span>
+                <span class="squareBackgroundSpan darkOrange" data-id="#ffffe096"></span>
             </div>
             
             <p class="squareThicknessLabel">Square Thickness</p>
@@ -84,14 +86,108 @@
             </div>
         </div>
 
+        <div class="circleSideBar hidden" id="circleSideBar">
+            <p class="circleColorLabel">Circle Stroke</p>
+            <div class="circleColorscircle">
+                <span class="circleStrokeSpan white selected" data-id="#fff"></span>
+                <span class="circleStrokeSpan red" data-id="#FF8383"></span>
+                <span class="circleStrokeSpan green" data-id="#3A994C"></span>
+                <span class="circleStrokeSpan skyBlue" data-id="#56A2E8"></span>
+                <span class="circleStrokeSpan darkYellow" data-id="#FFD700"></span>
+            </div>
+        
+        
+            <p class="circleBackgroundLabel">Circle Background</p>
+            <div class="circleBackground">
+                <span class="circleBackgroundSpan white selected" data-id="#fff"></span>
+                <span class="circleBackgroundSpan brown" data-id="#5B2D2D"></span>
+                <span class="circleBackgroundSpan darkGreen" data-id="#043B0C"></span>
+                <span class="circleBackgroundSpan darkBlue" data-id="#154163"></span>
+                <span class="circleBackgroundSpan darkOrange" data-id="#362600"></span>
+            </div>
+            
+            <p class="circleThicknessLabel">Circle Outline</p>
+            <div class="circleThickness">
+                <span class="circleStrokeThickSpan thin selected" data-id="2"> - </span>
+                <span class="circleStrokeThickSpan medium " data-id="5"> - </span>
+                <span class="circleStrokeThickSpan thick" data-id="7"> - </span>
+            </div>
+        
+          <p class="circleStyleLabel">Circle Outline Style</p>
+            <div class="circleStyle">
+                <span class="circleOutlineStyle solid selected" data-id="solid"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.167 10h11.666" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></svg> </span>
+                <span class="circleOutlineStyle dashed" data-id="dashed"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="2"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M5 12h2"></path><path d="M17 12h2"></path><path d="M11 12h2"></path></g></svg> </span>
+                <span class="circleOutlineStyle dotted" data-id="dotted"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="2"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 12v.01"></path><path d="M8 12v.01"></path><path d="M12 12v.01"></path><path d="M16 12v.01"></path><path d="M20 12v.01"></path></g></svg> </span>
+            </div> 
+        
+        
+            <p class="circleFillLabel">Circle Fill</p>  
+            <div class="circleFill">
+                <span class="circleFillStyleSpan selected" data-id="hachure">
+                    <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5.879 2.625h8.242a3.254 3.254 0 0 1 3.254 3.254v8.242a3.254 3.254 0 0 1-3.254 3.254H5.88a3.254 3.254 0 0 1-3.254-3.254V5.88a3.254 3.254 0 0 1 3.254-3.254Z" stroke="currentColor" stroke-width="1.25"></path><mask id="FillHachureIcon" maskUnits="userSpaceOnUse" x="2" y="2" width="16" height="16" style="mask-type: alpha;"><path d="M5.879 2.625h8.242a3.254 3.254 0 0 1 3.254 3.254v8.242a3.254 3.254 0 0 1-3.254 3.254H5.88a3.254 3.254 0 0 1-3.254-3.254V5.88a3.254 3.254 0 0 1 3.254-3.254Z" fill="currentColor" stroke="currentColor" stroke-width="1.25"></path></mask><g mask="url(#FillHachureIcon)"><path d="M2.258 15.156 15.156 2.258M7.324 20.222 20.222 7.325m-20.444 5.35L12.675-.222m-8.157 18.34L17.416 5.22" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></g></svg>
+                </span>
+                <span class="circleFillStyleSpan solid" data-id="solid">
+                    <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)"><path d="M4.91 2.625h10.18a2.284 2.284 0 0 1 2.285 2.284v10.182a2.284 2.284 0 0 1-2.284 2.284H4.909a2.284 2.284 0 0 1-2.284-2.284V4.909a2.284 2.284 0 0 1 2.284-2.284Z" stroke="currentColor" stroke-width="1.25"></path></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg>
+                </span>
+                <span class="circleFillStyleSpan dotted" data-id="dots">
+                    <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><defs><pattern id="dotsPattern" patternUnits="userSpaceOnUse" width="4" height="4"><circle cx="2" cy="2" r="0.8" fill="currentColor"></circle></pattern><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs><g clip-path="url(#a)"><path d="M4.91 2.625h10.18a2.284 2.284 0 0 1 2.285 2.284v10.182a2.284 2.284 0 0 1-2.284 2.284H4.909a2.284 2.284 0 0 1-2.284-2.284V4.909a2.284 2.284 0 0 1 2.284-2.284Z" stroke="currentColor" stroke-width="1.25" fill="url(#dotsPattern)"></path></g></svg>
+                </span>
+                <span class="circleFillStyleSpan hatch" data-id="cross-hatch">
+                    <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)"><path d="M5.879 2.625h8.242a3.254 3.254 0 0 1 3.254 3.254v8.242a3.254 3.254 0 0 1-3.254 3.254H5.88a3.254 3.254 0 0 1-3.254-3.254V5.88a3.254 3.254 0 0 1 3.254-3.254Z" stroke="currentColor" stroke-width="1.25"></path><mask id="FillCrossHatchIcon" maskUnits="userSpaceOnUse" x="-1" y="-1" width="22" height="22" style="mask-type: alpha;"><path d="M2.426 15.044 15.044 2.426M7.383 20 20 7.383M0 12.617 12.617 0m-7.98 17.941L17.256 5.324m-2.211 12.25L2.426 4.956M20 12.617 7.383 0m5.234 20L0 7.383m17.941 7.98L5.324 2.745" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></mask><g mask="url(#FillCrossHatchIcon)"><path d="M14.121 2H5.88A3.879 3.879 0 0 0 2 5.879v8.242A3.879 3.879 0 0 0 5.879 18h8.242A3.879 3.879 0 0 0 18 14.121V5.88A3.879 3.879 0 0 0 14.121 2Z" fill="currentColor"></path></g></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg>
+                </span>
+            </div>
+        </div>
+
+        <div class="arrowSideBar" id="arrowSideBar">
+            <div class="arrowHeadLabel">Arrow Head</div>
+            <div class="arrowHead">
+                <span class="arrowHeadStyleSpan default selected" data-id="default"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 40 20" class=""><g transform="" stroke="currentColor" stroke-width="2" fill="none"><path d="M34 10H6M34 10L27 5M34 10L27 15"></path><path d="M27.5 5L34.5 10L27.5 15"></path></g></svg> </span>
+                <span class="arrowHeadStyleSpan square" data-id="square"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 40 20" class=""><g stroke="currentColor" fill="currentColor" transform="" stroke-linejoin="round" stroke-width="2"><path d="M6,9.5H20"></path><path d="M27,5L34,10L27,14L20,9.5Z"></path></g></svg> </span>
+                <span class="arrowHeadStyleSpan outline" data-id="outline"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 40 20" class=""><g stroke="currentColor" fill="none" transform="" stroke-width="2"><path d="M26 10L6 10"></path><circle r="4" transform="matrix(-1 0 0 1 30 10)"></circle></g></svg> </span>
+                <span class="arrowHeadStyleSpan solid" data-id="solid"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 40 20" class=""><g stroke="currentColor" fill="currentColor" transform=""><path d="M32 10L6 10" stroke-width="2"></path><circle r="4" transform="matrix(-1 0 0 1 30 10)"></circle></g></svg> </span>
+            </div>
+
+            <p class="arrowColorLabel">Arrow Stroke</p>
+            <div class="arrowColorsarrow">
+                <span class="arrowStrokeSpan white selected" data-id="#fff"></span>
+                <span class="arrowStrokeSpan red" data-id="#FF8383"></span>
+                <span class="arrowStrokeSpan green" data-id="#3A994C"></span>
+                <span class="arrowStrokeSpan skyBlue" data-id="#56A2E8"></span>
+                <span class="arrowStrokeSpan darkYellow" data-id="#FFD700"></span>
+            </div>
+        
+            
+            <p class="arrowThicknessLabel">Arrow Thickness</p>
+            <div class="arrowThickness">
+                <span class="arrowStrokeThickSpan thin selected" data-id="2"> - </span>
+                <span class="arrowStrokeThickSpan medium " data-id="5"> - </span>
+                <span class="arrowStrokeThickSpan thick" data-id="7"> - </span>
+            </div>
+        
+          <p class="arrowStyleLabel">Arrow Outline Style</p>
+            <div class="arrowStyle">
+                <span class="arrowOutlineStyle solid selected" data-id="solid"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.167 10h11.666" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></svg> </span>
+                <span class="arrowOutlineStyle dashed" data-id="dashed"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="2"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M5 12h2"></path><path d="M17 12h2"></path><path d="M11 12h2"></path></g></svg> </span>
+                <span class="arrowOutlineStyle dotted" data-id="dotted"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="2"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 12v.01"></path><path d="M8 12v.01"></path><path d="M12 12v.01"></path><path d="M16 12v.01"></path><path d="M20 12v.01"></path></g></svg> </span>
+            </div> 
+            
+            <p class="arrowTypeLabel">Arrow Type</p>
+            <div class="arrowType">
+                <span class="arrowTypeStyle straight selected" data-id="false"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M6 18l12 -12"></path><path d="M18 10v-4h-4"></path></g></svg> </span>
+                <span class="arrowTypeStyle freehand" data-id="true"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g><path d="M16,12L20,9L16,6"></path><path d="M6 20c0 -6.075 4.925 -11 11 -11h3"></path></g></svg> </span>
+            </div>
+
+            
+
+        </div>
 
         <div class="toolbar">
             <i class='bx bxs-hand' ></i>
             <i class='bx bxs-pointer'></i>
-            <i class='bx bx-square selected' ></i>
+            <i class='bx bx-square ' ></i>
             <i class='bx bx-square' style="transform: rotate(45deg);"></i>
-            <i class='bx bx-circle'></i>
-            <i class='bx bx-right-arrow-alt' ></i>
+            <i class='bx bx-circle '></i>
+            <i class='bx bx-right-arrow-alt selected' style="transform: rotate(-45deg);" ></i>
             <i class='bx bx-dots-horizontal-rounded'></i>
             <i class='bx bxs-paint'></i>
             <i class='bx bx-text' ></i>
@@ -110,7 +206,9 @@
 
 
     <script src="JS/imports.js" type="module"> </script>
-    <script src="JS/drawSquare.js"></script>
+    <script src="JS/drawSquare.js" defer></script>
+    <script src="JS/drawCircle.js" defer></script>
+    <script src="JS/drawArrow.js" defer></script>
     <script src="JS/canvasStroke.js" defer></script>
     <script src="JS/sketchGeneric.js" defer></script>
     <script src="JS/sketch.js" defer></script>

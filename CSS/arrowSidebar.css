@@ -1,4 +1,4 @@
-.squareSideBar {
+.arrowSideBar {
     position: fixed;
     top: 50%;
     left: 0;
@@ -6,7 +6,7 @@
     width: 250px;
     border-top-right-radius: 25px;
     border-bottom-right-radius: 25px;
-    height: 60%;
+    height: 65%;
     background-color: #232329;
     overflow-x: hidden;
     overflow-y: auto;
@@ -16,7 +16,7 @@
     z-index: 10; /* Added z-index to ensure sidebar is above other elements */
 }
 
-.squareSideBar.hidden {
+.arrowSideBar.hidden {
     opacity: 0;
     transform: translateY(-50%) translateX(-100%); /* Modified transform for a smoother hiding effect */
     pointer-events: none;
@@ -24,62 +24,64 @@
     z-index: -1;
 }
 
-.squareSideBar::-webkit-scrollbar {
+.arrowSideBar::-webkit-scrollbar {
     display: none;
 }
 
 /*  Combined Labels  */
-.squareColorLabel,
-.squareBackgroundLabel,
-.squareThicknessLabel,
-.squareFillLabel,
-.squareStyleLabel {
+.arrowColorLabel,
+.arrowThicknessLabel,
+.arrowStyleLabel,
+.arrowTypeLabel,
+.arrowHeadLabel {
     color: #fff;
     font-size: 20px;
     margin-left: 20px;
     font-family: "Kanit", serif;
     font-weight: 300;
-    margin-top: 10px;
+    margin-top: 0px;
 }
 
 
 /* Combined containers for colors, backgrounds, thickness, and fill */
-.squareColorsSquare,
-.squareBackground,
-.squareThickness,
-.squareFill,
-.squareStyle {
+.arrowColorsarrow,
+.arrowThickness,
+.arrowStyle,
+.arrowType,
+.arrowHead {
     position: relative;
     top: 10px;
     display: flex;
     justify-content: flex-start;
     flex-wrap: wrap;
     height: 40px;
+    margin-bottom: 20px;
     gap: 5px;
+    left: 3%;
     align-items: center; /* Vertically center items */
     padding: 0 10px; /* Add some padding for better spacing */
     box-sizing: border-box; /* Include padding in width calculation */
 }
 
-.squareColorsSquare, .squareBackground, .squareFill {
+.arrowColorsarrow, .arrowBackground, .arrowFill {
     justify-content: flex-start; /* Align items to the start for color options */
 }
 
-.squareThickness, .squareStyle {
+.arrowThickness, .arrowStyle {
      justify-content: left; 
      gap: 10px;
 }
 
 
 /* Combined styles for color, background and fill spans */
-.squareColorsSquare span,
-.squareBackground span,
-.squareFill span {
+.arrowColorsarrow span
+ {
     position: relative;
     width: 30px;
     height: 30px;
     border-radius: 10px;
     margin: 0 5px;
+    margin-bottom: 10px;
     cursor: pointer;
     box-sizing: border-box;
     transition: 0.25s;
@@ -87,31 +89,30 @@
 }
 
 /* Combined selected styles for color background and fill spans */
-.squareColorsSquare span.selected,
-.squareBackground span.selected,
-.squareFill span.selected {
+.arrowColorsarrow span.selected
+ {
     border: 2px solid #3c09d6;
     transform: scale(1.3); /* Using transform instead of scale */
     transition: 0.25s;
 }
 
 /* Color-specific styles */
-.squareColorsSquare span:nth-child(1) { background-color: #fff; }
-.squareColorsSquare span:nth-child(2) { background: #FF8383; }
-.squareColorsSquare span:nth-child(3) { background-color: #3A994C; }
-.squareColorsSquare span:nth-child(4) { background-color: #56A2E8; }
-.squareColorsSquare span:nth-child(5) { background: #FFD700; }
+.arrowColorsarrow span:nth-child(1) { background-color: #fff; }
+.arrowColorsarrow span:nth-child(2) { background: #FF8383; }
+.arrowColorsarrow span:nth-child(3) { background-color: #3A994C; }
+.arrowColorsarrow span:nth-child(4) { background-color: #56A2E8; }
+.arrowColorsarrow span:nth-child(5) { background: #FFD700; }
 
 /* Background-specific styles */
-.squareBackground span:nth-child(1) { background-color: #f0f0f0;  } 
-.squareBackground span:nth-child(2) { background-color: #ffcccb;  } 
-.squareBackground span:nth-child(3) { background-color: #90ee90;  } 
-.squareBackground span:nth-child(4) { background-color: #add8e6;  } 
-.squareBackground span:nth-child(5) { background-color: #ffffe0;  } 
+.arrowBackground span:nth-child(1) { background-color: #fff; }
+.arrowBackground span:nth-child(2) { background-color: #5B2D2D; }
+.arrowBackground span:nth-child(3) { background-color: #043B0C; }
+.arrowBackground span:nth-child(4) { background-color: #154163; }
+.arrowBackground span:nth-child(5) { background-color: #362600; }
 
 
 /* Thickness styles */
-.squareThickness span {
+.arrowThickness span {
     width: 40px;
     height: 40px;
     position: relative;
@@ -129,47 +130,27 @@
     flex-shrink: 0; /* Prevent shrinking */
 }
 
-.squareThickness span.selected {
+.arrowThickness span.selected {
     background: #444480;
     transition: 0.25s;
 }
 
-.squareThickness span:nth-child(1) { font-weight: 100; }
-.squareThickness span:nth-child(2) { font-weight: 500; }
-.squareThickness span:nth-child(3) { font-weight: 700; }
+.arrowThickness span:nth-child(1) { font-weight: 100; }
+.arrowThickness span:nth-child(2) { font-weight: 500; }
+.arrowThickness span:nth-child(3) { font-weight: 700; }
 
 /* Fill styles */
 
 
-
-.squareFill span {
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
-    margin: 0 5px;
-    cursor: pointer;
-    box-sizing: border-box;
-    transition: 0.25s;
-    background: #31303B;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    color: #fff;
-    text-transform: uppercase;
-    flex-shrink: 0; /* Prevent shrinking */
+.arrowStyle
+{
+    gap: 20px;
 }
-
-.squareFill span.selected {
-    background: #444480;
-    transition: 0.25s;
-}
-
 /* Style styles */
-.squareStyle span {
+.arrowStyle span {
     width: 35px;
     height: 35px;
-    left: 5%;
+    left: 10%;
     border-radius: 10px;
     margin: 0; /* Remove left-right margins */
     cursor: pointer;
@@ -183,25 +164,87 @@
     flex-shrink: 0; /* Prevent shrinking */
 }
 
-.squareStyle span.selected {
+.arrowStyle span.selected {
     background: #444480;
     border: 2px solid #3c09d6;
     transition: 0.25s;
     transform: scale(1.1); /* Using transform instead of scale */
 }
 
-.squareStyle span svg {
+.arrowStyle span svg {
     width: 30px;
     height: 30px;
     stroke: #fff;
     transition: 0.25s;
 }
 
-.squareStyle span.selected svg {
+.arrowStyle span.selected svg {
     stroke: #FFD700;
 }
 
-.squareFill .squareFillStyleSpan svg {
-    pointer-events: none;
-  }
-  
+.arrowType 
+{
+    gap: 20px;
+}
+.arrowType span 
+{
+    width: 35px;
+    height: 35px;
+    left: 10%;
+    border-radius: 10px;
+    margin: 0; /* Remove left-right margins */
+    cursor: pointer;
+    color: #fff;
+    background: #31303B;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+    transition: 0.25s;
+    border: 2px solid transparent;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+.arrowType span.selected 
+{
+    background: #444480;
+    border: 2px solid #3c09d6;
+    transition: 0.25s;
+    transform: scale(1.1); 
+}
+.arrowType span svg {
+    width: 30px;
+    height: 30px;
+    stroke: #fff;
+    transition: 0.25s;
+}
+
+.arrowHead 
+{
+    gap: 10px;
+}
+
+.arrowHead span.selected 
+{
+    background: #444480;
+    border: 2px solid #3c09d6;
+    transition: 0.25s;
+    transform: scale(1.1);
+}
+
+.arrowHead span
+{
+    width: 35px;
+    height: 35px;
+    left: 10%;
+    border-radius: 10px;
+    margin: 0; /* Remove left-right margins */
+    cursor: pointer;
+    color: #fff;
+    background: #31303B;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+    transition: 0.25s;
+    border: 2px solid transparent;
+    flex-shrink: 0; /* Prevent shrinking */
+}
