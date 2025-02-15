@@ -14,13 +14,32 @@ let startX, startY;
 let squareElement = null; // Store the drawn square element
 
 // --- DOM Elements ---
-const svg = document.querySelector('svg');
+const svg = document.querySelector('#freehand-canvas');
 const tools = document.querySelectorAll(".toolbar i");
+
+//for paint brush 
 const strokeColors = document.querySelectorAll(".strokeColors span");
 const strokeThicknesses = document.querySelectorAll(".strokeThickness span");
+
+//for square 
+let squareStrokecolor = "#fff";
+let squareBackgroundColor = "#fff";
+let squareFillStyleValue = "hachure";
+let squareStrokeThicknes = 2;
+let squareOutlineStyle = "solid";
+
+const colorOptions = document.querySelectorAll(".squareStrokeSpan");
+const backgroundColorOptions = document.querySelectorAll(".squareBackgroundSpan");
+const fillStyleOptions = document.querySelectorAll(".squareFillStyleSpan");
+const squareStrokeThicknessValue = document.querySelectorAll(".squareStrokeThickSpan");
+const squareOutlineStyleValue = document.querySelectorAll(".squareOutlineStyle");
+
+
+//utils controls 
 const undoButton = document.getElementById("undo");
 const redoButton = document.getElementById("redo");
 const paintBrushSideBar = document.getElementById("paintBrushSideBar");
+const squareSideBar = document.getElementById("squareSideBar");
 
 // --- Rough.js Initialization ---
 const roughCanvas = rough.svg(svg);
@@ -85,13 +104,19 @@ function drawSquare(x, y, width, height) {
 
     const rc = rough.svg(svg);
     const element = rc.rectangle(x, y, width, height, {
-        stroke: strokeColor,
-        strokeWidth: strokeThickness,
-        fill: strokeColor,  // Fill color
-        fillStyle: "zigzag", // Change this to hachure, zigzag, dots, etc.
+        stroke: squareStrokecolor,
+        strokeWidth: squareStrokeThicknes,
+        fill: squareBackgroundColor,  // Fill color
+        fillStyle: squareFillStyleValue, // Change this to hachure, zigzag, dots, etc.
         hachureAngle: 60, // Angle of the hachure lines
         hachureGap: 10 // Space between hachure lines
     });
+
+    if (squareOutlineStyle === "dashed") {
+        element.setAttribute("stroke-dasharray", "10,10");
+    } else if (squareOutlineStyle === "dotted") {
+        element.setAttribute("stroke-dasharray", "2,8");
+    }
 
     squareElement = element;
     svg.appendChild(element);
@@ -129,15 +154,75 @@ function handleToolSelection(event) {
     toolExtraPopup();
 }
 
+// Square Stroke Color Selection
+colorOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        event.stopPropagation(); // Stop event propagation
+        colorOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        squareStrokecolor = span.getAttribute("data-id");
+        console.log("Selected Stroke Color:", squareStrokecolor);
+    });
+});
+
+// Square Background Color Selection
+backgroundColorOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        event.stopPropagation(); // Stop event propagation
+        backgroundColorOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        squareBackgroundColor = span.getAttribute("data-id");
+        console.log("Selected Background Color:", squareBackgroundColor);
+    });
+});
+
+// Square Fill Style Selection
+fillStyleOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        fillStyleOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        squareFillStyleValue = span.getAttribute("data-id");
+        console.log("Selected Fill Style:", squareFillStyleValue);
+        event.stopPropagation()
+    });
+});
+
+// Square Stroke Thickness Selection
+squareStrokeThicknessValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        squareStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        squareStrokeThicknes = parseInt(span.getAttribute("data-id"));
+        console.log("Selected Stroke Thickness:", squareStrokeThicknes);
+        event.stopPropagation()
+    });
+});
+
+// Square Outline Style Selection
+squareOutlineStyleValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        squareOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        squareOutlineStyle = span.getAttribute("data-id");
+        console.log("Selected Outline Style:", squareOutlineStyle);
+        event.stopPropagation()
+    });
+});
+
+
 function toolExtraPopup() {
     if (selectedTool.classList.contains("bxs-paint")) {
         paintBrushSideBar.classList.remove("hidden");
+        squareSideBar.classList.add("hidden");
     }
     else if (selectedTool.classList.contains("bx-square")) {
         isSquareToolActive = true;
+        squareSideBar.classList.remove("hidden");
+        paintBrushSideBar.classList.add("hidden");
     }
     else {
-        paintBrushSideBar.classList.add("hidden"); // Hide when not paintbrush
+        paintBrushSideBar.classList.add("hidden");
+        squareSideBar.classList.add("hidden");
     }
 }
 
@@ -214,6 +299,7 @@ function redo() {
 strokeColors.forEach(stroke => stroke.addEventListener("click", handleStrokeColorSelection));
 strokeThicknesses.forEach(thickness => thickness.addEventListener("click", handleStrokeThicknessSelection));
 tools.forEach(tool => tool.addEventListener("click", handleToolSelection));
+
 
 svg.addEventListener('pointerdown', handlePointerDown);
 svg.addEventListener('pointerup', handlePointerUp);

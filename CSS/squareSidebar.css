@@ -44,7 +44,7 @@
 
 
 /* Combined containers for colors, backgrounds, thickness, and fill */
-.squareColors,
+.squareColorsSquare,
 .squareBackground,
 .squareThickness,
 .squareFill,
@@ -61,7 +61,7 @@
     box-sizing: border-box; /* Include padding in width calculation */
 }
 
-.squareColors, .squareBackground, .squareFill {
+.squareColorsSquare, .squareBackground, .squareFill {
     justify-content: flex-start; /* Align items to the start for color options */
 }
 
@@ -72,7 +72,7 @@
 
 
 /* Combined styles for color, background and fill spans */
-.squareColors span,
+.squareColorsSquare span,
 .squareBackground span,
 .squareFill span {
     position: relative;
@@ -87,7 +87,7 @@
 }
 
 /* Combined selected styles for color background and fill spans */
-.squareColors span.selected,
+.squareColorsSquare span.selected,
 .squareBackground span.selected,
 .squareFill span.selected {
     border: 2px solid #3c09d6;
@@ -96,11 +96,11 @@
 }
 
 /* Color-specific styles */
-.squareColors span:nth-child(1) { background-color: #fff; }
-.squareColors span:nth-child(2) { background: #FF8383; }
-.squareColors span:nth-child(3) { background-color: #3A994C; }
-.squareColors span:nth-child(4) { background-color: #56A2E8; }
-.squareColors span:nth-child(5) { background: #FFD700; }
+.squareColorsSquare span:nth-child(1) { background-color: #fff; }
+.squareColorsSquare span:nth-child(2) { background: #FF8383; }
+.squareColorsSquare span:nth-child(3) { background-color: #3A994C; }
+.squareColorsSquare span:nth-child(4) { background-color: #56A2E8; }
+.squareColorsSquare span:nth-child(5) { background: #FFD700; }
 
 /* Background-specific styles */
 .squareBackground span:nth-child(1) { background-color: #fff; }
@@ -200,3 +200,8 @@
 .squareStyle span.selected svg {
     stroke: #FFD700;
 }
+
+.squareFill .squareFillStyleSpan svg {
+    pointer-events: none;
+  }
+  
