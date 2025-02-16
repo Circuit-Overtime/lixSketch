@@ -3,7 +3,7 @@
 // --- State Variables ---
 let strokeColor = "#fff";
 let strokeThickness = 2;
-let selectedTool = document.querySelector(".bxs-pointer");
+let selectedTool = document.querySelector(".bxs-hand");
 let currentPath = null;
 let points = [];
 let history = [];
@@ -15,6 +15,33 @@ let squareElement = null; // Store the drawn square element
 // --- DOM Elements ---
 const svg = document.querySelector('#freehand-canvas');
 const tools = document.querySelectorAll(".toolbar i");
+
+
+//for the zoom effect 
+let currentZoom = 1;
+const minScale = 0.4;
+const maxScale = 30; 
+const minZoom = 0.4;
+const maxZoom = 30; 
+let currentTranslation = { x: 0, y: 0 }; 
+const freehandCanvas = document.getElementById("freehand-canvas");
+const zoomInBtn = document.getElementById("zoomIn");
+const zoomOutBtn = document.getElementById("zoomOut");
+const zoomPercentSpan = document.getElementById("zoomPercent");
+let currentMatrix = new DOMMatrix();
+let container  = document.querySelector(".container");
+let isPanning = false;
+let panStart = null;
+let startCanvasX, startCanvasY;
+let currentViewBox = {
+  x: 0,
+  y: 0,
+  width: window.innerWidth,
+  height: window.innerHeight
+};
+
+
+
 
 //for paint brush 
 const strokeColors = document.querySelectorAll(".strokeColors span");
@@ -102,6 +129,22 @@ const arrowSideBar = document.getElementById("arrowSideBar");
 const roughCanvas = window.rough.svg(svg);
 const roughGenerator = roughCanvas.generator;
 
+
+
+//click event listener 
+
+document.addEventListener("click", function(event) {
+  const menuIcon = document.getElementById("menuIcon");
+  const menu = document.querySelector(".menu");
+
+  if (event.target === menuIcon) {
+    menu.classList.toggle("hidden");
+  } else {
+    menu.classList.add("hidden");
+  }
+});
+
+
 function toolExtraPopup() {
     if (selectedTool.classList.contains("bxs-paint")) {
         svg.style.cursor = "crosshair"
@@ -139,6 +182,14 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bxs-pointer"))
     {
         svg.style.cursor = "all-scroll";
+        squareSideBar.classList.add("hidden");
+        paintBrushSideBar.classList.add("hidden");
+        circleSideBar.classList.add("hidden");
+        arrowSideBar.classList.add("hidden");
+    }
+    else if(selectedTool.classList.contains("bxs-hand"))
+    {
+        svg.style.cursor = "grab";
         squareSideBar.classList.add("hidden");
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
@@ -363,6 +414,7 @@ function getSnapPoint(x, y) {
 
 // ===============================================================================================================
 //for selection tool 
+
 
 
 undoButton.addEventListener("click", undo);

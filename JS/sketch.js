@@ -186,6 +186,9 @@ arrowOutlineStyleValue.forEach((span) => {
     });
   });
 
+//zoom funtionality 
+
+
 
 // --- Merged Pointer Event Handlers ---
 
@@ -320,9 +323,10 @@ svg.addEventListener('pointerdown', handlePointerDown);
 svg.addEventListener('pointerup', handlePointerUp);
 
 
-
+resizeCanvas();
 // --- Initialization ---
 window.onload = () => {
     toolExtraPopup();
     updateUndoRedoButtons();
+    resizeCanvas();
 };
