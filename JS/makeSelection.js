@@ -73,8 +73,8 @@ function clientToSVG(x, y) {
       // Adding the Resizing
       anchorPositions.forEach(pos => {
           const anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          anchor.setAttribute("cx", pos.x + (pos.type === "ne" || pos.type === "se" ? 10 : 0));
-        anchor.setAttribute("cx", pos.x - (pos.type === "nw" || pos.type === "sw" ? 10 : 0));
+          anchor.setAttribute("cx", pos.x);
+        anchor.setAttribute("cx", pos.x );
         anchor.setAttribute("cy", pos.y);
           anchor.setAttribute("r", 7);
           anchor.setAttribute("stroke", "#7875A6");
@@ -209,7 +209,7 @@ function clientToSVG(x, y) {
       // Apply scaling and keep the origin in the same place
       const initT = anchor.initialTransform;
       const newTransform = `translate(${origin.x}, ${origin.y}) scale(${scaleX}, ${scaleY}) translate(${-origin.x + initT.x}, ${-origin.y + initT.y})`;
-      sel.setAttribute("transform", newTransform);
+      sel.setAttriute("transform", newTransform);
   
       // Update anchors.
       removeSelectionAnchors();

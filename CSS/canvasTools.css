@@ -16,6 +16,7 @@
     overflow-y: auto;
     transition: 0.25s;
     transform-origin: top left;
+    z-index: 1000;
 }
 .menu::-webkit-scrollbar
 {
@@ -127,6 +128,7 @@
     background: #363541;
     transition: .25s;
     cursor: pointer;
+    z-index: 1000;
 }
 .menuIcon:hover 
 {
@@ -263,6 +265,23 @@
     margin: 0 20px;
     cursor: pointer;
     transition: 0.25s;
+}
+
+.toolbar i:hover {
+    font-size: 30px;
+    color: #f259efad;
+    margin: 0 20px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.toolbar ion-icon {
+    font-size: 30px;
+    color: #ffffffad;
+    margin: 0 20px;
+    cursor: pointer;
+    transition: 0.25s;
+    color: #c873e4
 }
 
 .toolbar i:hover 
