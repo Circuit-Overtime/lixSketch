@@ -1,0 +1,12 @@
+@font-face 
+{
+    font-family: "lixFont";
+    src: url(../FONT/lixFont.woff2);
+    font-weight: normal;
+    font-size: normal;
+}
+
+#freehand-canvas textarea 
+{
+    z-index: 100;
+}

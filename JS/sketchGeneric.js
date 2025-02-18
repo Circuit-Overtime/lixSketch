@@ -3,7 +3,7 @@
 // --- State Variables ---
 let strokeColor = "#fff";
 let strokeThickness = 2;
-let selectedTool = document.querySelector(".bxs-hand");
+let selectedTool = document.querySelector(".bx-text");
 let currentPath = null;
 let points = [];
 let history = [];
@@ -18,7 +18,27 @@ const tools = document.querySelectorAll(".toolbar i");
 
 
 //for the zoom effect 
-
+let currentZoom = 1;
+const minScale = 0.4;
+const maxScale = 30; 
+const minZoom = 0.4;
+const maxZoom = 30; 
+let currentTranslation = { x: 0, y: 0 }; 
+const freehandCanvas = document.getElementById("freehand-canvas");
+const zoomInBtn = document.getElementById("zoomIn");
+const zoomOutBtn = document.getElementById("zoomOut");
+const zoomPercentSpan = document.getElementById("zoomPercent");
+let currentMatrix = new DOMMatrix();
+let container  = document.querySelector(".container");
+let isPanning = false;
+let panStart = null;
+let startCanvasX, startCanvasY;
+let currentViewBox = {
+  x: 0,
+  y: 0,
+  width: window.innerWidth,
+  height: window.innerHeight
+};
 
 
 //for paint brush 
@@ -92,6 +112,11 @@ let initialPositions = [];
 let isBoxSelecting = false;
 let selectionStartPoint = null;
 let selectionRect = null;
+isScaling = false;
+
+//for the text tool 
+let isTextToolActive = false;
+let textElements = [];
 
 
 
@@ -172,6 +197,15 @@ function toolExtraPopup() {
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
+    }
+    else if(selectedTool.classList.contains("bx-text"))
+    {
+      isTextToolActive = true;
+      svg.style.cursor = "text";
+      squareSideBar.classList.add("hidden");
+      paintBrushSideBar.classList.add("hidden");
+      circleSideBar.classList.add("hidden");
+      arrowSideBar.classList.add("hidden");
     }
     else {
         svg.style.cursor = "crosshair"

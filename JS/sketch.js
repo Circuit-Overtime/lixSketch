@@ -22,6 +22,7 @@ function handleToolSelection(event) {
     isSquareToolActive = tool.classList.contains("bx-square");
     isCircleToolActive = tool.classList.contains("bx-circle");
     isArrowToolActive = tool.classList.contains("bx-right-arrow-alt");
+    isTextToolActive = tool.classList.contains("bx-text");
     toolExtraPopup();
 }
 
@@ -235,7 +236,8 @@ function handlePointerDown(e) {
       svg.addEventListener("pointermove", handlePointerMove);
     }
   }
-  
+
+
   function handlePointerMove(e) {
 
     if (isArrowToolActive) {

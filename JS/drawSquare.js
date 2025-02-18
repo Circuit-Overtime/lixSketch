@@ -5,12 +5,12 @@ function drawSquare(x, y, width, height) {
       squareElement = null;
   }
 
-  // Adjust drawing coordinates based on current viewBox
-  const adjustedX = x + currentViewBox.x;
-  const adjustedY = y + currentViewBox.y;
+  // Convert drawing coordinates from screen/canvas space to viewBox space.
+  const adjustedX = currentViewBox.x + (x / currentZoom);
+  const adjustedY = currentViewBox.y + (y / currentZoom);
 
   const rc = rough.svg(svg);
-  const shape = rc.rectangle(adjustedX, adjustedY, width, height, {
+  const shape = rc.rectangle(adjustedX, adjustedY, width / currentZoom, height / currentZoom, {
       stroke: squareStrokecolor,
       strokeWidth: squareStrokeThicknes,
       fill: squareBackgroundColor,
@@ -26,12 +26,12 @@ function drawSquare(x, y, width, height) {
   }
 
   // Create a transparent overlay that will cover the entire drawn shape.
-  // We use the same x, y, width and height as the square.
   const overlay = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   overlay.setAttribute("x", adjustedX);
   overlay.setAttribute("y", adjustedY);
-  overlay.setAttribute("width", width);
-  overlay.setAttribute("height", height);
+  // Adjust width and height as well if needed (assuming they should scale)
+  overlay.setAttribute("width", width / currentZoom);
+  overlay.setAttribute("height", height / currentZoom);
   overlay.setAttribute("fill", "rgba(0,0,0,0)"); // Fully transparent
   overlay.style.pointerEvents = "all"; // Capture all pointer events
 
