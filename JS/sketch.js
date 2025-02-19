@@ -187,6 +187,54 @@ arrowOutlineStyleValue.forEach((span) => {
     });
   });
 
+// =======================================================================================
+// for the text
+
+textColorOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        event.stopPropagation(); // Stop event propagation
+        textColorOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        textColor = span.getAttribute("data-id");
+        console.log("Selected Text Color:", textColor);
+    });
+});
+
+textFontOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        textFontOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        textFont = span.getAttribute("data-id");
+        console.log("Selected Text Font:", textFont);
+        event.stopPropagation()
+    });
+});
+
+textSizeOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        textSizeOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        textSize = parseInt(span.getAttribute("data-id"));
+        console.log("Selected Text Size:", textSize);
+        event.stopPropagation()
+    });
+});
+
+textAlignOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        textAlignOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        textAlign = span.getAttribute("data-id");
+        console.log("Selected Text Align:", textAlign);
+        event.stopPropagation()
+    });
+});
+
+
+
+
+
+
 //zoom funtionality 
 
 
@@ -331,4 +379,5 @@ window.onload = () => {
     toolExtraPopup();
     updateUndoRedoButtons();
     resizeCanvas();
+    // document.getElementById("textElement").focus();
 };

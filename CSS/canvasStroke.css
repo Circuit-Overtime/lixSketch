@@ -31,9 +31,17 @@ path {
     stroke-linecap: round;
     stroke-linejoin: round;
 }
-
+#freehand-canvas
+{
+    overflow: hidden;
+    max-height: 100%;
+    max-width: 100%;
+}
 #freehand-canvas g,
 #freehand-canvas path {
     pointer-events: all;
     z-index: 1000;
+
 }   
+
+

@@ -6,7 +6,64 @@
     font-size: normal;
 }
 
-#freehand-canvas textarea 
+@font-face
 {
-    z-index: 100;
+    font-family: 'lixCode';
+    src: url(../FONT/lixCode.ttf);
+    font-weight: normal;
+    font-size: normal;
 }
+
+@font-face
+{
+    font-family: 'lixDefault';
+    src: url(../FONT/lixDefault.ttf);
+    font-weight: normal;
+    font-size: normal;
+}   
+
+@font-face
+{
+    font-family: 'lixFancy';
+    src: url(../FONT/lixFancy.ttf);
+    font-weight: normal;
+    font-size: normal;
+}
+
+#textElement
+{
+    height: 500px;
+    width: auto;
+    resize: none;
+    background: transparent;
+    color: #fff;
+    font-family: 'lixFont', sans-serif;
+    font-size: 30px;
+    border: none;
+    outline: none;
+    overflow: visible;
+    white-space: pre-wrap;  
+}
+#textElement::-webkit-scrollbar
+{
+    display: none;
+}
+
+#freehand-canvas > g 
+{
+    user-select: none;
+ 
+}
+
+
+
+ textarea 
+{
+    resize: none;
+    height: auto;
+}
+textarea::-webkit-scrollbar
+{
+    display: none;
+}
+

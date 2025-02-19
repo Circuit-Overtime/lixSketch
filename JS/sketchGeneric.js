@@ -3,7 +3,7 @@
 // --- State Variables ---
 let strokeColor = "#fff";
 let strokeThickness = 2;
-let selectedTool = document.querySelector(".bx-text");
+let selectedTool = document.querySelector(".bxs-pointer");
 let currentPath = null;
 let points = [];
 let history = [];
@@ -101,22 +101,24 @@ let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
 let arrowTypeStyleValue = document.querySelectorAll(".arrowTypeStyle");
 let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyleSpan");
 
-
-//selection tool 
-
-let selectedElements = [];  
-let selectionAnchors = [];
-let isDraggingSelected = false;
-let dragStartPoint = null;
-let initialPositions = [];  
-let isBoxSelecting = false;
-let selectionStartPoint = null;
-let selectionRect = null;
-isScaling = false;
-
 //for the text tool 
 let isTextToolActive = false;
 let textElements = [];
+let textSize = "30px";
+let textFont = "lixFont";
+let textColor = "#fff";
+let textAlign = "left";
+
+let textColorOptions  = document.querySelectorAll(".textColorSpan");
+let textFontOptions = document.querySelectorAll(".textFontSpan");
+let textSizeOptions = document.querySelectorAll(".textSizeSpan");
+let textAlignOptions = document.querySelectorAll(".textAlignSpan");
+
+
+//selection tool 
+
+
+
 
 
 
@@ -127,6 +129,7 @@ const paintBrushSideBar = document.getElementById("paintBrushSideBar");
 const squareSideBar = document.getElementById("squareSideBar");
 const circleSideBar = document.getElementById("circleSideBar");
 const arrowSideBar = document.getElementById("arrowSideBar");
+const textSideBar = document.getElementById("textSideBar");
 
 // --- Rough.js Initialization ---
 const roughCanvas = window.rough.svg(svg);
@@ -155,6 +158,7 @@ function toolExtraPopup() {
         squareSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
     }
     else if (selectedTool.classList.contains("bx-square")) {
         svg.style.cursor = "crosshair"
@@ -163,6 +167,7 @@ function toolExtraPopup() {
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
     }
     else if(selectedTool.classList.contains("bx-circle"))
     {
@@ -172,6 +177,7 @@ function toolExtraPopup() {
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.remove("hidden");
         arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
         
     }
     else if(selectedTool.classList.contains("bx-right-arrow-alt"))
@@ -181,6 +187,7 @@ function toolExtraPopup() {
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.remove("hidden");
+        textSideBar.classList.add("hidden");
     }
     else if(selectedTool.classList.contains("bxs-pointer"))
     {
@@ -189,6 +196,7 @@ function toolExtraPopup() {
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
     }
     else if(selectedTool.classList.contains("bxs-hand"))
     {
@@ -197,6 +205,7 @@ function toolExtraPopup() {
         paintBrushSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
     }
     else if(selectedTool.classList.contains("bx-text"))
     {
@@ -206,6 +215,8 @@ function toolExtraPopup() {
       paintBrushSideBar.classList.add("hidden");
       circleSideBar.classList.add("hidden");
       arrowSideBar.classList.add("hidden");
+      textSideBar.classList.remove("hidden");
+
     }
     else {
         svg.style.cursor = "crosshair"
@@ -213,6 +224,7 @@ function toolExtraPopup() {
         squareSideBar.classList.add("hidden");
         circleSideBar.classList.add("hidden");
         arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
     }
 
 }
