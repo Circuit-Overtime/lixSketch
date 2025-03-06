@@ -3,7 +3,7 @@
 // --- State Variables ---
 let strokeColor = "#fff";
 let strokeThickness = 2;
-let selectedTool = document.querySelector(".bxs-pointer");
+let selectedTool = document.querySelector(".bxs-eraser");
 let currentPath = null;
 let points = [];
 let history = [];
@@ -120,7 +120,22 @@ let textAlignOptions = document.querySelectorAll(".textAlignSpan");
 
 
 
+//for the laser tool
+let isLaserToolActive = false;
 
+
+//for line tool 
+
+let isDrawingLine = false; // State variable to track if the line drawing is in progress
+let lineStartX = 0;       // Starting X coordinate of the line
+let lineStartY = 0;       // Starting Y coordinate of the line
+let currentLine = null;    // Reference to the current line element being drawn
+let isLineToolSelected = false;
+
+
+//Eraser Tool
+
+let isEraserToolActive  = false;
 
 //utils controls 
 const undoButton = document.getElementById("undo");
@@ -153,6 +168,8 @@ document.addEventListener("click", function(event) {
 
 function toolExtraPopup() {
     if (selectedTool.classList.contains("bxs-paint")) {
+
+        disableAllTools();
         svg.style.cursor = "crosshair"
         paintBrushSideBar.classList.remove("hidden");
         squareSideBar.classList.add("hidden");
@@ -161,6 +178,8 @@ function toolExtraPopup() {
         textSideBar.classList.add("hidden");
     }
     else if (selectedTool.classList.contains("bx-square")) {
+
+        disableAllTools();
         svg.style.cursor = "crosshair"
         isSquareToolActive = true;
         squareSideBar.classList.remove("hidden");
@@ -171,6 +190,8 @@ function toolExtraPopup() {
     }
     else if(selectedTool.classList.contains("bx-circle"))
     {
+
+        disableAllTools();
         svg.style.cursor = "crosshair"
         isCircleToolActive = true;
         squareSideBar.classList.add("hidden");
@@ -182,6 +203,7 @@ function toolExtraPopup() {
     }
     else if(selectedTool.classList.contains("bx-right-arrow-alt"))
     {
+        disableAllTools();
         isArrowToolActive = true;
         squareSideBar.classList.add("hidden");
         paintBrushSideBar.classList.add("hidden");
@@ -191,6 +213,7 @@ function toolExtraPopup() {
     }
     else if(selectedTool.classList.contains("bxs-pointer"))
     {
+        disableAllTools();
         svg.style.cursor = "all-scroll";
         squareSideBar.classList.add("hidden");
         paintBrushSideBar.classList.add("hidden");
@@ -200,6 +223,7 @@ function toolExtraPopup() {
     }
     else if(selectedTool.classList.contains("bxs-hand"))
     {
+        disableAllTools();
         svg.style.cursor = "grab";
         squareSideBar.classList.add("hidden");
         paintBrushSideBar.classList.add("hidden");
@@ -209,6 +233,7 @@ function toolExtraPopup() {
     }
     else if(selectedTool.classList.contains("bx-text"))
     {
+        disableAllTools();
       isTextToolActive = true;
       svg.style.cursor = "text";
       squareSideBar.classList.add("hidden");
@@ -218,7 +243,40 @@ function toolExtraPopup() {
       textSideBar.classList.remove("hidden");
 
     }
+    else if(selectedTool.classList.contains("bxs-magic-wand"))
+    {
+        disableAllTools();
+        svg.style.cursor = "crosshair";
+        isLaserToolActive = true;
+        paintBrushSideBar.classList.add("hidden");
+        squareSideBar.classList.add("hidden");
+        circleSideBar.classList.add("hidden");
+        arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
+    }
+    else if(selectedTool.classList.contains("bx-dots-horizontal-rounded"))
+    {
+        disableAllTools();
+        svg.style.cursor = "crosshair";
+        isLineToolSelected = true;
+        paintBrushSideBar.classList.add("hidden");
+        squareSideBar.classList.add("hidden");
+        circleSideBar.classList.add("hidden");
+        arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
+    }
+    else if(selectedTool.classList.contains("bxs-eraser"))
+    {
+        disableAllTools();
+        isEraserToolActive  = true;
+        paintBrushSideBar.classList.add("hidden");
+        squareSideBar.classList.add("hidden");
+        circleSideBar.classList.add("hidden");
+        arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
+    }
     else {
+        disableAllTools();
         svg.style.cursor = "crosshair"
         paintBrushSideBar.classList.add("hidden");
         squareSideBar.classList.add("hidden");
@@ -228,6 +286,31 @@ function toolExtraPopup() {
     }
 
 }
+
+function disableAllTools() 
+{
+  isSquareToolActive = false;
+  isCircleToolActive = false;
+  isArrowToolActive = false;
+  isTextToolActive = false;
+  isLaserToolActive = false;
+  isLineToolSelected = false;
+  isEraserToolActive  = false;
+}
+
+document.addEventListener("keydown", function(event) {
+  event.preventDefault();
+  if (event.ctrlKey && event.key === 'z') {
+    undo();
+  }
+});
+
+document.addEventListener("keydown", function(event) {
+  event.preventDefault();
+  if (event.ctrlKey && event.key === 'y') {
+    redo();
+  }
+});
 
 
 function undo() {

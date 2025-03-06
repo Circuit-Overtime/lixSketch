@@ -1,14 +1,13 @@
 1. selection tool fix
-2. line 
-3. triangle 
+2. line [CHECKED]
 4. eraser 
-5. hand 
-6. text
+5. hand [CHECKED]
+6. text [CHECKED]
 7. image 
 8. ctrlc + ctrlv 
-9. ctrlz or ctrl y 
-10. canvas infitnite zoom (10% - 3000%)
-11. lazer pointer 
+9. ctrlz or ctrl y [checked] 
+10. canvas infitnite zoom (10% - 3000%) [CHECKED]
+11. lazer pointer [CHECKED]
 12. text to diagram 
 13. transparent rectangles and circle
 14. text to image 

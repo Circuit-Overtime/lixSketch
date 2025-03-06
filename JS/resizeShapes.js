@@ -27,6 +27,7 @@ function anchorPointerDown(e) {
   e.preventDefault(); // Prevent default browser actions
   const anchor = e.target;
   const sel = selectedElements[0];
+  console.log(sel)
 
   console.log(`Selected anchor type: ${anchor.anchorType}`);
 
@@ -127,39 +128,48 @@ function anchorPointerMove(e) {
   newWidth = Math.max(newWidth, 1);
   newHeight = Math.max(newHeight, 1);
 
-  //  Apply the new dimensions to the selected element group (g) and their inner objects
-  // Update data attributes of the group
+  // Update the rect element's attributes
   sel.setAttribute("data-x", newX);
   sel.setAttribute("data-y", newY);
   sel.setAttribute("data-width", newWidth);
   sel.setAttribute("data-height", newHeight);
 
-  // Update attributes of the inner overlay element
-  sel.overlay.setAttribute("x", newX);
-  sel.overlay.setAttribute("y", newY);
-  sel.overlay.setAttribute("width", newWidth);
-  sel.overlay.setAttribute("height", newHeight);
-  // Get the attributes of the rough Shape
-  const fill = sel.shape.getAttribute('fill');
-  const stroke = sel.shape.getAttribute('stroke');
-  const strokeWidth = sel.shape.getAttribute('stroke-width');
-  const strokeDasharray = sel.shape.getAttribute('stroke-dasharray')
-  //Redraw the RoughJS element
+  sel.setAttribute("x", newX);
+  sel.setAttribute("y", newY);
+  sel.setAttribute("width", newWidth);
+  sel.setAttribute("height", newHeight);
+
+  //Redraw the RoughJS element by keeping all of the same properties
+  const fill = sel.getAttribute('fill');
+  const stroke = sel.getAttribute('stroke');
+  const strokeWidth = sel.getAttribute('stroke-width');
+  const strokeDasharray = sel.getAttribute('stroke-dasharray');
+
   const rc = rough.svg(svg);
   const newShape = rc.rectangle(newX, newY, newWidth, newHeight, {
-      stroke: stroke,
-      strokeWidth: strokeWidth,
-      fill: fill,
+    stroke: stroke,
+    strokeWidth: strokeWidth,
+    fill: fill,
   });
+
+  //Apply all styles
   if (strokeDasharray) {
-      newShape.setAttribute("stroke-dasharray", strokeDasharray)
+    newShape.setAttribute("stroke-dasharray", strokeDasharray)
+  }
+  //Copy all new styles to selected el
+  for (let i = 0; i < newShape.attributes.length; i++) {
+    sel.setAttribute(newShape.attributes[i].name, newShape.attributes[i].value);
   }
 
-  // Replace the old shape with the new shape
-  sel.replaceChild(newShape, sel.shape);
-
-  // Store the new shape reference
-  sel.shape = newShape;
+  // Apply New sizes on selected element
+  sel.setAttribute("data-x", newX);
+  sel.setAttribute("data-y", newY);
+  sel.setAttribute("data-width", newWidth);
+  sel.setAttribute("data-height", newHeight);
+  sel.setAttribute("x", newX);
+  sel.setAttribute("y", newY);
+  sel.setAttribute("width", newWidth);
+  sel.setAttribute("height", newHeight);
   // Update the selection anchors for visual feedback
   removeSelectionAnchors();
   addSelectionAnchors(sel);
@@ -302,4 +312,3 @@ function addSelectionAnchors(element) {
   outline.style.pointerEvents = "none";
   svg.appendChild(outline);
 }
-
