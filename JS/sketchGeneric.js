@@ -3,7 +3,7 @@
 // --- State Variables ---
 let strokeColor = "#fff";
 let strokeThickness = 2;
-let selectedTool = document.querySelector(".bxs-eraser");
+let selectedTool = document.querySelector(".bxs-pointer");
 let currentPath = null;
 let points = [];
 let history = [];
@@ -137,6 +137,11 @@ let isLineToolSelected = false;
 
 let isEraserToolActive  = false;
 
+
+//for image tool
+let isImageToolActive = false;
+
+
 //utils controls 
 const undoButton = document.getElementById("undo");
 const redoButton = document.getElementById("redo");
@@ -214,6 +219,7 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bxs-pointer"))
     {
         disableAllTools();
+        isSelectionToolActive = true;
         svg.style.cursor = "all-scroll";
         squareSideBar.classList.add("hidden");
         paintBrushSideBar.classList.add("hidden");
@@ -275,6 +281,17 @@ function toolExtraPopup() {
         arrowSideBar.classList.add("hidden");
         textSideBar.classList.add("hidden");
     }
+    else if(selectedTool.classList.contains("bx-image-alt"))
+    {
+        disableAllTools();
+        svg.style.cursor = "crosshair"
+        isImageToolActive = true;
+        paintBrushSideBar.classList.add("hidden");
+        squareSideBar.classList.add("hidden");
+        circleSideBar.classList.add("hidden");
+        arrowSideBar.classList.add("hidden");
+        textSideBar.classList.add("hidden");
+    }
     else {
         disableAllTools();
         svg.style.cursor = "crosshair"
@@ -284,6 +301,7 @@ function toolExtraPopup() {
         arrowSideBar.classList.add("hidden");
         textSideBar.classList.add("hidden");
     }
+    
 
 }
 
@@ -296,18 +314,20 @@ function disableAllTools()
   isLaserToolActive = false;
   isLineToolSelected = false;
   isEraserToolActive  = false;
+  isSelectionToolActive = false;
+  isImageToolActive = false;
 }
 
 document.addEventListener("keydown", function(event) {
-  event.preventDefault();
   if (event.ctrlKey && event.key === 'z') {
+    event.preventDefault();
     undo();
   }
 });
 
 document.addEventListener("keydown", function(event) {
-  event.preventDefault();
   if (event.ctrlKey && event.key === 'y') {
+    event.preventDefault();
     redo();
   }
 });
@@ -521,6 +541,7 @@ function getSnapPoint(x, y) {
 
 // ===============================================================================================================
 //for selection tool 
+let isSelectionToolActive = false;
 
 
 
