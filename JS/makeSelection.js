@@ -7,7 +7,8 @@ let isSelecting = false;
 let startDragX, startDragY, startTransforms = new Map();
 let selectionRect = null;
 let isMultiSelect = false;
-
+let copiedElements = [];
+let pasteMouseCoords = null;
 // Detect click on elements or start selection
 svgCanvas.addEventListener("mousedown", (event) => {
     const target = event.target;
@@ -247,4 +248,68 @@ function toggleSelectionTool() {
         deselectAll();
     }
     return isSelectionToolActive;
+}
+
+document.addEventListener("keydown", (event) => {
+    if (!isSelectionToolActive) {
+        return;
+    }
+    if(event.ctrlKey && event.key === "c") {
+        copySelectedElements();
+    } else if(event.ctrlKey && event.key === "v") {
+        pasteCopiedElements(event);
+    } else if(event.key === "Delete" || event.key === "Backspace") {
+        deleteSelectedElements();
+    }
+});
+
+function copySelectedElements() {
+    if (!selectedElements.size) return;
+
+    copiedElements = []; // Clear previous copied elements
+    selectedElements.forEach(el => {
+        copiedElements.push(el.cloneNode(true));
+    });
+
+    console.log("Copied Elements:", copiedElements); // Log the array for debugging
+}
+
+function pasteCopiedElements(event) {
+    if (!copiedElements.length) return; // Check for empty copiedElements
+
+    deselectAll(); // Deselect existing selections
+
+    // Hardcoded test coordinates (replace with dynamic coords later)
+    let pasteCoords ={ x: 442, y: 305}
+
+    copiedElements.forEach(el => {
+        let newElement = el.cloneNode(true);
+        let transform = `translate(${pasteCoords.x}, ${ pasteCoords.y})`;
+        newElement.removeAttribute("transform");
+        newElement.removeAttribute("data-transform");
+        newElement.setAttribute("transform", transform);
+        newElement.setAttribute("data-transform", transform);
+        svgCanvas.appendChild(newElement);
+        selectElement(newElement, true);
+    });
+
+    pasteMouseCoords = null; // Reset for dynamic pasting later
+}
+
+
+
+svgCanvas.addEventListener("mouseover", (event) => {
+    if (!copiedElements.length) return; // Check for empty copiedElements   
+    pasteMouseCoords = screenToSVGCoords(event.clientX, event.clientY); // Get mouse coordinates in SVG space
+});
+
+svgCanvas.addEventListener("click", (event) => {    
+    console.log(event.clientX, event.clientY);
+});
+
+function deleteSelectedElements() {
+    selectedElements.forEach(element => {
+        svgCanvas.removeChild(element);
+    });
+    deselectAll();
 }
