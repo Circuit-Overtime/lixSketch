@@ -8,7 +8,7 @@ let scaleFactor = 0.2; // Adjust this to control initial miniature size
 let currentImageElement = null; // Keep track of the miniature image element
 // Assumes isImageToolActive, svg, selectedTool, etc., are already defined in the scope.
 
-selectedTool.addEventListener('click', () => {
+document.getElementById("importImage").addEventListener('click', () => {
     isImageToolActive = true; // Assuming isImageToolActive is defined elsewhere
     // Create a dummy file input
     const fileInput = document.createElement('input');

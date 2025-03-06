@@ -1,12 +1,12 @@
 const svgCanvas = document.getElementById("freehand-canvas");
-
-let selectedElement = null;
+let selectedElements = new Set();
 let selectionBox = null;
 let selectionBoxBounds = null;
 let isDragging = false;
 let isSelecting = false;
-let startDragX, startDragY, startTransform;
-let selectionRect = null; // Added missing variable declaration
+let startDragX, startDragY, startTransforms = new Map();
+let selectionRect = null;
+let isMultiSelect = false;
 
 // Detect click on elements or start selection
 svgCanvas.addEventListener("mousedown", (event) => {
@@ -14,30 +14,42 @@ svgCanvas.addEventListener("mousedown", (event) => {
     const tag = target.tagName.toLowerCase();
     const svgCoords = screenToSVGCoords(event.clientX, event.clientY);
 
-    // If clicking inside the selection box, move the selected element instead of creating a new selection
     if (selectionBoxBounds &&
         svgCoords.x >= selectionBoxBounds.x &&
         svgCoords.x <= selectionBoxBounds.x + selectionBoxBounds.width &&
         svgCoords.y >= selectionBoxBounds.y &&
         svgCoords.y <= selectionBoxBounds.y + selectionBoxBounds.height) {
         
-        if (selectedElement) startDrag(event);
+        if (selectedElements.size) startDrag(event);
         return;
     }
 
     if (tag === "rect" || tag === "path" || tag === "image" || target.closest("g[data-type='text-group']")) {
         if (isSelectionToolActive) { 
-            selectElement(target.closest("g") || target);
+            if (event.ctrlKey) {
+                isMultiSelect = true;
+                toggleElementSelection(target.closest("g") || target);
+            } else {
+                isMultiSelect = false;
+                selectElement(target.closest("g") || target);
+            }
         }
     } else if (tag === "svg") {
         if (isSelectionToolActive) {
+          deselectAll();
             startSelection(event);
-            deselectElement();
         }
     }
 });
 
-// Start selection rectangle
+function toggleElementSelection(element) {
+    if (selectedElements.has(element)) {
+        deselectElement(element);
+    } else {
+        selectElement(element, true);
+    }
+}
+
 function startSelection(event) {
     if (!isSelectionToolActive) return;
 
@@ -61,7 +73,6 @@ function startSelection(event) {
     svgCanvas.addEventListener("mouseup", finishSelection);
 }
 
-// Update selection rectangle while dragging
 function updateSelection(event) {
     if (!isSelecting) return;
 
@@ -77,126 +88,131 @@ function updateSelection(event) {
     selectionRect.setAttribute("height", height);
 }
 
-// Select an element with a selection box
-function selectElement(element) {
-    if (selectedElement) {
-        deselectElement();
+function selectElement(element, multiple = false) {
+    if (!multiple) {
+        deselectAll();
     }
+    selectedElements.add(element);
+    storeTransformData(element);
+    drawSelectionBox();
+}
 
-    selectedElement = element;
+function storeTransformData(element) {
+    let transform = element.getAttribute("transform") || "translate(0,0)";
+    element.setAttribute("data-transform", transform);
+}
 
-    // Remove previous selection box
+function getTransformedBBox(element) {
+    let bbox = element.getBBox();
+    let transform = element.getAttribute("data-transform") || "translate(0,0)";
+    let match = transform.match(/translate\((-?\d+\.?\d*),\s*(-?\d+\.?\d*)\)/);
+    let tx = match ? parseFloat(match[1]) : 0;
+    let ty = match ? parseFloat(match[2]) : 0;
+    
+    return {
+        x: bbox.x + tx,
+        y: bbox.y + ty,
+        width: bbox.width,
+        height: bbox.height
+    };
+}
+
+function deselectElement(element) {
+    selectedElements.delete(element);
+    drawSelectionBox();
+}
+
+function deselectAll() {
+    selectedElements.clear();
     if (selectionBox) {
         svgCanvas.removeChild(selectionBox);
         selectionBox = null;
     }
+    selectionBoxBounds = null;
+}
 
-    // Get bounding box
-    const bbox = selectedElement.getBBox();
-    
-    // Create a selection rectangle around the element
+function drawSelectionBox() {
+    if (selectionBox) {
+        svgCanvas.removeChild(selectionBox);
+    }
+    if (selectedElements.size === 0) return;
+
+    const combinedBBox = Array.from(selectedElements).reduce((acc, el) => {
+        const bbox = getTransformedBBox(el);
+        return {
+            x: Math.min(acc.x, bbox.x),
+            y: Math.min(acc.y, bbox.y),
+            width: Math.max(acc.x + acc.width, bbox.x + bbox.width) - Math.min(acc.x, bbox.x),
+            height: Math.max(acc.y + acc.height, bbox.y + bbox.height) - Math.min(acc.y, bbox.y)
+        };
+    }, getTransformedBBox(selectedElements.values().next().value));
+
     selectionBox = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    selectionBox.setAttribute("x", bbox.x - 5);
-    selectionBox.setAttribute("y", bbox.y - 5);
-    selectionBox.setAttribute("width", bbox.width + 10);
-    selectionBox.setAttribute("height", bbox.height + 10);
+    selectionBox.setAttribute("x", combinedBBox.x - 5);
+    selectionBox.setAttribute("y", combinedBBox.y - 5);
+    selectionBox.setAttribute("width", combinedBBox.width + 10);
+    selectionBox.setAttribute("height", combinedBBox.height + 10);
     selectionBox.setAttribute("fill", "none");
     selectionBox.setAttribute("stroke", "#9A97D9");
     selectionBox.setAttribute("stroke-width", "2");
     selectionBox.setAttribute("stroke-dasharray", "5,5");
-    selectionBox.style.pointerEvents = "none"; // Prevents interference with selection
-
-    // Get transform of selected element
-    const transform = selectedElement.getAttribute("transform");
-    if (transform) {
-        selectionBox.setAttribute("transform", transform);
-    }
-
+    selectionBox.style.pointerEvents = "none";
+    
     svgCanvas.appendChild(selectionBox);
-
-    // Update selection box bounds for checking click inside
     selectionBoxBounds = selectionBox.getBBox();
-
-    selectedElement.addEventListener("mousedown", startDrag);
 }
 
-// Deselect an element
-function deselectElement() {
-    if (selectedElement) {
-        selectedElement.removeEventListener("mousedown", startDrag);
-        selectedElement = null;
-    }
-    
-    if (selectionBox) {
-        svgCanvas.removeChild(selectionBox);
-        selectionBox = null;
-    }
-    
-    selectionBoxBounds = null;
-}
 
-// Start dragging a selected element
 function startDrag(event) {
-    if (!selectedElement) return;
+    if (!selectedElements.size) return;
 
     isDragging = true;
     startDragX = event.clientX;
     startDragY = event.clientY;
-    startTransform = selectedElement.getAttribute("transform") || "translate(0,0)";
+
+    startTransforms.clear();
+    selectedElements.forEach(el => {
+        startTransforms.set(el, el.getAttribute("transform") || "translate(0,0)");
+    });
 
     svgCanvas.addEventListener("mousemove", drag);
     svgCanvas.addEventListener("mouseup", stopDrag);
 }
 
-// Perform dragging
 function drag(event) {
-    if (!isDragging || !selectedElement) return;
+    if (!isDragging || selectedElements.size === 0) return;
 
-    const viewBox = svgCanvas.getAttribute("viewBox").split(" ").map(Number);
-    const canvasWidth = svgCanvas.clientWidth;
-    const canvasHeight = svgCanvas.clientHeight;
+    let dx = event.clientX - startDragX;
+    let dy = event.clientY - startDragY;
 
-    const viewBoxWidth = viewBox[2];
-    const viewBoxHeight = viewBox[3];
+    selectedElements.forEach(el => {
+        let transform = el.getAttribute("data-transform") || "translate(0,0)";
+        let match = transform.match(/translate\((-?\d+\.?\d*),\s*(-?\d+\.?\d*)\)/);
+        let newX = dx, newY = dy;
 
-    const scaleX = viewBoxWidth / canvasWidth;
-    const scaleY = viewBoxHeight / canvasHeight;
+        if (match) {
+            newX += parseFloat(match[1]);
+            newY += parseFloat(match[2]);
+        }
 
-    let dx = (event.clientX - startDragX) * scaleX;
-    let dy = (event.clientY - startDragY) * scaleY;
+        el.setAttribute("transform", `translate(${newX},${newY})`);
+        el.setAttribute("data-transform", `translate(${newX},${newY})`);
+    });
 
-    let match = startTransform.match(/translate\((-?\d+\.?\d*),\s*(-?\d+\.?\d*)\)/);
-    let prevX = match ? parseFloat(match[1]) : 0;
-    let prevY = match ? parseFloat(match[2]) : 0;
+    drawSelectionBox();
 
-    let newTransform = `translate(${prevX + dx}, ${prevY + dy})`;
-    selectedElement.setAttribute("transform", newTransform);
-    
-    // Move the selection box along with the element
-    if(selectionBox){
-        selectionBox.setAttribute("transform", newTransform);
-        // Update selection box bounds after moving
-        selectionBoxBounds = selectionBox.getBBox();
-    }
+    startDragX = event.clientX;
+    startDragY = event.clientY;
 }
 
-// Stop dragging
 function stopDrag() {
     isDragging = false;
     svgCanvas.removeEventListener("mousemove", drag);
     svgCanvas.removeEventListener("mouseup", stopDrag);
-
-    // Update selection box bounds after moving
-    if (selectionBox) {
-        selectionBoxBounds = selectionBox.getBBox();
-    }
 }
 
-// Finish selection and check for elements inside
 function finishSelection() {
     isSelecting = false;
-
-    let selectedElements = [];
     let rectBounds = selectionRect.getBBox();
 
     document.querySelectorAll("#freehand-canvas > g, #freehand-canvas > path, #freehand-canvas > image").forEach((el) => {
@@ -208,22 +224,16 @@ function finishSelection() {
             elBounds.x + elBounds.width <= rectBounds.x + rectBounds.width &&
             elBounds.y + elBounds.height <= rectBounds.y + rectBounds.height
         ) {
-            selectedElements.push(el);
+            selectElement(el, true);
         }
     });
 
     svgCanvas.removeChild(selectionRect);
     selectionRect = null;
-
-    if (selectedElements.length > 0) {
-        selectedElements.forEach(el => selectElement(el));
-    }
-
     svgCanvas.removeEventListener("mousemove", updateSelection);
     svgCanvas.removeEventListener("mouseup", finishSelection);
 }
 
-// Convert screen coordinates to SVG coordinates
 function screenToSVGCoords(x, y) {
     let point = svgCanvas.createSVGPoint();
     point.x = x;
@@ -231,11 +241,10 @@ function screenToSVGCoords(x, y) {
     return point.matrixTransform(svgCanvas.getScreenCTM().inverse());
 }
 
-// Toggle selection tool
 function toggleSelectionTool() {
     isSelectionToolActive = !isSelectionToolActive;
     if (!isSelectionToolActive) {
-        deselectElement();
+        deselectAll();
     }
     return isSelectionToolActive;
 }

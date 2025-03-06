@@ -52,3 +52,88 @@ function drawSquare(x, y, width, height) {
     squareElement = group;
     svg.appendChild(group);
   }
+
+  svg.addEventListener('pointerdown', handlePointerDownSquare);
+svg.addEventListener('pointerup', handlePointerUpSquare);
+
+function handlePointerDownSquare(e) {
+  if (isSquareToolActive) {
+    startX = e.clientX;
+    startY = e.clientY;
+    // Initialize squareElement to null before drawing a new one
+    squareElement = null;
+    svg.addEventListener("pointermove", handlePointerMoveSquare);
+  }
+}
+
+function handlePointerMoveSquare(e) {
+  if (isSquareToolActive) {
+    const width = e.clientX - startX;
+    const height = e.clientY - startY;
+    drawSquare(startX, startY, width, height);
+  }
+}
+
+function handlePointerUpSquare(e) {
+  svg.removeEventListener("pointermove", handlePointerMoveSquare);
+  if (isSquareToolActive && squareElement) {
+    history.push(squareElement); // Store the square element
+    squareElement = null;        // Reset after pushing to history
+  }
+}
+
+
+SquarecolorOptions.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      event.stopPropagation(); // Stop event propagation
+      SquarecolorOptions.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      squareStrokecolor = span.getAttribute("data-id");
+      console.log("Selected Stroke Color:", squareStrokecolor);
+  });
+});
+
+// Square Background Color Selection
+backgroundColorOptionsSquare.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      event.stopPropagation(); // Stop event propagation
+      backgroundColorOptionsSquare.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      squareBackgroundColor = span.getAttribute("data-id");
+      console.log("Selected Background Color:", squareBackgroundColor);
+  });
+});
+
+// Square Fill Style Selection
+fillStyleOptions.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      fillStyleOptions.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      squareFillStyleValue = span.getAttribute("data-id");
+      console.log("Selected Fill Style:", squareFillStyleValue);
+      event.stopPropagation()
+  });
+});
+
+
+// Square Stroke Thickness Selection
+squareStrokeThicknessValue.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      squareStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      squareStrokeThicknes = parseInt(span.getAttribute("data-id"));
+      console.log("Selected Stroke Thickness:", squareStrokeThicknes);
+      event.stopPropagation()
+  });
+});
+
+// Square Outline Style Selection
+squareOutlineStyleValue.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      squareOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      squareOutlineStyle = span.getAttribute("data-id");
+      console.log("Selected Outline Style:", squareOutlineStyle);
+      event.stopPropagation()
+  });
+});

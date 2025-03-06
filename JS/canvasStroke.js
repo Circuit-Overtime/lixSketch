@@ -66,3 +66,56 @@ function screenToViewBoxPoint(x, y) {
     currentPath.setAttribute('d', getSvgPathFromStroke(stroke));
   }
   
+
+  svg.addEventListener('pointerdown', handlePointerDownStroke);
+svg.addEventListener('pointerup', handlePointerUpStroke);
+
+function handlePointerDownStroke(e) {
+  if (selectedTool.classList.contains("bxs-paint")) {
+    points = [[e.clientX, e.clientY, e.pressure]];
+    currentPath = createNewPathElement();
+    svg.appendChild(currentPath); // Append the new path immediately
+    renderStroke();
+    svg.addEventListener("pointermove", handlePointerMoveStroke);
+  }
+}
+
+function handlePointerMoveStroke(e) {
+  if (selectedTool.classList.contains("bxs-paint")) {
+    points.push([e.clientX, e.clientY, e.pressure]);
+    renderStroke();
+  }
+}
+
+function handlePointerUpStroke(e) {
+  svg.removeEventListener("pointermove", handlePointerMoveStroke);
+  if (selectedTool.classList.contains("bxs-paint")) {
+    if (currentPath) {
+      history.push(currentPath);
+      currentPath = null;
+    }
+  }
+  points = [];
+  redoStack = [];
+  updateUndoRedoButtons();
+}
+
+
+
+function handleStrokeColorSelection(event) {
+  strokeColors.forEach(s => s.classList.remove("selected"));
+  event.target.classList.add("selected");
+  strokeColor = event.target.getAttribute("data-id");
+  console.log("Selected Color:", strokeColor);
+}
+
+function handleStrokeThicknessSelection(event) {
+  strokeThicknesses.forEach(t => t.classList.remove("selected"));
+  event.target.classList.add("selected");
+  strokeThickness = parseInt(event.target.getAttribute("data-id"));
+  console.log("Selected Thickness:", strokeThickness);
+}
+
+
+strokeColors.forEach(stroke => stroke.addEventListener("click", handleStrokeColorSelection));
+strokeThicknesses.forEach(thickness => thickness.addEventListener("click", handleStrokeThicknessSelection));

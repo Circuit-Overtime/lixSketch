@@ -1,3 +1,4 @@
+
 function drawCircleFromOrigin(originX, originY, pointerX, pointerY) {
   // Remove the old circle element if it exists
   if (circleElement) {
@@ -58,3 +59,86 @@ function drawCircleFromOrigin(originX, originY, pointerX, pointerY) {
   circleElement = group;
   svg.appendChild(group);
 }
+
+svg.addEventListener('pointerdown', handlePointerDownCircle);
+svg.addEventListener('pointerup', handlePointerUpCircle);
+
+function handlePointerDownCircle(e) {
+  if (isCircleToolActive) {
+    circleStartX = e.clientX;
+    circleStartY = e.clientY;
+    // Remove any existing preview circle
+    if (circleElement) {
+      svg.removeChild(circleElement);
+      circleElement = null;
+    }
+    svg.addEventListener("pointermove", handlePointerMoveCircle);
+  }
+}
+
+function handlePointerMoveCircle(e) {
+  if (isCircleToolActive) {
+    // Here we're using the function that grows the circle from the pointer origin
+    drawCircleFromOrigin(circleStartX, circleStartY, e.clientX, e.clientY);
+  }
+}
+
+function handlePointerUpCircle(e) {
+  // Remove pointermove listener from all tools
+  svg.removeEventListener("pointermove", handlePointerMoveCircle);
+  if (isCircleToolActive && circleElement) {
+    history.push(circleElement);
+    circleElement = null;
+  }
+}
+
+
+circleColorOptions.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      event.stopPropagation(); // Stop event propagation
+      circleColorOptions.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      circleStrokeColor = span.getAttribute("data-id");
+      console.log("Selected Stroke Color:", circleStrokeColor);
+  });
+});
+
+circleFillColorOptions.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      event.stopPropagation(); // Stop event propagation
+      circleFillColorOptions.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      circleFillColor = span.getAttribute("data-id");
+      console.log("Selected Background Color:", circleFillColor);
+  });
+});
+
+circleFillStyleOptions.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      circleFillStyleOptions.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      circleFillStyle = span.getAttribute("data-id");
+      console.log("Selected Fill Style:", circleFillStyle);
+      event.stopPropagation()
+  });
+});
+
+circleStrokeThicknessValue.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      circleStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      circleStrokeThickness = parseInt(span.getAttribute("data-id"));
+      console.log("Selected Stroke Thickness:", circleStrokeThickness);
+      event.stopPropagation()
+  });
+});
+
+circleOutlineStyleValue.forEach((span) => {
+  span.addEventListener("click", (event) => {
+      circleOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
+      span.classList.add("selected");
+      circleOutlineStyle = span.getAttribute("data-id");
+      console.log("Selected Outline Style:", circleOutlineStyle);
+      event.stopPropagation()
+  });
+});
