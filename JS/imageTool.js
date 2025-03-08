@@ -1,4 +1,3 @@
-
 let isDraggingImage = false;
 let imageToPlace = null;
 let imageX = 0;
@@ -133,8 +132,30 @@ svg.addEventListener('click', async (e) => {
         finalImage.setAttribute("width", placedImageWidth);
         finalImage.setAttribute("height", placedImageHeight);
         finalImage.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+        // Store data for undo/redo
+        finalImage.setAttribute('data-href', imageToPlace);
+        finalImage.setAttribute('data-x', placedX - placedImageWidth / 2);
+        finalImage.setAttribute('data-y', placedY - placedImageHeight / 2);
+        finalImage.setAttribute('data-width', placedImageWidth);
+        finalImage.setAttribute('data-height', placedImageHeight);
+
         svg.appendChild(finalImage);
-        history.push(finalImage);
+
+        const action = {
+            type: ACTION_CREATE,
+            element: finalImage,
+            parent: finalImage.parentNode,
+            nextSibling: finalImage.nextSibling,
+            data: {
+                href: imageToPlace,
+                x: placedX - placedImageWidth / 2,
+                y: placedY - placedImageHeight / 2,
+                width: placedImageWidth,
+                height: placedImageHeight
+            }
+        };
+        history.push(action);
         updateUndoRedoButtons();
 
     } catch (error) {
@@ -147,6 +168,5 @@ svg.addEventListener('click', async (e) => {
         isDraggingImage = false;
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.
-
     }
 });

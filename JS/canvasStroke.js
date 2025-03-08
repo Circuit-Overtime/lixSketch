@@ -64,7 +64,7 @@ function screenToViewBoxPoint(x, y) {
         easing: (t) => t,
         cap: true
       },
-      simulatePressure: false
+      simulatePressure: true
     });
     
     // Set the 'd' attribute of the path using the generated stroke.
@@ -96,7 +96,19 @@ function handlePointerUpStroke(e) {
   svg.removeEventListener("pointermove", handlePointerMoveStroke);
   if (ispaintToolActive) {
     if (currentPath) {
-      history.push(currentPath);
+
+        const action = {
+            type: ACTION_CREATE,
+            element: currentPath,
+            parent: currentPath.parentNode,
+            nextSibling: currentPath.nextSibling,
+            data: {
+                stroke: strokeColor,
+                strokeWidth: strokeThickness,
+                d: currentPath.getAttribute('d')
+            }
+        };
+      history.push(action);
       currentPath = null;
     }
   }
@@ -108,17 +120,40 @@ function handlePointerUpStroke(e) {
 
 
 function handleStrokeColorSelection(event) {
+    const previousColor = strokeColor;
   strokeColors.forEach(s => s.classList.remove("selected"));
   event.target.classList.add("selected");
   strokeColor = event.target.getAttribute("data-id");
   console.log("Selected Color:", strokeColor);
+
+   if (currentPath) {
+            const action = {
+                type: ACTION_MODIFY,
+                element: currentPath,
+                data: { property: 'stroke', newValue: strokeColor, oldValue: previousColor }
+            };
+            history.push(action);
+            redoStack = [];
+            updateUndoRedoButtons();
+        }
 }
 
 function handleStrokeThicknessSelection(event) {
+    const previousThickness = strokeThickness;
   strokeThicknesses.forEach(t => t.classList.remove("selected"));
   event.target.classList.add("selected");
   strokeThickness = parseInt(event.target.getAttribute("data-id"));
   console.log("Selected Thickness:", strokeThickness);
+   if (currentPath) {
+            const action = {
+                type: ACTION_MODIFY,
+                element: currentPath,
+                data: { property: 'strokeWidth', newValue: strokeThickness, oldValue: previousThickness }
+            };
+            history.push(action);
+            redoStack = [];
+            updateUndoRedoButtons();
+        }
 }
 
 

@@ -42,7 +42,19 @@ function drawArrowFromPoints(points) {
   arrowElementGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
   arrowElementGroup.appendChild(line);
   arrowElementGroup.appendChild(arrowHead);
-  
+
+  // Store data attributes on the group for undo/redo
+  arrowElementGroup.setAttribute('data-points', JSON.stringify(convertedPoints));  // Store all points
+  arrowElementGroup.setAttribute('data-stroke', arrowStrokeColor);
+  arrowElementGroup.setAttribute('data-strokeWidth', arrowStrokeThickness);
+  arrowElementGroup.setAttribute('data-outlineStyle', arrowOutlineStyle);
+  arrowElementGroup.setAttribute('data-arrowHeadStyle', arrowHeadStyle);
+  arrowElementGroup.setAttribute('data-arrowHeadLength', arrowHeadLength);
+  arrowElementGroup.setAttribute('data-arrowHeadAngleDeg', arrowHeadAngleDeg);
+
+  arrowElementGroup.line = line;   // Store the rough element
+  arrowElementGroup.arrowHead = arrowHead; // Store the arrow head element
+
   svg.appendChild(arrowElementGroup);
 }
 
@@ -80,11 +92,11 @@ function createArrowHead(tipX, tipY, angle) {
     const C = [ tipX + L * v.x - (L/2) * w.x, tipY + L * v.y - (L/2) * w.y ]; // bottom-right
     
     // Build the points array in order.
-    const points = [ A, B, C, D ];
-  
+    const pointsList = [ A, B, C, D ];
+
     // Create a filled polygon using Rough.js with a solid fill.
     const rc = rough.svg(svg);
-    const arrowHeadElement = rc.polygon(points, {
+    const arrowHeadElement = rc.polygon(pointsList, {
         fill: arrowStrokeColor,
         stroke: arrowStrokeColor,
         fillStyle: 'solid', // Ensures a solid fill.
@@ -212,8 +224,36 @@ function handlePointerUpCurveArrow(e) {
     if (arrowCurved) {
       drawArrowFromPoints(arrowPoints);
       if (arrowElementGroup) {
-        history.push(arrowElementGroup);
+        // Retrieve data attributes
+        const pointsString = arrowElementGroup.getAttribute('data-points');
+        const points = JSON.parse(pointsString);  // Back to array of objects
+        const stroke = arrowElementGroup.getAttribute('data-stroke');
+        const strokeWidth = parseFloat(arrowElementGroup.getAttribute('data-strokeWidth'));
+        const outlineStyle = arrowElementGroup.getAttribute('data-outlineStyle');
+        const arrowHeadStyleValue = arrowElementGroup.getAttribute('data-arrowHeadStyle');
+        const arrowHeadLengthValue = arrowElementGroup.getAttribute('data-arrowHeadLength');
+        const arrowHeadAngleDegValue = arrowElementGroup.getAttribute('data-arrowHeadAngleDeg');
+
+        const action = {
+            type: ACTION_CREATE,
+            element: arrowElementGroup,
+            parent: arrowElementGroup.parentNode,
+            nextSibling: arrowElementGroup.nextSibling,
+            data: {
+                points: points,
+                stroke: stroke,
+                strokeWidth: strokeWidth,
+                outlineStyle: outlineStyle,
+                arrowHeadStyle: arrowHeadStyleValue,
+                arrowHeadLength: arrowHeadLengthValue,
+                arrowHeadAngleDeg: arrowHeadAngleDegValue,
+            }
+        };
+
+        history.push(action);
         arrowElementGroup = null;
+        redoStack = [];
+        updateUndoRedoButtons();
       }
     }
   }

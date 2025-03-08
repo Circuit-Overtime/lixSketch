@@ -53,18 +53,25 @@ function handleElementRemoval(clientX, clientY) {
   const element = document.elementFromPoint(clientX, clientY);
 
   if (element) {
-    // Traverse up the DOM tree to find the top-level removable element (g or path)
+    // Traverse up the DOM tree to find the top-level removable element
     let elementToRemove = element;
     while (elementToRemove && elementToRemove !== svg) {
-      if (elementToRemove.tagName === "g" || elementToRemove.tagName === "path") {
-        // Ensure the element is a direct child of the SVG
+      if (
+        elementToRemove.tagName === "g" ||
+        elementToRemove.tagName === "path" ||
+        elementToRemove.tagName === "image" ||
+        elementToRemove.closest("g[data-type='text-group']")
+      ) {
         if (elementToRemove.parentNode === svg) {
-          svg.removeChild(elementToRemove);
+          // Ensure we store a valid reference BEFORE removing
           history.push({
-            type: "remove",
             element: elementToRemove,
-            tool: "eraser"
+            parent: elementToRemove.parentNode,
+            nextSibling: elementToRemove.nextSibling, // Preserve position for reinsert
           });
+
+          elementToRemove.parentNode.removeChild(elementToRemove);
+          deselectAll();
           redoStack = [];
           updateUndoRedoButtons();
           return;
@@ -74,6 +81,8 @@ function handleElementRemoval(clientX, clientY) {
     }
   }
 }
+
+
 
 // --- Function to create a custom cursor ---
 function createCustomCursor() {

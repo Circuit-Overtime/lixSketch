@@ -1,4 +1,3 @@
-
 let textElements = [];
 let textSize = "30px";
 let textFont = "lixFont";
@@ -48,13 +47,39 @@ function getSVGCoordinates(event) {
     textElement.setAttribute("cursor", "text");
     textElement.setAttribute("white-space", "pre"); // Important for newline handling
     textElement.textContent = "";
+
+    // Store data for undo/redo
+    gElement.setAttribute('data-x', x);
+    gElement.setAttribute('data-y', y);
+    gElement.setAttribute('data-textColor', textColor);
+    gElement.setAttribute('data-textSize', textSize);
+    gElement.setAttribute('data-textFont', textFont);
+    gElement.setAttribute('data-textAlign', textAlign);
+
+    // Add reference
+    gElement.textElement = textElement;
   
     // Append text to group, then group to SVG
     gElement.appendChild(textElement);
     svg.appendChild(gElement);
-    history.push(gElement);
-    redoStack = []; // Clear redo stack
-    updateUndoRedoButtons();
+
+        const action = {
+            type: ACTION_CREATE,
+            element: gElement,
+            parent: gElement.parentNode,
+            nextSibling: gElement.nextSibling,
+            data: {
+                x: x,
+                y: y,
+                textColor: textColor,
+                textSize: textSize,
+                textFont: textFont,
+                textAlign: textAlign
+            }
+        };
+        history.push(action);
+        redoStack = []; // Clear redo stack
+        updateUndoRedoButtons();
   
     // Immediately make the new text element editable
     makeTextEditable(textElement);
@@ -143,39 +168,44 @@ function getSVGCoordinates(event) {
   }
   
   // Function to render the text and group tspans together
-  function renderText(input, textElement, deleteIfEmpty = false) {
+function renderText(input, textElement, deleteIfEmpty = false) {
     const text = input.value || "";
-  
+
     if (deleteIfEmpty && text.trim() === "") {
-      // Delete the group containing the text element if it's empty
-      let gElement = textElement.parentNode;
-      svg.removeChild(gElement);
-  
-      // Remove from history/redo stacks
-      const index = history.indexOf(gElement);
-      if (index > -1) {
-        history.splice(index, 1);
-      }
-      updateUndoRedoButtons();
+        // Delete the group containing the text element if it's empty
+        let gElement = textElement.parentNode;
+
+        // Check if the element is already removed.
+        if (!gElement.parentNode) return; // Prevent errors if already removed
+
+        svg.removeChild(gElement);
+
+        // Remove from history/redo stacks
+        const index = history.findIndex(action => action.element === gElement); // Find action by element
+        if (index > -1) {
+            history.splice(index, 1);
+        }
+        updateUndoRedoButtons();
+
     } else {
-      // Clear any existing tspans
-      while (textElement.firstChild) {
-        textElement.removeChild(textElement.firstChild);
-      }
-  
-      // Split text by newline and create tspans
-      const lines = text.split("\n");
-      lines.forEach((line, index) => {
-        let tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-        tspan.setAttribute("x", textElement.getAttribute("x"));
-        tspan.setAttribute("dy", index === 0 ? "0" : "1.2em"); // Adjust line height as needed
-        tspan.textContent = line;
-        textElement.appendChild(tspan);
-      });
+        // Clear any existing tspans
+        while (textElement.firstChild) {
+            textElement.removeChild(textElement.firstChild);
+        }
+
+        // Split text by newline and create tspans
+        const lines = text.split("\n");
+        lines.forEach((line, index) => {
+            let tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            tspan.setAttribute("x", textElement.getAttribute("x"));
+            tspan.setAttribute("dy", index === 0 ? "0" : "1.2em"); // Adjust line height as needed
+            tspan.textContent = line;
+            textElement.appendChild(tspan);
+        });
     }
-  
+
     document.body.removeChild(input);
-  }
+}
   
   // Find the text element (within a group) at a given position
   function findTextElementAtPosition(x, y) {
@@ -222,41 +252,103 @@ function getSVGCoordinates(event) {
   textColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
         event.stopPropagation(); // Stop event propagation
+        const previousColor = textColor;
         textColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         textColor = span.getAttribute("data-id");
         console.log("Selected Text Color:", textColor);
+
+         let input = document.querySelector("textarea");
+           if (input) {
+           let textElement = findTextElementAtPosition(parseFloat(input.style.left), parseFloat(input.style.top));
+                if (textElement) {
+                       const action = {
+                           type: ACTION_MODIFY,
+                           element: textElement.parentNode,
+                           data: { property: 'textColor', newValue: textColor, oldValue: previousColor }
+                       };
+                       history.push(action);
+                       redoStack = [];
+                       updateUndoRedoButtons();
+                   }
+           }
     });
 });
 
 textFontOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation()
+      const previousFont = textFont;
         textFontOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         textFont = span.getAttribute("data-id");
         console.log("Selected Text Font:", textFont);
-        event.stopPropagation()
+
+         let input = document.querySelector("textarea");
+           if (input) {
+           let textElement = findTextElementAtPosition(parseFloat(input.style.left), parseFloat(input.style.top));
+                if (textElement) {
+                       const action = {
+                           type: ACTION_MODIFY,
+                           element: textElement.parentNode,
+                           data: { property: 'textFont', newValue: textFont, oldValue: previousFont }
+                       };
+                       history.push(action);
+                       redoStack = [];
+                       updateUndoRedoButtons();
+                   }
+           }
     });
 });
 
 textSizeOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation()
+      const previousSize = textSize;
         textSizeOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         textSize = parseInt(span.getAttribute("data-id"));
         console.log("Selected Text Size:", textSize);
-        event.stopPropagation()
+
+         let input = document.querySelector("textarea");
+           if (input) {
+           let textElement = findTextElementAtPosition(parseFloat(input.style.left), parseFloat(input.style.top));
+                if (textElement) {
+                       const action = {
+                           type: ACTION_MODIFY,
+                           element: textElement.parentNode,
+                           data: { property: 'textSize', newValue: textSize, oldValue: previousSize }
+                       };
+                       history.push(action);
+                       redoStack = [];
+                       updateUndoRedoButtons();
+                   }
+           }
     });
 });
 
 textAlignOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation()
+      const previousAlign = textAlign;
         textAlignOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         textAlign = span.getAttribute("data-id");
         console.log("Selected Text Align:", textAlign);
-        event.stopPropagation()
+
+         let input = document.querySelector("textarea");
+           if (input) {
+           let textElement = findTextElementAtPosition(parseFloat(input.style.left), parseFloat(input.style.top));
+                if (textElement) {
+                       const action = {
+                           type: ACTION_MODIFY,
+                           element: textElement.parentNode,
+                           data: { property: 'textAlign', newValue: textAlign, oldValue: previousAlign }
+                       };
+                       history.push(action);
+                       redoStack = [];
+                       updateUndoRedoButtons();
+                   }
+           }
     });
 });
-
-

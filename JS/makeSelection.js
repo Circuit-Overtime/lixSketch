@@ -1,14 +1,13 @@
 const svgCanvas = document.getElementById("freehand-canvas");
-let selectedElements = new Set();
 let selectionBox = null;
 let selectionBoxBounds = null;
 let isDragging = false;
 let isSelecting = false;
+let selectedElements = new Set();
 let startDragX, startDragY, startTransforms = new Map();
 let selectionRect = null;
 let isMultiSelect = false;
 let copiedElements = [];
-let pasteMouseCoords = null;
 // Detect click on elements or start selection
 svgCanvas.addEventListener("mousedown", (event) => {
     const target = event.target;
@@ -20,13 +19,13 @@ svgCanvas.addEventListener("mousedown", (event) => {
         svgCoords.x <= selectionBoxBounds.x + selectionBoxBounds.width &&
         svgCoords.y >= selectionBoxBounds.y &&
         svgCoords.y <= selectionBoxBounds.y + selectionBoxBounds.height) {
-        
+
         if (selectedElements.size) startDrag(event);
         return;
     }
 
     if (tag === "rect" || tag === "path" || tag === "image" || target.closest("g[data-type='text-group']")) {
-        if (isSelectionToolActive) { 
+        if (isSelectionToolActive) {
             if (event.ctrlKey) {
                 isMultiSelect = true;
                 toggleElementSelection(target.closest("g") || target);
@@ -37,7 +36,7 @@ svgCanvas.addEventListener("mousedown", (event) => {
         }
     } else if (tag === "svg") {
         if (isSelectionToolActive) {
-          deselectAll();
+            deselectAll();
             startSelection(event);
         }
     }
@@ -109,7 +108,7 @@ function getTransformedBBox(element) {
     let match = transform.match(/translate\((-?\d+\.?\d*),\s*(-?\d+\.?\d*)\)/);
     let tx = match ? parseFloat(match[1]) : 0;
     let ty = match ? parseFloat(match[2]) : 0;
-    
+
     return {
         x: bbox.x + tx,
         y: bbox.y + ty,
@@ -158,7 +157,8 @@ function drawSelectionBox() {
     selectionBox.setAttribute("stroke-width", "2");
     selectionBox.setAttribute("stroke-dasharray", "5,5");
     selectionBox.style.pointerEvents = "none";
-    
+    selectionBox.id = "selectionBox"
+
     svgCanvas.appendChild(selectionBox);
     selectionBoxBounds = selectionBox.getBBox();
 }
@@ -210,6 +210,28 @@ function stopDrag() {
     isDragging = false;
     svgCanvas.removeEventListener("mousemove", drag);
     svgCanvas.removeEventListener("mouseup", stopDrag);
+
+    // Collect the initial and final transforms for all selected elements
+    let initialTransforms = new Map();
+    let finalTransforms = new Map();
+    selectedElements.forEach(el => {
+        initialTransforms.set(el, startTransforms.get(el) || "translate(0,0)");
+        finalTransforms.set(el, el.getAttribute("transform") || "translate(0,0)");
+    });
+
+    // Create an action for the transformation
+    const action = {
+        type: ACTION_MODIFY,
+        elements: Array.from(selectedElements),
+        data: {
+            property: "transform",
+            initialTransforms: Object.fromEntries(initialTransforms),
+            finalTransforms: Object.fromEntries(finalTransforms)
+        }
+    };
+    history.push(action);
+    redoStack = [];
+    updateUndoRedoButtons();
 }
 
 function finishSelection() {
@@ -248,68 +270,4 @@ function toggleSelectionTool() {
         deselectAll();
     }
     return isSelectionToolActive;
-}
-
-document.addEventListener("keydown", (event) => {
-    if (!isSelectionToolActive) {
-        return;
-    }
-    if(event.ctrlKey && event.key === "c") {
-        copySelectedElements();
-    } else if(event.ctrlKey && event.key === "v") {
-        pasteCopiedElements(event);
-    } else if(event.key === "Delete" || event.key === "Backspace") {
-        deleteSelectedElements();
-    }
-});
-
-function copySelectedElements() {
-    if (!selectedElements.size) return;
-
-    copiedElements = []; // Clear previous copied elements
-    selectedElements.forEach(el => {
-        copiedElements.push(el.cloneNode(true));
-    });
-
-    console.log("Copied Elements:", copiedElements); // Log the array for debugging
-}
-
-function pasteCopiedElements(event) {
-    if (!copiedElements.length) return; // Check for empty copiedElements
-
-    deselectAll(); // Deselect existing selections
-
-    // Hardcoded test coordinates (replace with dynamic coords later)
-    let pasteCoords ={ x: 442, y: 305}
-
-    copiedElements.forEach(el => {
-        let newElement = el.cloneNode(true);
-        let transform = `translate(${pasteCoords.x}, ${ pasteCoords.y})`;
-        newElement.removeAttribute("transform");
-        newElement.removeAttribute("data-transform");
-        newElement.setAttribute("transform", transform);
-        newElement.setAttribute("data-transform", transform);
-        svgCanvas.appendChild(newElement);
-        selectElement(newElement, true);
-    });
-
-    pasteMouseCoords = null; // Reset for dynamic pasting later
-}
-
-
-
-svgCanvas.addEventListener("mouseover", (event) => {
-    if (!copiedElements.length) return; // Check for empty copiedElements   
-    pasteMouseCoords = screenToSVGCoords(event.clientX, event.clientY); // Get mouse coordinates in SVG space
-});
-
-svgCanvas.addEventListener("click", (event) => {    
-    console.log(event.clientX, event.clientY);
-});
-
-function deleteSelectedElements() {
-    selectedElements.forEach(element => {
-        svgCanvas.removeChild(element);
-    });
-    deselectAll();
 }

@@ -1,8 +1,4 @@
-
-
-// --- State Variables ---
-
-let selectedTool = document.querySelector(".bx-dots-horizontal-rounded");
+let selectedTool = document.querySelector(".bxs-pointer");
 let history = [];
 let redoStack = [];
 
@@ -48,6 +44,7 @@ let isSelectionToolActive = false;
 let isPanningToolActive = false;
 
 
+
 const undoButton = document.getElementById("undo");
 const redoButton = document.getElementById("redo");
 
@@ -58,7 +55,9 @@ const circleSideBar = document.getElementById("circleSideBar");
 const arrowSideBar = document.getElementById("arrowSideBar");
 const textSideBar = document.getElementById("textSideBar");
 
-
+const ACTION_CREATE = "create";
+const ACTION_DELETE = "delete";
+const ACTION_MODIFY = "modify";  
 
 document.addEventListener("click", function(event) {
   const menuIcon = document.getElementById("menuIcon");
@@ -202,30 +201,6 @@ document.addEventListener("keydown", function(event) {
     redo();
   }
 });
-
-
-function undo() {
-    if (history.length > 0) {
-        const lastElement = history.pop();
-        redoStack.push(lastElement);
-        svg.removeChild(lastElement);
-        updateUndoRedoButtons();
-    }
-}
-
-function redo() {
-    if (redoStack.length > 0) {
-        const lastRedo = redoStack.pop();
-        history.push(lastRedo);
-        svg.appendChild(lastRedo);
-        updateUndoRedoButtons();
-    }
-}
-
-function updateUndoRedoButtons() {
-    undoButton.classList.toggle("disabled", history.length === 0);
-    redoButton.classList.toggle("disabled", redoStack.length === 0);
-}
 
 tools.forEach(tool => tool.addEventListener("click", handleToolSelection));
 function handleToolSelection(event) {
