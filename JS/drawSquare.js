@@ -1,3 +1,16 @@
+let squareStrokecolor = "#fff";
+let squareBackgroundColor = "#fff";
+let squareFillStyleValue = "hachure";
+let squareStrokeThicknes = 2;
+let squareOutlineStyle = "solid";
+let squareElement = null; 
+let startX, startY;
+let SquarecolorOptions = document.querySelectorAll(".squareStrokeSpan");
+let backgroundColorOptionsSquare = document.querySelectorAll(".squareBackgroundSpan");
+let fillStyleOptions = document.querySelectorAll(".squareFillStyleSpan");
+let squareStrokeThicknessValue = document.querySelectorAll(".squareStrokeThickSpan");
+let squareOutlineStyleValue = document.querySelectorAll(".squareOutlineStyle");
+
 function drawSquare(x, y, width, height) {
     // Remove previous square element if exists.
     if (squareElement) {

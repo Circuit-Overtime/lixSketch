@@ -1,4 +1,9 @@
-// --- Utility Functions ---
+const strokeColors = document.querySelectorAll(".strokeColors span");
+const strokeThicknesses = document.querySelectorAll(".strokeThickness span");
+let strokeColor = "#fff";
+let strokeThickness = 2;
+let points = [];
+let currentPath = null;
 
 // Converts a point (x, y) from screen/canvas coordinates to viewBox coordinates.
 function screenToViewBoxPoint(x, y) {
@@ -71,7 +76,7 @@ function screenToViewBoxPoint(x, y) {
 svg.addEventListener('pointerup', handlePointerUpStroke);
 
 function handlePointerDownStroke(e) {
-  if (selectedTool.classList.contains("bxs-paint")) {
+  if (ispaintToolActive) {
     points = [[e.clientX, e.clientY, e.pressure]];
     currentPath = createNewPathElement();
     svg.appendChild(currentPath); // Append the new path immediately
@@ -81,7 +86,7 @@ function handlePointerDownStroke(e) {
 }
 
 function handlePointerMoveStroke(e) {
-  if (selectedTool.classList.contains("bxs-paint")) {
+  if (ispaintToolActive) {
     points.push([e.clientX, e.clientY, e.pressure]);
     renderStroke();
   }
@@ -89,7 +94,7 @@ function handlePointerMoveStroke(e) {
 
 function handlePointerUpStroke(e) {
   svg.removeEventListener("pointermove", handlePointerMoveStroke);
-  if (selectedTool.classList.contains("bxs-paint")) {
+  if (ispaintToolActive) {
     if (currentPath) {
       history.push(currentPath);
       currentPath = null;

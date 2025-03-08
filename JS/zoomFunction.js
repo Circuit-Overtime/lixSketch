@@ -13,11 +13,10 @@ function updateViewBox(anchorX = null, anchorY = null) {
   let centerX, centerY;
 
   if (anchorX === null || anchorY === null) {
-    // Use center of current viewBox as anchor if no specific anchor provided
     centerX = currentViewBox.x + (currentViewBox.width / 2);
     centerY = currentViewBox.y + (currentViewBox.height / 2);
   } else {
-    // Use provided anchor
+
     centerX = anchorX;
     centerY = anchorY;
   }
@@ -30,7 +29,6 @@ function updateViewBox(anchorX = null, anchorY = null) {
     `${viewBoxX} ${viewBoxY} ${scaledWidth} ${scaledHeight}`
   );
 
-  // Update currentViewBox to reflect the new viewBox values.
   currentViewBox.x = viewBoxX;
   currentViewBox.y = viewBoxY;
   currentViewBox.width = scaledWidth;
@@ -40,14 +38,14 @@ function updateViewBox(anchorX = null, anchorY = null) {
 zoomInBtn.addEventListener("click", function() {
   currentZoom *= 1.1;
   if (currentZoom > maxScale) currentZoom = maxScale;
-  updateViewBox(); // Center anchor for button clicks
+  updateViewBox(); 
   updateZoomDisplay();
 });
 
 zoomOutBtn.addEventListener("click", function() {
   currentZoom /= 1.1;
   if (currentZoom < minScale) currentZoom = minScale;
-  updateViewBox(); // Center anchor for button clicks
+  updateViewBox(); 
   updateZoomDisplay();
 });
 

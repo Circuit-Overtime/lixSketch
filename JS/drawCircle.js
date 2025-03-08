@@ -1,4 +1,20 @@
 
+let circleStartX, circleStartY;
+let circleElement = null;
+
+let circleStrokeColor = "#fff";
+let circleFillColor = "#fff";
+let circleFillStyle = "hachure";
+let circleStrokeThickness = 2;
+let circleOutlineStyle = "solid"; // Options: "solid", "dashed", "dotted"
+
+let circleColorOptions = document.querySelectorAll(".circleStrokeSpan");
+let circleFillColorOptions = document.querySelectorAll(".circleBackgroundSpan");
+let circleFillStyleOptions = document.querySelectorAll(".circleFillStyleSpan");
+let circleStrokeThicknessValue = document.querySelectorAll(".circleStrokeThickSpan");
+let circleOutlineStyleValue = document.querySelectorAll(".circleOutlineStyle");
+
+
 function drawCircleFromOrigin(originX, originY, pointerX, pointerY) {
   // Remove the old circle element if it exists
   if (circleElement) {

@@ -1,3 +1,16 @@
+
+let textElements = [];
+let textSize = "30px";
+let textFont = "lixFont";
+let textColor = "#fff";
+let textAlign = "left";
+
+let textColorOptions  = document.querySelectorAll(".textColorSpan");
+let textFontOptions = document.querySelectorAll(".textFontSpan");
+let textSizeOptions = document.querySelectorAll(".textSizeSpan");
+let textAlignOptions = document.querySelectorAll(".textAlignSpan");
+
+
 function getSVGCoordinates(event) {
     let pt = svg.createSVGPoint();
     pt.x = event.clientX;

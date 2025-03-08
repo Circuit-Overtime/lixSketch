@@ -1,3 +1,27 @@
+let shapeEndpoints = []; // Store the endpoints of shapes for snapping
+let highlightCircle = null; // Highlight indicator for snapping
+
+let arrowStartX, arrowStartY;
+let arrowElementGroup = null;
+
+
+let arrowStrokeColor = "#fff";
+let arrowStrokeThickness = 2;
+let arrowOutlineStyle = "solid"; 
+let arrowCurved = false;         
+let arrowCurveAmount = 20;       
+let arrowHeadLength = 10;        
+let arrowHeadAngleDeg = 30;      
+let arrowPoints = [];   
+let arrowHeadStyle = "default";
+
+
+let arrowStrokeColorOptions = document.querySelectorAll(".arrowStrokeSpan");
+let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
+let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
+let arrowTypeStyleValue = document.querySelectorAll(".arrowTypeStyle");
+let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyleSpan");
+
 function drawArrow(x1, y1, x2, y2) {
   // Remove old arrow element if it exists.
   if (arrowElementGroup) {
