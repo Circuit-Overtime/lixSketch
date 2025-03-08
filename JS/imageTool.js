@@ -134,12 +134,16 @@ svg.addEventListener('click', async (e) => {
         finalImage.setAttribute("height", placedImageHeight);
         finalImage.setAttribute("preserveAspectRatio", "xMidYMid meet");
         svg.appendChild(finalImage);
+        history.push(finalImage);
+        updateUndoRedoButtons();
 
     } catch (error) {
         console.error("Error placing image:", error);
-        // Handle the error (e.g., display an error message)
+        isDraggingImage = false;
+        imageToPlace = null;
+        isImageToolActive = false; // Important: Reset the tool state.
     } finally {
-        // Reset dragging state
+        
         isDraggingImage = false;
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.

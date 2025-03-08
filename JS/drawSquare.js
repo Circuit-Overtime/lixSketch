@@ -90,8 +90,8 @@ function handlePointerMoveSquare(e) {
 function handlePointerUpSquare(e) {
   svg.removeEventListener("pointermove", handlePointerMoveSquare);
   if (isSquareToolActive && squareElement) {
-    history.push(squareElement); // Store the square element
-    squareElement = null;        // Reset after pushing to history
+    history.push(squareElement); 
+    squareElement = null;        
   }
 }
 

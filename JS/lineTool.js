@@ -34,6 +34,7 @@ function drawLine(x1, y1, x2, y2) {
     strokeLineDash: lineStrokeStyle === 'dashed' ? [5, 5] : lineStrokeStyle === 'dotted' ? [2, 12] : []
   });
 
+  
   svg.appendChild(currentLine); // Append line to SVG
 }
 
@@ -68,14 +69,16 @@ svg.addEventListener("pointermove", (e) => {
 svg.addEventListener("pointerup", () => {
   if (!isDrawingLine) return;
   isDrawingLine = false;
-  currentLine = null; // Reset to null for the NEXT line to be drawn
+  history.push(currentLine);
+  updateUndoRedoButtons();
+  currentLine = null; 
 });
 
 // Pointer leave event listener
 svg.addEventListener("pointerleave", () => {
   if (!isDrawingLine) return;
   isDrawingLine = false;
-  currentLine = null; // Reset on pointer leave to clear the line
+  currentLine = null; 
 });
 
 
