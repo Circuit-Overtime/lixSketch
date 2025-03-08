@@ -44,17 +44,19 @@ function copySelectedElements() {
 function pasteCopiedElements(x, y) {
     if (!copiedElements.length) return;
 
-    deselectAll();
+    deselectAll(); // Deselect all before pasting
 
-    let pasteCoords = screenToSVGCoords(x, y);
-    let pastedElements = [];
+    let pasteCoords = screenToSVGCoords(x, y); // Convert mouse position to SVG coordinates
+    let pastedElements = []; // Track pasted elements for undo action
 
     copiedElements.forEach((el, index) => {
         let newElement = el.cloneNode(true);
         let originalCenter = copiedCenters[index];
 
+        // Convert original center to SVG coordinates
         let originalSVGCoords = screenToSVGCoords(originalCenter.x, originalCenter.y);
 
+        // Calculate translation needed
         let translateX = pasteCoords.x - originalSVGCoords.x;
         let translateY = pasteCoords.y - originalSVGCoords.y;
 
@@ -63,22 +65,21 @@ function pasteCopiedElements(x, y) {
         newElement.setAttribute("transform", transform);
         svgCanvas.appendChild(newElement);
         selectElement(newElement, true);
-        pastedElements.push(newElement);
+        pastedElements.push(newElement); // Track new elements
     });
 
-    // Store undo action
+    // Store paste action for undo/redo
     const action = {
-        type: ACTION_CREATE,
-        elements: pastedElements,
-        parent: svgCanvas,
-        data: {
-            transform: pastedElements.map(el => el.getAttribute('transform')),
-        }
+        type: ACTION_PASTE,
+        elements: pastedElements, // Store the new elements
+        parent: svgCanvas, // Parent is the canvas, so it can be removed easily
     };
+
     history.push(action);
     redoStack = [];
     updateUndoRedoButtons();
 }
+
 
 function deleteSelectedElements() {
     if (!selectedElements.size) return;
@@ -102,59 +103,6 @@ function deleteSelectedElements() {
     deselectAll();
 }
 
-function undo() {
-    if (history.length > 0) {
-        const action = history.pop();
-
-        switch (action.type) {
-            case ACTION_CREATE:
-                action.elements.forEach(el => el.parentElement.removeChild(el));
-                break;
-            case ACTION_DELETE:
-                action.elements.forEach(el => action.parent.appendChild(el));
-                break;
-            case ACTION_MODIFY:
-                action.elements.forEach((el, index) => {
-                    el.setAttribute("transform", action.data.transform[index] || "translate(0,0)");
-                });
-                break;
-            default:
-                console.warn("Unknown action type:", action.type);
-                return;
-        }
-
-        redoStack.push(action);
-        updateUndoRedoButtons();
-        deselectAll();
-    }
-}
-
-function redo() {
-    if (redoStack.length > 0) {
-        const action = redoStack.pop();
-
-        switch (action.type) {
-            case ACTION_CREATE:
-                action.elements.forEach(el => action.parent.appendChild(el));
-                break;
-            case ACTION_DELETE:
-                action.elements.forEach(el => el.parentElement.removeChild(el));
-                break;
-            case ACTION_MODIFY:
-                action.elements.forEach((el, index) => {
-                    el.setAttribute("transform", action.data.transform[index] || "translate(0,0)");
-                });
-                break;
-            default:
-                console.warn("Unknown action type:", action.type);
-                return;
-        }
-
-        history.push(action);
-        updateUndoRedoButtons();
-        deselectAll();
-    }
-}
 
 function screenToSVGCoords(x, y) {
     let point = svgCanvas.createSVGPoint();
@@ -163,7 +111,3 @@ function screenToSVGCoords(x, y) {
     return point.matrixTransform(svgCanvas.getScreenCTM().inverse());
 }
 
-function updateUndoRedoButtons() {
-    undoButton.classList.toggle("disabled", history.length === 0);
-    redoButton.classList.toggle("disabled", redoStack.length === 0);
-}

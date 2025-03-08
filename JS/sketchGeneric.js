@@ -58,6 +58,7 @@ const textSideBar = document.getElementById("textSideBar");
 const ACTION_CREATE = "create";
 const ACTION_DELETE = "delete";
 const ACTION_MODIFY = "modify";  
+const ACTION_PASTE = "paste";
 
 document.addEventListener("click", function(event) {
   const menuIcon = document.getElementById("menuIcon");
