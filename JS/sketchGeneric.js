@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bxs-eraser");
+let selectedTool = document.querySelector(".bx-circle");
 let history = [];
 let redoStack = [];
 

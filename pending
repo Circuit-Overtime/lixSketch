@@ -1,6 +1,6 @@
-1. selection tool fix
+1. selection tool fix 
 2. line [CHECKED]
-4. eraser 
+4. eraser [CHECKED]
 5. hand [CHECKED]
 6. text [CHECKED]
 7. image [CHECKED]
@@ -9,7 +9,7 @@
 10. canvas infitnite zoom (10% - 3000%) [CHECKED]
 11. lazer pointer [CHECKED]
 12. text to diagram 
-13. transparent rectangles and circle
+13. transparent rectangles and circle [CHECKED]
 14. text to image 
 15. diagram to code
 16. expand palette (export as image, 

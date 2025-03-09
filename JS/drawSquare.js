@@ -1,6 +1,6 @@
 let squareStrokecolor = "#fff";
 let squareBackgroundColor = "#fff";
-let squareFillStyleValue = "hachure";
+let squareFillStyleValue = "transparent";
 let squareStrokeThicknes = 2;
 let squareOutlineStyle = "solid";
 let squareElement = null;
@@ -14,6 +14,7 @@ let squareOutlineStyleValue = document.querySelectorAll(".squareOutlineStyle");
 
 
 function drawSquare(x, y, width, height) {
+    
     // Remove previous square element if exists.
     if (squareElement) {
       svg.removeChild(squareElement);
@@ -23,12 +24,17 @@ function drawSquare(x, y, width, height) {
     // Convert drawing coordinates from screen/canvas space to viewBox space.
     const adjustedX = currentViewBox.x + (x / currentZoom);
     const adjustedY = currentViewBox.y + (y / currentZoom);
+    let actualFillColor = squareBackgroundColor; // Use backgroundColor by default
+
+    if(squareFillStyleValue === "transparent") {
+        actualFillColor = "rgba(0,0,0,0)"; // Set to transparent if fill style is transparent
+    }
 
     const rc = rough.svg(svg);
     const shape = rc.rectangle(adjustedX, adjustedY, width / currentZoom, height / currentZoom, {
       stroke: squareStrokecolor,
       strokeWidth: squareStrokeThicknes,
-      fill: squareBackgroundColor,
+      fill: actualFillColor,
       fillStyle: squareFillStyleValue,
       hachureAngle: 60,
       hachureGap: 10
@@ -60,7 +66,8 @@ function drawSquare(x, y, width, height) {
     // Store references to the shape and overlay within the group (VERY IMPORTANT).
     group.shape = shape; // Direct access for easier manipulation
     group.overlay = overlay;
-
+    group.actualFillColor = actualFillColor; //Store the acutal fill color based on fill style
+    group.squareFillStyleValue = squareFillStyleValue;
     group.appendChild(shape);
     group.appendChild(overlay);
     // Store the group as the square element.
@@ -132,6 +139,8 @@ SquarecolorOptions.forEach((span) => {
 
         // Store the modification action
         if (squareElement) { // Check if a square is currently drawn.
+            squareElement.shape.setAttribute('stroke', squareStrokecolor);
+
             const action = {
                 type: ACTION_MODIFY,
                 element: squareElement,
@@ -156,6 +165,11 @@ backgroundColorOptionsSquare.forEach((span) => {
 
         // Store the modification action
         if (squareElement) { // Check if a square is currently drawn.
+             if (squareElement.squareFillStyleValue !== "transparent") {
+               squareElement.shape.setAttribute('fill', squareBackgroundColor);
+               squareElement.actualFillColor = squareBackgroundColor;
+            }
+
             const action = {
                 type: ACTION_MODIFY,
                 element: squareElement,
@@ -176,8 +190,18 @@ fillStyleOptions.forEach((span) => {
         fillStyleOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         squareFillStyleValue = span.getAttribute("data-id");
+          let fillColor = squareBackgroundColor;
+
+          if (squareFillStyleValue === "transparent") {
+               fillColor = "rgba(0,0,0,0)";
+
+          }
 
         if (squareElement) {
+              squareElement.shape.setAttribute('fill', fillColor);
+              squareElement.actualFillColor = fillColor;
+              squareElement.squareFillStyleValue = squareFillStyleValue;
+
             const action = {
                 type: ACTION_MODIFY,
                 element: squareElement,
@@ -202,6 +226,8 @@ squareStrokeThicknessValue.forEach((span) => {
         squareStrokeThicknes = parseInt(span.getAttribute("data-id"));
 
         if (squareElement) {
+            squareElement.shape.setAttribute('strokeWidth', squareStrokeThicknes);
+
             const action = {
                 type: ACTION_MODIFY,
                 element: squareElement,
@@ -225,6 +251,14 @@ squareOutlineStyleValue.forEach((span) => {
         squareOutlineStyle = span.getAttribute("data-id");
 
         if (squareElement) {
+              if (squareOutlineStyle === "dashed") {
+                  squareElement.shape.setAttribute("stroke-dasharray", "10,10");
+              } else if (squareOutlineStyle === "dotted") {
+                   squareElement.shape.setAttribute("stroke-dasharray", "2,8");
+              } else {
+                  squareElement.shape.setAttribute("stroke-dasharray", "");  // Remove dash array for solid
+              }
+
             const action = {
                 type: ACTION_MODIFY,
                 element: squareElement,
