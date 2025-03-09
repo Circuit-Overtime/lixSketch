@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bxs-pointer");
+let selectedTool = document.querySelector(".bxs-magic-wand");
 let history = [];
 let redoStack = [];
 

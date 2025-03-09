@@ -19,12 +19,11 @@ svgCanvas.addEventListener("mousedown", (event) => {
         svgCoords.x <= selectionBoxBounds.x + selectionBoxBounds.width &&
         svgCoords.y >= selectionBoxBounds.y &&
         svgCoords.y <= selectionBoxBounds.y + selectionBoxBounds.height) {
-
         if (selectedElements.size) startDrag(event);
         return;
     }
 
-    if (tag === "rect" || tag === "path" || tag === "image" || target.closest("g[data-type='text-group']")) {
+    if (tag === "rect" || tag === "path" || tag === "image" || tag === "line" || target.closest("g[data-type='text-group']")) {
         if (isSelectionToolActive) {
             if (event.ctrlKey) {
                 isMultiSelect = true;
@@ -39,8 +38,87 @@ svgCanvas.addEventListener("mousedown", (event) => {
             deselectAll();
             startSelection(event);
         }
+    } else {
+        // Expand selection detection for lines/arrows
+        let closestElement = getClosestSelectableElement(event);
+        if (closestElement) {
+            selectElement(closestElement);
+        }
     }
 });
+
+function getClosestSelectableElement(event) {
+    const point = screenToSVGCoords(event.clientX, event.clientY);
+    let closestElement = null;
+    let minDistance = 50; // Max distance to consider selection
+
+    document.querySelectorAll("line, path").forEach((element) => {
+        const bbox = element.getBBox();
+        const padding = 50; // Allow clicking near the element
+
+        // Check if the point is within the expanded bounding box
+        if (
+            point.x >= bbox.x - padding &&
+            point.x <= bbox.x + bbox.width + padding &&
+            point.y >= bbox.y - padding &&
+            point.y <= bbox.y + bbox.height + padding
+        ) {
+            if (element instanceof SVGPathElement) {
+                // Precise stroke check for paths
+                const ctx = new Path2D(element.getAttribute("d"));
+                if (svgCanvas.getContext("2d").isPointInStroke(ctx, point.x, point.y)) {
+                    closestElement = element;
+                }
+            } else if (element.tagName === "line") {
+                // Compute distance from the point to the line
+                const x1 = parseFloat(element.getAttribute("x1"));
+                const y1 = parseFloat(element.getAttribute("y1"));
+                const x2 = parseFloat(element.getAttribute("x2"));
+                const y2 = parseFloat(element.getAttribute("y2"));
+
+                const dist = pointToLineDistance(point.x, point.y, x1, y1, x2, y2);
+                if (dist < minDistance) {
+                    minDistance = dist; // Update min distance
+                    closestElement = element;
+                }
+            } else {
+                closestElement = element;
+            }
+        }
+    });
+
+    return closestElement;
+}
+
+// Function to calculate distance from a point to a line segment
+function pointToLineDistance(px, py, x1, y1, x2, y2) {
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const len_sq = C * C + D * D;
+    let param = len_sq !== 0 ? dot / len_sq : -1;
+
+    let xx, yy;
+    if (param < 0) {
+        xx = x1;
+        yy = y1;
+    } else if (param > 1) {
+        xx = x2;
+        yy = y2;
+    } else {
+        xx = x1 + param * C;
+        yy = y1 + param * D;
+    }
+
+    const dx = px - xx;
+    const dy = py - yy;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+
 
 function toggleElementSelection(element) {
     if (selectedElements.has(element)) {

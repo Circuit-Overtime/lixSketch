@@ -104,7 +104,7 @@ function removeCustomCursor() {
     document.body.removeChild(cursorCircle);
     cursorCircle = null;
   }
-  svg.style.cursor = "default";
+  
 }
 
 // --- Event Listeners ---

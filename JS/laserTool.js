@@ -1,71 +1,106 @@
 let isDrawing = false;
-let lastPoint = null;
+let pointsLazer = [];
+const maxTrailLength = 30; // Maximum trail length
+const rc = rough.svg(svg); // Rough.js instance
 
-// Function to create a fading laser stroke between two points
-function createLaserStroke(x1, y1, x2, y2) {
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", x1);
-    line.setAttribute("y1", y1);
-    line.setAttribute("x2", x2);
-    line.setAttribute("y2", y2);
-    line.setAttribute("stroke", "#00ff87");
-    line.setAttribute("stroke-width", "3");
-    line.setAttribute("stroke-linecap", "butt");
-    line.style.opacity = "1";
-    line.style.transition = "opacity 0.3s ease-out"; // Smooth transition
-    line.style.filter = "blur(2px)";
-    svg.appendChild(line);
-
-    setTimeout(() => {
-        line.style.opacity = "0";
-        setTimeout(() => {
-            if (line.parentNode) {
-                svg.removeChild(line);
-            }
-        }, 300); // Remove after the transition completes
-    }, 10);
+// Convert screen coordinates to SVG viewBox
+function screenToViewBoxPoint(x, y) {
+    const CTM = svg.getScreenCTM();
+    return [(x - CTM.e) / CTM.a, (y - CTM.f) / CTM.d];
 }
 
-// Activate the laser tool only when the laser tool is selected from the toolbar
+// Function to draw the laser stroke with smooth, heavy curves and progressive fade
+function drawLaserStroke() {
+    if (pointsLazer.length < 2) return;
+
+    // Reduce trail size progressively
+    if (pointsLazer.length > maxTrailLength) {
+        pointsLazer.shift(); // Remove the oldest point from the start
+    }
+
+    let opacityFactor = pointsLazer.length / maxTrailLength; // Opacity linked to trail size
+    let strokeWidth = Math.max(2, opacityFactor * 4); // Stroke tapers as it fades
+
+    // Apply Rough.js effect with improved fluidity
+    let roughStroke = rc.curve(pointsLazer, {
+        stroke: `rgba(0, 255, 0, ${opacityFactor})`, // Opacity fades naturally
+        strokeWidth: 5,
+        roughness: 0.08, // Keeps strokes stable
+        bowing: 0.02, // Prevents unwanted wobbliness
+        thinning: 0,
+        smoothing: 1.8, // More curved, fluid motion
+        streamline: 0.75, // Keeps it thick & continuous
+    });
+
+    // Remove previous path before adding a new one
+    let oldPath = document.getElementById("laserPath");
+    if (oldPath) oldPath.remove();
+
+    roughStroke.setAttribute("id", "laserPath");
+    svg.appendChild(roughStroke);
+}
+
+// Function to smoothly fade out the laser when mouse is up (rear-end fade)
+function fadeLaserTrail() {
+    function fade() {
+        if (pointsLazer.length === 0) return;
+
+        pointsLazer.shift(); // Remove points progressively from the rear
+
+        let opacityFactor = pointsLazer.length / maxTrailLength;
+        let strokeWidth = Math.max(2, opacityFactor * 6);
+
+        if (pointsLazer.length > 1) {
+            let roughStroke = rc.curve(pointsLazer, {
+                stroke: `rgba(0, 250, 0, ${opacityFactor})`,
+                strokeWidth: strokeWidth,
+                roughness: 0.08,
+                bowing: 0.5,
+                thinning: 0,
+                smoothing: 1.8,
+                streamline: 0.75,
+            });
+
+            let oldPath = document.getElementById("laserPath");
+            if (oldPath) oldPath.remove();
+
+            roughStroke.setAttribute("id", "laserPath");
+            svg.appendChild(roughStroke);
+        }
+
+        if (pointsLazer.length > 0) {
+            requestAnimationFrame(fade); 
+        }
+    }
+
+    requestAnimationFrame(fade);
+}
+
+// Pointer down: Start drawing
 svg.addEventListener("pointerdown", (e) => {
     if (!selectedTool.classList.contains("bxs-magic-wand")) return;
 
-    isLaserToolActive = true;
     isDrawing = true;
-
-    // Get the transformation matrix from the SVG to the screen
-    const CTM = svg.getScreenCTM();
-
-    // Apply the inverse transformation to the mouse coordinates to get the SVG coordinates
-    const x = (e.clientX - CTM.e) / CTM.a;
-    const y = (e.clientY - CTM.f) / CTM.d;
-
-    lastPoint = { x: x, y: y };
+    pointsLazer = [screenToViewBoxPoint(e.clientX, e.clientY)];
+    drawLaserStroke();
 });
 
+// Pointer move: Draw laser effect with **progressive fading while moving**
 svg.addEventListener("pointermove", (e) => {
-    if (!isLaserToolActive || !isDrawing) return;
+    if (!isDrawing) return;
 
-    // Get the transformation matrix from the SVG to the screen
-    const CTM = svg.getScreenCTM();
+    pointsLazer.push(screenToViewBoxPoint(e.clientX, e.clientY));
 
-    // Apply the inverse transformation to the mouse coordinates to get the SVG coordinates
-    const x = (e.clientX - CTM.e) / CTM.a;
-    const y = (e.clientY - CTM.f) / CTM.d;
-
-    const newPoint = { x: x, y: y };
-    if (lastPoint) {
-        createLaserStroke(lastPoint.x, lastPoint.y, newPoint.x, newPoint.y);
-    }
-    lastPoint = newPoint;
+    drawLaserStroke(); // This now applies rear-end fading continuously
 });
 
+// Pointer up: Stop drawing and trigger **rear-end fade-out**
 svg.addEventListener("pointerup", () => {
     isDrawing = false;
-    isLaserToolActive = false;
+    fadeLaserTrail();
 });
 
+// Pointer leave: Stop drawing
 svg.addEventListener("pointerleave", () => {
     isDrawing = false;
-    isLaserToolActive = false;
 });

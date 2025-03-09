@@ -19,3 +19,5 @@ canvas background,
 save to server, or save to local or export as link ) 
 17. help command palette
 18. canvas lock
+19. scroll to scroll down or up the canvas [CHECKED]
+20. text edit bug fix

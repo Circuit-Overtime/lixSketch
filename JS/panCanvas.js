@@ -33,13 +33,21 @@ freehandCanvas.addEventListener("mousemove", (e) => {
 });
 
 freehandCanvas.addEventListener("mouseup", () => {
-    isPanning = false;
-    freehandCanvas.style.cursor = 'default';
+    if(isPanningToolActive)
+    {
+        isPanning = false;
+        freehandCanvas.style.cursor = 'grab';
+    }
+    
 });
 
 freehandCanvas.addEventListener("mouseleave", () => {
-    isPanning = false;
-    freehandCanvas.style.cursor = 'default';
+    if(isPanningToolActive)
+    {
+        isPanning = false;
+        freehandCanvas.style.cursor = 'grab';
+    }
+
 });
 
 
