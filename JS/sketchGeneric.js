@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bxs-magic-wand");
+let selectedTool = document.querySelector(".bxs-eraser");
 let history = [];
 let redoStack = [];
 
@@ -6,6 +6,22 @@ const svg = document.querySelector('#freehand-canvas');
 const tools = document.querySelectorAll(".toolbar i");
 const roughCanvas = window.rough.svg(svg);  
 const roughGenerator = roughCanvas.generator;
+
+// Custom SVG Cursor (Circle with White Border)
+const eraserCursorSVG = `data:image/svg+xml;base64,${btoa(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="7" fill="#222" stroke="white" stroke-width="2"/>
+  </svg>
+`)}`;
+
+const lazerCursor = `data:image/svg+xml;base64,${btoa(`
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+    <g fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 10 10)">
+      <path clip-rule="evenodd" d="m9.644 13.69 7.774-7.773a2.357 2.357 0 0 0-3.334-3.334l-7.773 7.774L8 12l1.643 1.69Z"></path>
+      <path d="m13.25 3.417 3.333 3.333M10 10l2-2M5 15l3-3M2.156 17.894l1-1M5.453 19.029l-.144-1.407M2.377 11.887l.866 1.118M8.354 17.273l-1.194-.758M.953 14.652l1.408.13"></path>
+    </g>
+  </svg>
+`)}`;
 
 
 let currentZoom = 1;
@@ -147,6 +163,7 @@ function toolExtraPopup() {
     {
         disableAllTools();
         isEraserToolActive  = true;
+        svg.style.cursor = `url(${eraserCursorSVG}) 10 10, auto`; // Maintain custom cursor
         disableAllSideBars();
     }
     else if(selectedTool.classList.contains("bx-image-alt"))

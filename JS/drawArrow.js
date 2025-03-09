@@ -4,7 +4,6 @@ let highlightCircle = null; // Highlight indicator for snapping
 let arrowStartX, arrowStartY;
 let arrowElementGroup = null;
 
-
 let arrowStrokeColor = "#fff";
 let arrowStrokeThickness = 2;
 let arrowOutlineStyle = "solid";
@@ -15,31 +14,39 @@ let arrowHeadAngleDeg = 30;
 let arrowPoints = [];
 let arrowHeadStyle = "default";
 
-
 let arrowStrokeColorOptions = document.querySelectorAll(".arrowStrokeSpan");
 let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
 let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
 let arrowTypeStyleValue = document.querySelectorAll(".arrowTypeStyle");
 let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyleSpan");
 
+
+function screenToViewBoxPointArrow(x, y) {
+  return [
+    currentViewBox.x + x / currentZoom,
+    currentViewBox.y + y / currentZoom
+  ];
+}
+
 function drawArrow(x1, y1, x2, y2) {
     // Remove old arrow element if it exists.
     if (arrowElementGroup) {
-        svg.removeChild(arrowElementGroup);
-        arrowElementGroup = null;
+        //Remove all children to clear it
+        while (arrowElementGroup.firstChild) {
+          arrowElementGroup.removeChild(arrowElementGroup.firstChild);
+      }
     }
-
-    // Snap endpoints if available.
-    const startSnap = getSnapPoint ? getSnapPoint(x1, y1) : {x: x1, y: y1};
-    const endSnap = getSnapPoint ? getSnapPoint(x2, y2) : {x: x2, y: y2};
-    x1 = startSnap.x;
-    y1 = startSnap.y;
-    x2 = endSnap.x;
-    y2 = endSnap.y;
-
-    // Convert to viewBox coordinates.
-    const [vx1, vy1] = screenToViewBoxPoint(x1, y1);
-    const [vx2, vy2] = screenToViewBoxPoint(x2, y2);
+     // Snap endpoints if available.
+     const startSnap = getSnapPoint ? getSnapPoint(x1, y1) : {x: x1, y: y1};
+     const endSnap = getSnapPoint ? getSnapPoint(x2, y2) : {x: x2, y: y2};
+     x1 = startSnap.x;
+     y1 = startSnap.y;
+     x2 = endSnap.x;
+     y2 = endSnap.y;
+ 
+     // Convert to viewBox coordinates.
+     const [vx1, vy1] = screenToViewBoxPointArrow(x1, y1);
+     const [vx2, vy2] = screenToViewBoxPointArrow(x2, y2);
 
     const angle = Math.atan2(vy2 - vy1, vx2 - vx1);
 
@@ -78,140 +85,34 @@ function drawArrow(x1, y1, x2, y2) {
     arrowPath.setAttribute("stroke", arrowStrokeColor);
     arrowPath.setAttribute("stroke-width", arrowStrokeThickness);
     arrowPath.setAttribute("fill", "none");
-
     if (arrowOutlineStyle === "dashed") {
-        arrowPath.setAttribute("stroke-dasharray", "10,10");
+      arrowPath.setAttribute("stroke-dasharray", "10,10");
     } else if (arrowOutlineStyle === "dotted") {
-        arrowPath.setAttribute("stroke-dasharray", "2,8");
+      arrowPath.setAttribute("stroke-dasharray", "2,8");
     }
+     //Store properties
+    arrowPath.setAttribute("data-x1", vx1);
+    arrowPath.setAttribute("data-y1", vy1);
+    arrowPath.setAttribute("data-x2", vx2);
+    arrowPath.setAttribute("data-y2", vy2);
+    arrowPath.setAttribute("data-arrowStrokeColor", arrowStrokeColor);
+    arrowPath.setAttribute("data-arrowStrokeThickness", arrowStrokeThickness);
+    arrowPath.setAttribute("data-arrowOutlineStyle", arrowOutlineStyle);
+    arrowPath.setAttribute("data-arrowHeadStyle", arrowHeadStyle);
 
-    // Wrap everything in a single group
-    arrowElementGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    arrowElementGroup.appendChild(arrowPath);
-
-    //Store properties
-    arrowElementGroup.setAttribute("data-x1", vx1);
-    arrowElementGroup.setAttribute("data-y1", vy1);
-    arrowElementGroup.setAttribute("data-x2", vx2);
-    arrowElementGroup.setAttribute("data-y2", vy2);
-    arrowElementGroup.setAttribute("data-arrowStrokeColor", arrowStrokeColor);
-    arrowElementGroup.setAttribute("data-arrowStrokeThickness", arrowStrokeThickness);
-    arrowElementGroup.setAttribute("data-arrowOutlineStyle", arrowOutlineStyle);
-    arrowElementGroup.setAttribute("data-arrowHeadStyle", arrowHeadStyle);
-    arrowElementGroup.path = arrowPath;
-
-    svg.appendChild(arrowElementGroup);
-}
-
-
-function createArrowHead(tipX, tipY, angle) {
-  const rc = rough.svg(svg);
-  const arrowHeadAngle = arrowHeadAngleDeg * Math.PI / 180;
-  let points;
-  
-  if (arrowHeadStyle === "default") {
-    // Default V-shaped arrowhead.
-    points = [
-      [tipX, tipY],
-      [tipX - arrowHeadLength * Math.cos(angle - arrowHeadAngle), tipY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)],
-      [tipX - arrowHeadLength * Math.cos(angle + arrowHeadAngle), tipY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)]
-    ];
-  } 
-  
-  else if (arrowHeadStyle === "square") {
-    // Create a square arrow head (proper square end) that is filled.
-    // We'll treat arrowHeadLength as the side-length of the square.
-    const L = arrowHeadLength;
-    // v: unit vector along the arrow's direction.
-    const v = { x: Math.cos(angle), y: Math.sin(angle) };
-    // w: unit vector perpendicular to the arrow's direction.
-    const w = { x: -Math.sin(angle), y: Math.cos(angle) };
-  
-    // Define the square so that its left side is flush with the arrow tip.
-    // The arrow tip (tipX, tipY) will be the midpoint of the left side.
-    // Left side endpoints:
-    const A = [ tipX + (L/2) * w.x, tipY + (L/2) * w.y ]; // top-left
-    const B = [ tipX - (L/2) * w.x, tipY - (L/2) * w.y ]; // bottom-left
-    // Right side endpoints:
-    const D = [ tipX + L * v.x + (L/2) * w.x, tipY + L * v.y + (L/2) * w.y ]; // top-right
-    const C = [ tipX + L * v.x - (L/2) * w.x, tipY + L * v.y - (L/2) * w.y ]; // bottom-right
-    
-    // Build the points array in order.
-    const points = [ A, B, C, D ];
-  
-    // Create a filled polygon using Rough.js with a solid fill.
-    const rc = rough.svg(svg);
-    const arrowHeadElement = rc.polygon(points, {
-        fill: arrowStrokeColor,
-        stroke: arrowStrokeColor,
-        fillStyle: 'solid', // Ensures a solid fill.
-        strokeWidth: arrowStrokeThickness,
-    });
-    
-    // Optionally, apply dash styles if needed.
-    if (arrowOutlineStyle === "dashed") {
-      arrowHeadElement.setAttribute("stroke-dasharray", "10,10");
-    } else if (arrowOutlineStyle === "dotted") {
-      arrowHeadElement.setAttribute("stroke-dasharray", "2,8");
+    if(!arrowElementGroup){
+        arrowElementGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        arrowElementGroup.setAttribute("data-type", "arrow-group");
     }
-    
-    return arrowHeadElement;
-  }
-  
-  
-  
-  else if (arrowHeadStyle === "solid") {
-    // Create a circular filled arrow head.
-    // Here, we treat arrowHeadLength as the radius of the circle.
-    const rc = rough.svg(svg);
-    // rough.js circle takes the diameter as the size parameter.
-    const diameter = arrowHeadLength * 1;
-    const arrowHeadElement = rc.circle(tipX, tipY, diameter, {
-      fill: arrowStrokeColor,
-      stroke: arrowStrokeColor,
-      fillStyle: 'solid',
-      strokeWidth: 0.8,
+    //Clean
+    while (arrowElementGroup.firstChild) {
+        arrowElementGroup.removeChild(arrowElementGroup.firstChild);
+    }
+     arrowElementGroup.appendChild(arrowPath);
 
-    });
     
-    return arrowHeadElement;
-  }
-
-  
-  
-  else if (arrowHeadStyle === "outline") {
-    // Create a circular filled arrow head.
-    // Here, we treat arrowHeadLength as the radius of the circle.
-    const rc = rough.svg(svg);
-    // rough.js circle takes the diameter as the size parameter.
-    const diameter = arrowHeadLength * 1.2;
-    const arrowHeadElement = rc.circle(tipX, tipY, diameter, {
-      fill: arrowStrokeColor,
-      stroke: arrowStrokeColor,
-      fillStyle: 'none',
-      strokeWidth: 0.2,
-
-    });
-    
-    return arrowHeadElement;
-  }
-  
-  const arrowHeadElement = rc.polygon(points, {
-    fill: arrowStrokeColor,
-    stroke: arrowStrokeColor,
-    strokeWidth: arrowStrokeThickness,
-  });
-  
-  if (arrowOutlineStyle === "dashed") {
-    arrowHeadElement.setAttribute("stroke-dasharray", "10,10");
-  } else if (arrowOutlineStyle === "dotted") {
-    arrowHeadElement.setAttribute("stroke-dasharray", "2,8");
-  }
-  
-  return arrowHeadElement;
+    return arrowElementGroup;
 }
-
-
   function getSnapPoint(x, y) {
     const snapThreshold = 10; // If within 10px, snap to endpoint
     for (let pt of shapeEndpoints) {
@@ -224,15 +125,16 @@ function createArrowHead(tipX, tipY, angle) {
     return { x, y };
   }
 
+
 svg.addEventListener('pointerdown', handlePointerDownArrow);
 svg.addEventListener('pointerup', handlePointerUpArrow);
 
 function handlePointerDownArrow(e) {
     if (isArrowToolActive && !arrowCurved) {
-        if (arrowElementGroup) {
-            svg.removeChild(arrowElementGroup);
-            arrowElementGroup = null;
-        }
+        //This is to handle the intitial draw in a single click
+        if(arrowElementGroup && arrowElementGroup.parentNode) svg.removeChild(arrowElementGroup);
+        arrowElementGroup = null;
+
         arrowStartX = e.clientX;
         arrowStartY = e.clientY;
     }
@@ -241,24 +143,34 @@ function handlePointerDownArrow(e) {
 
 function handlePointerMoveArrow(e) {
     if (isArrowToolActive && !arrowCurved) {
-        drawArrow(arrowStartX, arrowStartY, e.clientX, e.clientY);
+      //This is to handle a single click
+      if (arrowElementGroup && arrowElementGroup.parentNode) svg.removeChild(arrowElementGroup);
+      arrowElementGroup = null;
+
+        const arrow = drawArrow(arrowStartX, arrowStartY, e.clientX, e.clientY);
+        if(arrow)  {
+                if(arrow.parentNode != svg)
+                  svg.appendChild(arrow) //Add the arrow
+        }
     }
 }
 
 function handlePointerUpArrow(e) {
     svg.removeEventListener("pointermove", handlePointerMoveArrow);
     if (isArrowToolActive && !arrowCurved) {
-        drawArrow(arrowStartX, arrowStartY, e.clientX, e.clientY);
-        if (arrowElementGroup) {
+        const arrow = drawArrow(arrowStartX, arrowStartY, e.clientX, e.clientY);
 
-            const x1 = parseFloat(arrowElementGroup.getAttribute("data-x1"));
-            const y1 = parseFloat(arrowElementGroup.getAttribute("data-y1"));
-            const x2 = parseFloat(arrowElementGroup.getAttribute("data-x2"));
-            const y2 = parseFloat(arrowElementGroup.getAttribute("data-y2"));
-            const arrowStrokeColorValue = arrowElementGroup.getAttribute("data-arrowStrokeColor");
-            const arrowStrokeThicknessValue = parseFloat(arrowElementGroup.getAttribute("data-arrowStrokeThickness"));
-            const arrowOutlineStyleValue = arrowElementGroup.getAttribute("data-arrowOutlineStyle");
-            const arrowHeadStyleValue = arrowElementGroup.getAttribute("data-arrowHeadStyle");
+        if (arrow) {
+           svg.appendChild(arrow);
+          if (arrowElementGroup) {
+            const x1 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-x1"));
+            const y1 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-y1"));
+            const x2 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-x2"));
+            const y2 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-y2"));
+            const arrowStrokeColorValue = arrowElementGroup.querySelector("path").getAttribute("data-arrowStrokeColor");
+            const arrowStrokeThicknessValue = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-arrowStrokeThickness"));
+            const arrowOutlineStyleValue = arrowElementGroup.querySelector("path").getAttribute("data-arrowOutlineStyle");
+            const arrowHeadStyleValue = arrowElementGroup.querySelector("path").getAttribute("data-arrowHeadStyle");
 
             const action = {
                 type: ACTION_CREATE,
@@ -276,12 +188,14 @@ function handlePointerUpArrow(e) {
                     arrowHeadStyle: arrowHeadStyleValue
                 }
             };
+            //svg.appendChild(arrowElementGroup) //Add the arrow
 
             history.push(action);
             arrowElementGroup = null;
             redoStack = [];
             updateUndoRedoButtons();
-        }
+          }
+       }
     }
 }
 
@@ -294,6 +208,9 @@ arrowStrokeColorOptions.forEach((span) => {
         arrowStrokeColor = span.getAttribute("data-id");
 
          if (arrowElementGroup) {
+           const arrowPath = arrowElementGroup.querySelector("path")
+            if(arrowPath) arrowPath.setAttribute("stroke", arrowStrokeColor);
+
             const action = {
                 type: ACTION_MODIFY,
                 element: arrowElementGroup,
@@ -313,8 +230,10 @@ arrowStrokeThicknessValue.forEach((span) => {
         arrowStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         arrowStrokeThickness = parseInt(span.getAttribute("data-id"));
-        
-          if (arrowElementGroup) {
+
+        if (arrowElementGroup) {
+           const arrowPath = arrowElementGroup.querySelector("path")
+           if(arrowPath) arrowPath.setAttribute("stroke-width", arrowStrokeThickness);
             const action = {
                 type: ACTION_MODIFY,
                 element: arrowElementGroup,
@@ -335,8 +254,11 @@ arrowOutlineStyleValue.forEach((span) => {
         arrowOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         arrowOutlineStyle = span.getAttribute("data-id");
-        
+
          if (arrowElementGroup) {
+              const arrowPath = arrowElementGroup.querySelector("path")
+              let strokeLineDash = arrowOutlineStyle === "dashed" ? "10,10" : arrowOutlineStyle === "dotted" ? "2,8" : "";
+              if(arrowPath) arrowPath.setAttribute("stroke-dasharray", strokeLineDash);
             const action = {
                 type: ACTION_MODIFY,
                 element: arrowElementGroup,
@@ -368,16 +290,16 @@ arrowHeadStyleValue.forEach((span) => {
         span.classList.add("selected");
         arrowHeadStyle = span.getAttribute("data-id");
 
-        if (arrowElementGroup) {
-            const action = {
-                type: ACTION_MODIFY,
-                element: arrowElementGroup,
-                data: { property: 'arrowHeadStyle', newValue: arrowHeadStyle, oldValue: previousArrowHeadStyle }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
+        //if (arrowElementGroup) {
+            // const action = {
+            //     type: ACTION_MODIFY,
+            //     element: arrowElementGroup,
+            //     data: { property: 'arrowHeadStyle', newValue: arrowHeadStyle, oldValue: previousArrowHeadStyle }
+            // };
+            // history.push(action);
+            // redoStack = [];
+            // updateUndoRedoButtons();
+        //}
 
         console.log("Selected Arrow Head Style:", arrowHeadStyle);
         event.stopPropagation()

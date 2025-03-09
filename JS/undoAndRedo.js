@@ -1,46 +1,46 @@
 function undo() {
     if (history.length > 0) {
         const action = history.pop();
-  
-        switch (action.type) {
-            case ACTION_CREATE:
-                // Delete the created element
-                action.parent.removeChild(action.element);
-                break;
+        redoStack.push(action);
 
-            case ACTION_DELETE:
-                // Restore the deleted element
-                if (action.nextSibling) {
+        if (action.type === ACTION_DELETE) {
+            // Restore the deleted element
+            if (action.parent) {
+                // Check if the nextSibling is still in the DOM and is a child of the parent
+                if (action.nextSibling && action.parent.contains(action.nextSibling)) {
                     action.parent.insertBefore(action.element, action.nextSibling);
                 } else {
                     action.parent.appendChild(action.element);
                 }
-                break;
 
-            case ACTION_MODIFY:
-                // Revert the transformation
-                if (action.data.property === "transform") {
-                    const { initialTransforms } = action.data;
-                    action.elements.forEach(el => {
-                        el.setAttribute("transform", initialTransforms[el] || "translate(0,0)");
-                        el.setAttribute("data-transform", initialTransforms[el] || "translate(0,0)");
-                    });
+                // Restore the original opacity (if recorded)
+                if (action.originalOpacity !== undefined) {
+                    action.element.style.opacity = action.originalOpacity;
                 }
-                break;
-
-            case ACTION_PASTE:
-                // Remove pasted elements
+            }
+        } else if (action.type === ACTION_CREATE) {
+            // Delete the created element
+            if (action.element && action.element.parentNode) {
+                action.parent.removeChild(action.element);
+            }
+        } else if (action.type === ACTION_MODIFY) {
+            // Revert the transformation
+            if (action.data.property === "transform") {
+                const { initialTransforms } = action.data;
                 action.elements.forEach(el => {
-                    action.parent.removeChild(el);
+                    el.setAttribute("transform", initialTransforms[el] || "translate(0,0)");
+                    el.setAttribute("data-transform", initialTransforms[el] || "translate(0,0)");
                 });
-                break;
-
-            default:
-                console.warn("Unknown action type:", action.type);
-                return; // Don't push to redoStack if action is unknown
+            }
+        } else if (action.type === ACTION_PASTE) {
+            // Remove pasted elements
+            action.elements.forEach(el => {
+                if (el && el.parentNode) {  //Check if parent exists before removing
+                    action.parent.removeChild(el);
+                }
+            });
         }
 
-        redoStack.push(action);
         updateUndoRedoButtons();
         deselectAll();
     }
@@ -49,46 +49,36 @@ function undo() {
 function redo() {
     if (redoStack.length > 0) {
         const action = redoStack.pop();
-  
-        switch (action.type) {
-            case ACTION_CREATE:
-                // Re-create the element
-                if (action.nextSibling) {
-                    action.parent.insertBefore(action.element, action.nextSibling);
-                } else {
-                    action.parent.appendChild(action.element);
-                }
-                break;
+        history.push(action);
 
-            case ACTION_DELETE:
-                // Re-delete the element
+        if (action.type === ACTION_DELETE) {
+            // Re-delete the element
+            if (action.element && action.element.parentNode) {
                 action.parent.removeChild(action.element);
-                break;
-
-            case ACTION_MODIFY:
-                // Reapply the transformation
-                if (action.data.property === "transform") {
-                    const { finalTransforms } = action.data;
-                    action.elements.forEach(el => {
-                        el.setAttribute("transform", finalTransforms[el] || "translate(0,0)");
-                        el.setAttribute("data-transform", finalTransforms[el] || "translate(0,0)");
-                    });
-                }
-                break;
-
-            case ACTION_PASTE:
-                // Re-add pasted elements
+            }
+        } else if (action.type === ACTION_CREATE) {
+            // Re-create the element
+            if (action.nextSibling) {
+                action.parent.insertBefore(action.element, action.nextSibling);
+            } else {
+                action.parent.appendChild(action.element);
+            }
+        } else if (action.type === ACTION_MODIFY) {
+            // Reapply the transformation
+            if (action.data.property === "transform") {
+                const { finalTransforms } = action.data;
                 action.elements.forEach(el => {
-                    action.parent.appendChild(el);
+                    el.setAttribute("transform", finalTransforms[el] || "translate(0,0)");
+                    el.setAttribute("data-transform", finalTransforms[el] || "translate(0,0)");
                 });
-                break;
-
-            default:
-                console.warn("Unknown action type:", action.type);
-                return; // Don't push to history if action is unknown
+            }
+        } else if (action.type === ACTION_PASTE) {
+            // Re-add pasted elements
+            action.elements.forEach(el => {
+                action.parent.appendChild(el);
+            });
         }
 
-        history.push(action);
         updateUndoRedoButtons();
         deselectAll();
     }

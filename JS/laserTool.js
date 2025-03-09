@@ -1,84 +1,113 @@
-const magicWandCursor = `data:image/svg+xml;base64,${btoa(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-      <g fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 10 10)">
-        <path clip-rule="evenodd" d="m9.644 13.69 7.774-7.773a2.357 2.357 0 0 0-3.334-3.334l-7.773 7.774L8 12l1.643 1.69Z"></path>
-        <path d="m13.25 3.417 3.333 3.333M10 10l2-2M5 15l3-3M2.156 17.894l1-1M5.453 19.029l-.144-1.407M2.377 11.887l.866 1.118M8.354 17.273l-1.194-.758M.953 14.652l1.408.13"></path>
-      </g>
-    </svg>
-    `)}`;
-
 let isDrawing = false;
-let pointsLazer = [];
+let lasers = []; // Array to store multiple laser trails
 const maxTrailLength = 30; // Maximum trail length
+const fadeOutDuration = 500; // Duration of fade-out in milliseconds (adjust as needed)
+
 const rc = rough.svg(svg); // Rough.js instance
 
 // Convert screen coordinates to SVG viewBox
 function screenToViewBoxPoint(x, y) {
     const CTM = svg.getScreenCTM();
-    return [(x - CTM.e) / CTM.a, (y - CTM.f) / CTM.d];
+    if (!CTM) return null; // Prevent null reference errors
+
+    return {
+        x: (x - CTM.e) / CTM.a,
+        y: (y - CTM.f) / CTM.d
+    };
 }
 
-// Function to draw the laser stroke with smooth, heavy curves and progressive fade
-function drawLaserStroke() {
-    if (pointsLazer.length < 2) return;
+// Function to draw a single laser stroke
+function drawLaserStroke(laser) {
+    if (laser.points.length < 3) return;
 
     // Reduce trail size progressively
-    if (pointsLazer.length > maxTrailLength) {
-        pointsLazer.shift(); // Remove the oldest point from the start
+    if (laser.points.length > maxTrailLength) {
+        laser.points.shift(); // Remove the oldest point
     }
 
-    let opacityFactor = pointsLazer.length / maxTrailLength; // Opacity linked to trail size
-    let strokeWidth = Math.max(2, opacityFactor * 4); // Stroke tapers as it fades
+    let opacityFactor = laser.points.length / maxTrailLength;
+    let strokeWidth = Math.max(4, opacityFactor * 5); // Stroke tapers as it fades
 
-    // Apply Rough.js effect with improved fluidity
-    let roughStroke = rc.curve(pointsLazer, {
-        stroke: `rgba(0, 255, 0, ${opacityFactor})`, // Opacity fades naturally
-        strokeWidth: 5,
-        roughness: 0.08, // Keeps strokes stable
-        bowing: 0.02, // Prevents unwanted wobbliness
-        thinning: 0,
-        smoothing: 1.8, // More curved, fluid motion
-        streamline: 0.75, // Keeps it thick & continuous
-    });
+    let pathData = `M ${laser.points[0].x} ${laser.points[0].y}`;
 
-    // Remove previous path before adding a new one
-    let oldPath = document.getElementById("laserPath");
-    if (oldPath) oldPath.remove();
+    for (let i = 1; i < laser.points.length - 2; i++) {
+        let p0 = laser.points[i - 1];
+        let p1 = laser.points[i];
+        let p2 = laser.points[i + 1];
+        let p3 = laser.points[i + 2];
 
-    roughStroke.setAttribute("id", "laserPath");
-    svg.appendChild(roughStroke);
+        // Catmull-Rom to Bézier conversion (smooth interpolation)
+        let cp1x = p1.x + (p2.x - p0.x) / 6;
+        let cp1y = p1.y + (p2.y - p0.y) / 6;
+        let cp2x = p2.x - (p3.x - p1.x) / 6;
+        let cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        pathData += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+
+    let laserPath = document.getElementById(laser.id);
+    if (!laserPath) {
+        laserPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        laserPath.setAttribute("id", laser.id);
+        svg.appendChild(laserPath);
+    }
+
+    laserPath.setAttribute("d", pathData);
+    laserPath.setAttribute("stroke", `rgba(0, 255, 0, 0.7)`);
+    laserPath.setAttribute("stroke-width", strokeWidth);
+    laserPath.setAttribute("fill", "none");
+    laserPath.setAttribute("stroke-linecap", "round");
+    laserPath.setAttribute("stroke-linejoin", "round");
 }
 
-// Function to smoothly fade out the laser when mouse is up (rear-end fade)
-function fadeLaserTrail() {
-    function fade() {
-        if (pointsLazer.length === 0) return;
+// Function to smoothly fade out a single laser trail
+function fadeLaserTrail(laser) {
+    const startTime = performance.now();
 
-        pointsLazer.shift(); // Remove points progressively from the rear
+    function fade(currentTime) {
+        const elapsedTime = currentTime - startTime;
+        let progress = Math.min(1, elapsedTime / fadeOutDuration);  // Normalize progress (0 to 1)
 
-        let opacityFactor = pointsLazer.length / maxTrailLength;
-        let strokeWidth = Math.max(2, opacityFactor * 6);
+        // Apply an ease-out function (e.g., quadratic ease-out)
+        const easedProgress = progress * (2 - progress);
 
-        if (pointsLazer.length > 1) {
-            let roughStroke = rc.curve(pointsLazer, {
-                stroke: `rgba(0, 250, 0, ${opacityFactor})`,
-                strokeWidth: strokeWidth,
-                roughness: 0.08,
-                bowing: 0.5,
-                thinning: 0,
-                smoothing: 1.8,
-                streamline: 0.75,
-            });
+        const opacityFactor = Math.max(0, 0.7 * (1 - easedProgress)); // Opacity goes from 0.7 to 0
+        let strokeWidth = Math.max(2, opacityFactor * 5); // Adjust stroke width if needed
 
-            let oldPath = document.getElementById("laserPath");
-            if (oldPath) oldPath.remove();
+        if (laser.points.length > 1) {
+            let pathData = `M ${laser.points[0].x} ${laser.points[0].y}`;
 
-            roughStroke.setAttribute("id", "laserPath");
-            svg.appendChild(roughStroke);
+            for (let i = 1; i < laser.points.length - 2; i++) {
+                let p0 = laser.points[i - 1];
+                let p1 = laser.points[i];
+                let p2 = laser.points[i + 1];
+                let p3 = laser.points[i + 2];
+
+                let cp1x = p1.x + (p2.x - p0.x) / 6;
+                let cp1y = p1.y + (p2.y - p0.y) / 6;
+                let cp2x = p2.x - (p3.x - p1.x) / 6;
+                let cp2y = p2.y - (p3.y - p1.y) / 6;
+
+                pathData += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+            }
+
+            let laserPath = document.getElementById(laser.id);
+            if (laserPath) {
+                laserPath.setAttribute("d", pathData);
+                laserPath.setAttribute("stroke", `rgba(0, 250, 0, ${opacityFactor})`);
+                laserPath.setAttribute("stroke-width", strokeWidth);
+            }
         }
 
-        if (pointsLazer.length > 0) {
-            requestAnimationFrame(fade); 
+         if (easedProgress < 1) { // Continue fading until fully faded
+                requestAnimationFrame(fade);
+        } else {
+            let laserPath = document.getElementById(laser.id);
+            if (laserPath) {
+                laserPath.remove();
+            }
+            // Remove the laser from the lasers array
+            lasers = lasers.filter(l => l.id !== laser.id);
         }
     }
 
@@ -89,28 +118,44 @@ function fadeLaserTrail() {
 svg.addEventListener("pointerdown", (e) => {
     if (!selectedTool.classList.contains("bxs-magic-wand")) return;
 
+    let point = screenToViewBoxPoint(e.clientX, e.clientY);
+    if (!point) return; // Prevent null errors
+
     isDrawing = true;
-    pointsLazer = [screenToViewBoxPoint(e.clientX, e.clientY)];
-    drawLaserStroke();
+    const laserId = "laserPath_" + Date.now(); // Unique ID for each laser
+    const newLaser = {
+        id: laserId,
+        points: [point]
+    };
+    lasers.push(newLaser);
+    drawLaserStroke(newLaser);
 });
 
-// Pointer move: Draw laser effect with **progressive fading while moving**
+// Pointer move: Draw laser effect with progressive fading while moving
 svg.addEventListener("pointermove", (e) => {
-    if (selectedTool.classList.contains("bxs-magic-wand"))
-    {
-        svg.style.cursor = `url(${magicWandCursor}) 10 10, auto`;
+    if (selectedTool.classList.contains("bxs-magic-wand")) {
+        svg.style.cursor = `url(${lazerCursor}) 10 10, auto`;
     }
     if (!isDrawing) return;
 
-    pointsLazer.push(screenToViewBoxPoint(e.clientX, e.clientY));
+    // Get the currently active laser
+    const currentLaser = lasers[lasers.length - 1];
 
-    drawLaserStroke(); // This now applies rear-end fading continuously
+    let point = screenToViewBoxPoint(e.clientX, e.clientY);
+    if (!point) return;
+
+    currentLaser.points.push(point);
+    drawLaserStroke(currentLaser);
 });
 
-// Pointer up: Stop drawing and trigger **rear-end fade-out**
+// Pointer up: Stop drawing and trigger rear-end fade-out
 svg.addEventListener("pointerup", () => {
     isDrawing = false;
-    fadeLaserTrail();
+    // Get the last created laser and fade it out
+    if (lasers.length > 0) {
+        const currentLaser = lasers[lasers.length - 1];
+        fadeLaserTrail(currentLaser);
+    }
 });
 
 // Pointer leave: Stop drawing

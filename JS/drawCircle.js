@@ -77,7 +77,7 @@ function drawCircleFromOrigin(originX, originY, pointerX, pointerY) {
     group.setAttribute('data-diameter', diameter);
     group.setAttribute('data-originX', adjustedOriginX);
     group.setAttribute('data-originY', adjustedOriginY);
-
+    group.setAttribute('data-type', 'circle-group');
     group.shape = element; // Store the rough element
     group.overlay = overlay;
 

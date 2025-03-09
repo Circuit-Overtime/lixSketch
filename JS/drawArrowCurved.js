@@ -6,7 +6,12 @@ function drawArrowFromPoints(points) {
     svg.removeChild(arrowElementGroup);
     arrowElementGroup = null;
   }
-  
+  function screenToViewBoxPoint(x, y) {
+    return [
+      currentViewBox.x + x / currentZoom,
+      currentViewBox.y + y / currentZoom
+    ];
+  }
   // Convert each point from screen to viewBox coordinates.
   const convertedPoints = points.map(p => {
     // If your points are objects like { x, y }:
