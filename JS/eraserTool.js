@@ -9,7 +9,7 @@ function handleElementHighlight(clientX, clientY) {
 
   while (elementToHighlight && elementToHighlight !== svg) {
     let groupType = elementToHighlight.closest("g[data-type='text-group']");
-    let circleGroupType = elementToHighlight.closest("g[data-type='circle-group']");  //Check circle-group specifically.
+    let circleGroupType = elementToHighlight.closest("g[data-type='circle-group']");  
     let squareGroupType = elementToHighlight.closest("g[data-type='square-group']");
     let lineGroupType = elementToHighlight.closest("g[data-type='line-group']");
     let arrowGroupType = elementToHighlight.closest("g[data-type='arrow-group']");
@@ -40,7 +40,6 @@ function handleElementHighlight(clientX, clientY) {
             elementToHighlight.dataset.storedOpacity = elementToHighlight.getAttribute("data-original-opacity");
             elementToHighlight.style.opacity = "0.5";
             console.log("Targeted Element:", elementToHighlight);
-            navigator.clipboard.writeText(elementToHighlight.outerHTML);
         }
         return;
     }
