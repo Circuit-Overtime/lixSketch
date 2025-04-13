@@ -385,9 +385,9 @@
         <div class="toolbar">
             <i class='bx bxs-hand ' ></i>
             <div class="spacer"></div>
-            <i class='bx bxs-pointer '></i>
+            <i class='bx bxs-pointer selected'></i>
             <i class='bx bx-square ' ></i>
-            <i class='bx bx-circle selected'></i>
+            <i class='bx bx-circle '></i>
             <i class='bx bx-right-arrow-alt' style="transform: rotate(-45deg);" ></i>
             <i class='bx bx-dots-horizontal-rounded '></i>
             <i class='bx bxs-paint'></i>
@@ -404,9 +404,7 @@
 
 
         <svg id="freehand-canvas" style="transform: scale(1); width: 1536px; height: 730px; cursor: default;" viewBox="0 0 1536 730">
-            <path></path>  
-           
-            <g data-type="text-group" data-x="413.7489013671875" data-y="446.2445373535156" data-textColor="#fff" data-textSize="30px" data-textFont="lixFont" data-textAlign="left" data-transform="translate(-107,18)" transform="translate(-107,18)"><text x="413.7489013671875" y="446.2445373535156" fill="#fff" font-size="30px" font-family="lixFont" text-anchor="start" cursor="text" white-space="pre"><tspan x="413.7489013671875" dy="0">this is a textbox</tspan></text></g>
+            <path></path>   
             
         </svg>
 
@@ -426,6 +424,7 @@
 
     </div>
 
+
     <script src="https://unpkg.com/konva@9/konva.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <script src="JS/imports.js" type="module"> </script>
@@ -436,6 +435,7 @@
     <script src="JS/sketchGeneric.js" defer></script>
     
     <script src="JS/drawSquare.js" defer></script>
+    <script src="JS/squareProxy.js" defer></script>
      <script src="JS/drawCircle.js" defer></script>
     <script src="JS/drawArrowCurved.js" defer></script>
    <script src="JS/drawArrow.js" defer></script>
@@ -444,7 +444,9 @@
      <script src="JS/lineTool.js" defer></script>
     <script src="JS/imageTool.js" defer></script>
 
+    <!-- <script src="JS/makeSelectionGeneric.js" defer></script> -->
     <script src="JS/makeSelection.js" defer></script>
+    <!-- <script src="JS/resizeCode.js" defer></script> -->
     <script src="JS/undoAndRedo.js" defer></script>
     <script src="JS/copyAndPaste.js" defer></script>
    <script src="JS/zoomFunction.js" defer></script>

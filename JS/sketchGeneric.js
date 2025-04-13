@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-circle");
+let selectedTool = document.querySelector(".bxs-pointer");
 let history = [];
 let redoStack = [];
 
@@ -92,6 +92,8 @@ function toolExtraPopup() {
     if (selectedTool.classList.contains("bxs-paint")) {
 
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bxs-paint").classList.add("selected");
         ispaintToolActive = true;
         svg.style.cursor = "crosshair"
         disableAllSideBars();
@@ -100,6 +102,8 @@ function toolExtraPopup() {
     else if (selectedTool.classList.contains("bx-square")) {
 
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bx-square").classList.add("selected");
         svg.style.cursor = "crosshair"
         isSquareToolActive = true;
         disableAllSideBars();
@@ -109,6 +113,8 @@ function toolExtraPopup() {
     {
 
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bx-circle").classList.add("selected");
         svg.style.cursor = "crosshair"
         isCircleToolActive = true;
         disableAllSideBars();
@@ -117,6 +123,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bx-right-arrow-alt"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bx-right-arrow-alt").classList.add("selected");
         isArrowToolActive = true;
         disableAllSideBars();
         arrowSideBar.classList.remove("hidden");
@@ -124,6 +132,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bxs-pointer"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bxs-pointer").classList.add("selected");
         isSelectionToolActive = true;
         svg.style.cursor = "all-scroll";
         disableAllSideBars();
@@ -131,6 +141,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bxs-hand"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bxs-hand").classList.add("selected");
         isPanningToolActive = true;
         svg.style.cursor = "grab";
         disableAllSideBars();
@@ -138,6 +150,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bx-text"))
     {
       disableAllTools();
+      disSelectAllTools();
+      document.querySelector(".bx-text").classList.add("selected");
       isTextToolActive = true;
       svg.style.cursor = "text";
       disableAllSideBars();
@@ -147,6 +161,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bxs-magic-wand"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bxs-magic-wand").classList.add("selected");
         svg.style.cursor = "crosshair";
         isLaserToolActive = true;
         disableAllSideBars();
@@ -154,6 +170,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bx-dots-horizontal-rounded"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bx-dots-horizontal-rounded").classList.add("selected");
         svg.style.cursor = "crosshair";
         isLineToolActive = true;
         disableAllSideBars();
@@ -162,6 +180,8 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bxs-eraser"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bxs-eraser").classList.add("selected");
         isEraserToolActive  = true;
         svg.style.cursor = `url(${eraserCursorSVG}) 10 10, auto`; // Maintain custom cursor
         disableAllSideBars();
@@ -169,11 +189,14 @@ function toolExtraPopup() {
     else if(selectedTool.classList.contains("bx-image-alt"))
     {
         disableAllTools();
+        disSelectAllTools();
+        document.querySelector(".bx-image-alt").classList.add("selected");
         disableAllSideBars();
         svg.style.cursor = "crosshair"
     }
     else {
         disableAllTools();
+        disSelectAllTools();
         disableAllSideBars();
         svg.style.cursor = "crosshair"
     }
@@ -181,6 +204,11 @@ function toolExtraPopup() {
 
 }
 
+
+function disSelectAllTools()
+{
+  tools.forEach(t => t.classList.remove("selected"));
+}
 
 function disableAllSideBars()
 {

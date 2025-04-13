@@ -57,13 +57,28 @@
 
 
 
- textarea 
-{
-    resize: none;
-    height: auto;
-}
 textarea::-webkit-scrollbar
 {
     display: none;
+}
+
+textarea {
+    position: absolute;
+    left: 926.401px;
+    top: 268.57px;
+    width: fit-content;
+    height: fit-content;
+    font-size: 30px;
+    color: rgb(255, 255, 255);
+    font-family: lixFont;
+    text-align: left;
+    border: none;
+    outline: none;
+    background: transparent;
+    resize: none;
+    overflow: visible hidden;
+    padding: 0px;
+    margin: 0px;
+    box-sizing: border-box;
 }
 

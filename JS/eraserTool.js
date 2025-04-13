@@ -83,6 +83,7 @@ function removeTargetedElements() {
         }
 
         redoStack = [];
+        deselectAll(); // Deselect all elements
         updateUndoRedoButtons();
         targetedElements.clear(); // Clear the Set
     }

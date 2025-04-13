@@ -90,45 +90,68 @@ function addText(event) {
   makeTextEditable(textElement, {x, y});
 }
 
-// Function to make text editable
 function makeTextEditable(textElement, initialPosition = null) {
+  deselectAll(); // Deselect all elements
+  console.log("Making text editable");
   let input = document.createElement("textarea"); // Use textarea for multiline editing
-  input.value = textElement.textContent;
+
+  // Extract and reconstruct text with newlines
+  let textContent = "";
+  for (let i = 0; i < textElement.childNodes.length; i++) {
+    let node = textElement.childNodes[i];
+    if (node.nodeType === Node.TEXT_NODE) {
+      textContent += node.textContent;
+    } else if (node.tagName === "tspan") {
+      textContent += node.textContent;
+      if (i < textElement.childNodes.length - 1) {
+        textContent += "\n"; // Add newline between tspans
+      }
+    }
+  }
+  input.value = textContent;
+
   input.style.position = "absolute";
+  input.style.boxSizing = "border-box"; // VERY IMPORTANT!
+  input.style.border = "none";        // Remove border
+  input.style.outline = "none";       // Remove outline
+  input.style.padding = "0px";        // Remove padding
+  input.style.overflow = "hidden";
 
   let bbox;
 
   if (initialPosition) {
-      //If it's newly created, use the passed position
-      bbox = {
-          left: initialPosition.x,
-          top: initialPosition.y,
-          width: 100, //Initial Width
-          height: 30  //Initial Height
-      };
+    // If it's newly created, use the passed position
+    bbox = {
+      left: initialPosition.x,
+      top: initialPosition.y,
+    };
   } else {
-      // Get bounding box of the text element in screen coordinates
-      bbox = textElement.getBoundingClientRect();
+    // Get bounding box of the text element in screen coordinates
+    bbox = textElement.getBoundingClientRect();
   }
 
+  // Correct positioning
   input.style.left = bbox.left + "px";
   input.style.top = bbox.top + "px";
-  input.style.width = bbox.width + "px";
-  input.style.height = bbox.height + "px";
 
-  input.style.fontSize = textSize;
-  input.style.color = textColor;
-  input.style.fontFamily = textFont;
-  input.style.textAlign = textAlign;
-  input.style.border = "none";
-  input.style.outline = "none";
-  input.style.background = "transparent";
-  input.style.resize = "none";
-  input.style.overflow = "visible";
-  input.style.padding = "0px";
-  input.style.margin = "0px";
-  input.style.boxSizing = "border-box";
+  // Infinite width:
+  input.style.width = "1000px";   // Large width
+  input.style.height = bbox.height + "px"; // Initial height
 
+  // Set font properties
+  if (initialPosition) {
+    // Newly created text
+    input.style.fontSize = textSize;
+    input.style.fontFamily = textFont;
+    input.style.color = textColor;
+    input.style.textAlign = textAlign;
+  } else {
+    // Editing existing text
+    input.style.fontSize = textElement.getAttribute("font-size") || "30px";
+    input.style.fontFamily = textElement.getAttribute("font-family") || "lixFont";
+    input.style.color = textElement.getAttribute("fill") || "#fff";
+    input.style.textAlign = textElement.getAttribute("text-anchor") || "left";
+  }
 
   document.body.appendChild(input);
 
@@ -143,17 +166,9 @@ function makeTextEditable(textElement, initialPosition = null) {
 
   // Clip textarea height if it exceeds canvas height
   const canvasHeight = svg.getBoundingClientRect().bottom; // Get actual height of the SVG element
-  const textareaBottom = input.getBoundingClientRect().bottom; // bottom position of textarea
+  const textareaBottom = input.getBoundingClientRect().bottom; // Bottom position of textarea
   console.log(textareaBottom, canvasHeight);
   const maxHeight = canvasHeight - 20; // Maximum height with 20px margin
-
-  if (textareaBottom > canvasHeight) {
-    input.style.maxHeight = maxHeight + "px";
-    input.style.overflowY = "scroll"; // Enable vertical scroll if it exceeds
-  } else {
-    input.style.maxHeight = "100vh"; // Default max height
-    input.style.overflowY = "hidden"; // Disable vertical scrolling
-  }
 
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
@@ -170,19 +185,9 @@ function makeTextEditable(textElement, initialPosition = null) {
       // Adjust textarea height
       input.style.height = "auto";
       input.style.height = input.scrollHeight + "px";
-
-      // Re-check and clip height after Enter
-      const textareaBottom = input.getBoundingClientRect().bottom;
-      console.log(textareaBottom);
-      if (textareaBottom > canvasHeight - 50) {
-        console.log("overflowing");
-        console.log(input.getBoundingClientRect().height);
-        input.style.maxHeight = input.getBoundingClientRect().height + "px";
-        input.style.overflowY = "scroll"; // Enable vertical scroll if it exceeds
-      }
     }
     if (e.key === "Escape") {
-      renderText(input, textElement, true); // true to delete if empty
+      renderText(input, textElement, true); 
     }
   });
 
@@ -190,9 +195,10 @@ function makeTextEditable(textElement, initialPosition = null) {
   input.originalTextElement = textElement;
 
   // Hide the text group
-  textElement.parentNode.style.display = 'none'; // Hide the group
+  textElement.parentNode.style.display = "none"; // Hide the group
   input.textGroup = textElement.parentNode;
 }
+
 
 // Function to render the text and group tspans together
 function renderText(input, textElement, deleteIfEmpty = false) {
@@ -238,6 +244,9 @@ function renderText(input, textElement, deleteIfEmpty = false) {
   gElement.style.display = 'block';
 
   document.body.removeChild(input);
+  selectElement(gElement);
+  selectedTool = document.querySelector(".bxs-pointer");
+  toolExtraPopup();
 }
 
 // Find the text element (within a group) at a given position
@@ -270,7 +279,7 @@ handleTextMousedown = function (e) {
   } else if (selectedTool.classList.contains("bxs-pointer")) {
     let input = document.querySelector("textarea");
     if (input) {
-      //Get text element based on associated Original Element
+      
       let textElement = input.originalTextElement;
 
       if (textElement) {

@@ -21,3 +21,9 @@ save to server, or save to local or export as link )
 18. canvas lock
 19. scroll to scroll down or up the canvas [CHECKED]
 20. text edit bug fix
+
+
+[BUGS]
+
+1. textarea font size same as of render [CHECKED]
+2. textarea position is with an offset [CHECKED]
