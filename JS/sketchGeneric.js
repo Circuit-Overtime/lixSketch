@@ -1,13 +1,13 @@
-let selectedTool = document.querySelector(".bxs-pointer");
+let selectedTool = document.querySelector(".bx-right-arrow-alt");
 let history = [];
 let redoStack = [];
-
+let shapes = [];
 const svg = document.querySelector('#freehand-canvas');
 const tools = document.querySelectorAll(".toolbar i");
 const roughCanvas = window.rough.svg(svg);  
 const roughGenerator = roughCanvas.generator;
+let currentShape = null;
 
-// Custom SVG Cursor (Circle with White Border)
 const eraserCursorSVG = `data:image/svg+xml;base64,${btoa(`
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
     <circle cx="10" cy="10" r="7" fill="#222" stroke="white" stroke-width="2"/>

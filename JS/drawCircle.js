@@ -1,295 +1,327 @@
-let circleStartX, circleStartY;
-let circleElement = null;
 
+import { SelectionManager } from './selectionManager.js';
+
+let circleStartX, circleStartY;
+let currentCircle = null; 
+let isDrawingCircle = false; 
 let circleStrokeColor = "#fff";
 let circleFillColor = "#fff";
 let circleFillStyle = "transparent";
 let circleStrokeThickness = 2;
 let circleOutlineStyle = "solid";
-
 let circleColorOptions = document.querySelectorAll(".circleStrokeSpan");
 let circleFillColorOptions = document.querySelectorAll(".circleBackgroundSpan");
 let circleFillStyleOptions = document.querySelectorAll(".circleFillStyleSpan");
 let circleStrokeThicknessValue = document.querySelectorAll(".circleStrokeThickSpan");
 let circleOutlineStyleValue = document.querySelectorAll(".circleOutlineStyle");
+const selectionManager = new SelectionManager(svg, shapes);
 
-
-function drawEllipseFromOrigin(originX, originY, pointerX, pointerY) {
-    // Remove the old circle element if it exists
-    if (circleElement) {
-        svg.removeChild(circleElement);
-        circleElement = null;
+class Circle {
+    constructor(centerX, centerY, radiusX, radiusY, options = {}) {
+        this.centerX = centerX;
+        this.centerY = centerY;
+        this.radiusX = radiusX;
+        this.radiusY = radiusY;
+        this.options = {
+            roughness: 1.5,
+            stroke: circleStrokeColor,
+            strokeWidth: circleStrokeThickness,
+            fill: circleFillColor === "transparent" ? "rgba(0,0,0,0)" : circleFillColor,
+            fillStyle: circleFillStyle === "transparent" ? 'hachure' : circleFillStyle, // default fillStyle if transparent
+            strokeDasharray: circleOutlineStyle === "dashed" ? "10,10" : (circleOutlineStyle === "dotted" ? "2,8" : ""),
+            ...options
+        };
+        this.element = null;
+        this.overlay = null; // For event capturing
+        this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.isSelected = false;
+        this.anchors = [];
+        this.rotationAnchor = null; // Circles don't rotate in the same way, but keep for consistency if needed for grouping later
+        this.selectionPadding = 8;
+        this.selectionOutline = null;
+        this.draw();
     }
 
-    // Convert the origin and pointer coordinates from screen/canvas space to viewBox space.
-    const adjustedOriginX = currentViewBox.x + (originX / currentZoom);
-    const adjustedOriginY = currentViewBox.y + (originY / currentZoom);
-    const adjustedPointerX = currentViewBox.x + (pointerX / currentZoom);
-    const adjustedPointerY = currentViewBox.y + (pointerY / currentZoom);
-
-    // Calculate distances from the adjusted origin (in viewBox coordinates)
-    const dx = adjustedPointerX - adjustedOriginX;
-    const dy = adjustedPointerY - adjustedOriginY;
-
-    // Calculate the radii of the ellipse
-    const rx = Math.abs(dx); // Radius on the x-axis
-    const ry = Math.abs(dy); // Radius on the y-axis
-
-    const centerX = (adjustedOriginX + adjustedPointerX) / 2;
-    const centerY = (adjustedOriginY + adjustedPointerY) / 2;
-
-    const rc = rough.svg(svg);
-
-    let actualFillColor = circleFillColor;
-    if (circleFillStyle === "transparent") {
-        actualFillColor = "rgba(0,0,0,0)";
-    }
-
-    // Draw the ellipse using the calculated center and diameters in viewBox coordinates
-    const element = rc.ellipse(centerX, centerY, rx * 2, ry * 2, {
-        stroke: circleStrokeColor,
-        strokeWidth: circleStrokeThickness,
-        fill: actualFillColor,
-        fillStyle: circleFillStyle,
-        hachureAngle: 60,
-        hachureGap: 10
-    });
-
-    // Apply outline style using SVG's stroke-dasharray attribute
-    if (circleOutlineStyle === "dashed") {
-        element.setAttribute("stroke-dasharray", "10,10");
-    } else if (circleOutlineStyle === "dotted") {
-        element.setAttribute("stroke-dasharray", "2,8");
-    }
-
-    // Create an invisible overlay rectangle covering the circle's bounding box.
-    const overlay = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    overlay.setAttribute("x", centerX - rx);
-    overlay.setAttribute("y", centerY - ry);
-    overlay.setAttribute("width", rx * 2);
-    overlay.setAttribute("height", ry * 2);
-    overlay.setAttribute("fill", "rgba(0,0,0,0)"); // fully transparent
-    overlay.style.pointerEvents = "all"; // capture pointer events
-
-    // Group the circle and overlay together.
-    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    group.appendChild(element);
-    group.appendChild(overlay);
-
-    // Store data attributes for undo/redo
-    group.setAttribute('data-centerX', centerX);
-    group.setAttribute('data-centerY', centerY);
-    group.setAttribute('data-rx', rx);
-    group.setAttribute('data-ry', ry);
-    group.setAttribute('data-originX', adjustedOriginX);
-    group.setAttribute('data-originY', adjustedOriginY);
-    group.setAttribute('data-pointerX', adjustedPointerX);
-    group.setAttribute('data-pointerY', adjustedPointerY);
-    group.setAttribute('data-type', 'ellipse-group');
-    group.shape = element; // Store the rough element
-    group.overlay = overlay;
-    group.actualFillColor = actualFillColor;
-    group.circleFillStyle = circleFillStyle;
-    circleElement = group;
-    svg.appendChild(group);
-}
-
-svg.addEventListener('pointerdown', handlePointerDownCircle);
-svg.addEventListener('pointerup', handlePointerUpCircle);
-
-function handlePointerDownCircle(e) {
-    if (isCircleToolActive) {
-        circleStartX = e.clientX;
-        circleStartY = e.clientY;
-        // Remove any existing preview circle
-        if (circleElement) {
-            svg.removeChild(circleElement);
-            circleElement = null;
+    draw() {
+        while (this.group.firstChild) {
+            this.group.removeChild(this.group.firstChild);
         }
-        svg.addEventListener("pointermove", handlePointerMoveCircle);
+        if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+            this.group.removeChild(this.selectionOutline);
+            this.selectionOutline = null;
+        }
+
+        const roughEllipse = rc.ellipse(this.centerX, this.centerY, this.radiusX * 2, this.radiusY * 2, this.options);
+        this.element = roughEllipse;
+
+
+        // Create an invisible overlay rectangle covering the circle's bounding box for better event handling.
+        if (!this.overlay) {
+            this.overlay = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            this.overlay.setAttribute("fill", "rgba(0,0,0,0)"); // fully transparent
+            this.overlay.style.pointerEvents = "all"; // capture pointer events
+        }
+        this.overlay.setAttribute("x", this.centerX - this.radiusX);
+        this.overlay.setAttribute("y", this.centerY - this.radiusY);
+        this.overlay.setAttribute("width", this.radiusX * 2);
+        this.overlay.setAttribute("height", this.radiusY * 2);
+
+
+        this.group.appendChild(roughEllipse);
+        this.group.appendChild(this.overlay); // Add overlay to the group
+
+        if (this.isSelected) {
+            this.addAnchors();
+        }
+
+        svg.appendChild(this.group);
     }
-}
 
-function handlePointerMoveCircle(e) {
-    if (isCircleToolActive) {
-        // Here we're using the function that grows the circle from the pointer origin
-        drawEllipseFromOrigin(circleStartX, circleStartY, e.clientX, e.clientY);
-    }
-}
+    addAnchors() {
+        const anchorSize = 10;
+        const anchorStrokeWidth = 2;
+        const self = this;
 
-function handlePointerUpCircle(e) {
-    // Remove pointermove listener from all tools
-    svg.removeEventListener("pointermove", handlePointerMoveCircle);
-    if (isCircleToolActive && circleElement) {
-      const centerX = parseFloat(circleElement.getAttribute('data-centerX'));
-      const centerY = parseFloat(circleElement.getAttribute('data-centerY'));
-      const rx = parseFloat(circleElement.getAttribute('data-rx'));
-      const ry = parseFloat(circleElement.getAttribute('data-ry'));
-      const originX = parseFloat(circleElement.getAttribute('data-originX'));
-      const originY = parseFloat(circleElement.getAttribute('data-originY'));
-      const pointerX = parseFloat(circleElement.getAttribute('data-pointerX'));
-      const pointerY = parseFloat(circleElement.getAttribute('data-pointerY'));
+        const expandedX = this.centerX - this.radiusX - this.selectionPadding;
+        const expandedY = this.centerY - this.radiusY - this.selectionPadding;
+        const expandedWidth = this.radiusX * 2 + 2 * this.selectionPadding;
+        const expandedHeight = this.radiusY * 2 + 2 * this.selectionPadding;
 
-        const action = {
-            type: ACTION_CREATE,
-            element: circleElement,
-            parent: circleElement.parentNode,
-            nextSibling: circleElement.nextSibling,
-            data: {
-                centerX: centerX,
-                centerY: centerY,
-                rx: rx,
-                ry: ry,
-                originX: originX,
-                originY: originY,
-                pointerX: pointerX,
-                pointerY: pointerY,
-                stroke: circleStrokeColor,
-                fill: circleFillColor,
-                fillStyle: circleFillStyle,
-                strokeWidth: circleStrokeThickness,
-                outlineStyle: circleOutlineStyle
-            }
+        const positions = [
+            { x: expandedX, y: expandedY }, // 0 - NW
+            { x: expandedX + expandedWidth, y: expandedY }, // 1 - NE
+            { x: expandedX, y: expandedY + expandedHeight }, // 2 - SW
+            { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, // 3 - SE
+            { x: expandedX + expandedWidth / 2, y: expandedY }, // 4 - N-Mid
+            { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, // 5 - S-Mid
+            { x: expandedX, y: expandedY + expandedHeight / 2 }, // 6 - W-Mid
+            { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 }  // 7 - E-Mid
+        ];
+
+        const anchorDirections = {
+            0: 'nwse',
+            1: 'nesw',
+            2: 'nesw',
+            3: 'nwse',
+            4: 'ns',
+            5: 'ns',
+            6: 'ew',
+            7: 'ew'
         };
 
-        history.push(action);
-        circleElement = null;
-        redoStack = [];
-        updateUndoRedoButtons();
+        const outlinePoints = [
+            [positions[0].x, positions[0].y],
+            [positions[1].x, positions[1].y],
+            [positions[3].x, positions[3].y],
+            [positions[2].x, positions[2].y],
+            [positions[0].x, positions[0].y]
+        ];
+
+
+        this.anchors.forEach(anchor => {
+            if (anchor.parentNode === this.group) {
+                this.group.removeChild(anchor);
+            }
+        });
+        if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
+            this.group.removeChild(this.rotationAnchor);
+        }
+        this.anchors = [];
+
+        positions.forEach((pos, i) => {
+            const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+
+            anchor.setAttribute('x', pos.x - anchorSize / 2);
+            anchor.setAttribute('y', pos.y - anchorSize / 2);
+            anchor.setAttribute('width', anchorSize);
+            anchor.setAttribute('height', anchorSize);
+            anchor.setAttribute('class', 'anchor');
+            anchor.setAttribute('data-index', i);
+            anchor.setAttribute('fill', '#121212');
+            anchor.setAttribute('stroke', '#5B57D1');
+            anchor.setAttribute('stroke-width', anchorStrokeWidth);
+            anchor.setAttribute('style', 'pointer-events: all;');
+
+            anchor.addEventListener('mouseover', function () {
+                const index = parseInt(this.getAttribute('data-index'));
+                const baseDirection = anchorDirections[index];
+                svg.style.cursor = baseDirection + '-resize'; // No rotation for circle resize cursors for now.
+            });
+
+            anchor.addEventListener('mouseout', function () {
+                svg.style.cursor = 'default';
+            });
+
+            this.group.appendChild(anchor);
+            this.anchors[i] = anchor;
+        });
+
+
+        const pointsAttr = outlinePoints.map(p => p.join(',')).join(' ');
+        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        outline.setAttribute('points', pointsAttr);
+        outline.setAttribute('fill', 'none');
+        outline.setAttribute('stroke', '#5B57D1');
+        outline.setAttribute('stroke-width', 1.5);
+        outline.setAttribute('stroke-dasharray', '4 2');
+        outline.setAttribute('style', 'pointer-events: none;');
+        this.group.appendChild(outline);
+        this.selectionOutline = outline;
+    }
+
+
+    contains(x, y) {
+        // Check if point (x, y) is inside the ellipse
+        const normalizedX = (x - this.centerX) / this.radiusX;
+        const normalizedY = (y - this.centerY) / this.radiusY;
+        return (normalizedX * normalizedX + normalizedY * normalizedY) <= 1;
+    }
+
+    move(dx, dy) {
+        this.centerX += dx;
+        this.centerY += dy;
+        this.draw();
+    }
+
+    updatePosition(anchorIndex, newX, newY) {
+        const dx = newX - this.centerX;
+        const dy = newY - this.centerY;
+
+        switch (anchorIndex) {
+            case 0: // NW - adjust both radiusX and radiusY based on NW anchor
+                this.radiusX = Math.abs(this.centerX - newX);
+                this.radiusY = Math.abs(this.centerY - newY);
+                break;
+            case 1: // NE - adjust radiusX and radiusY
+                this.radiusX = Math.abs(newX - this.centerX);
+                this.radiusY = Math.abs(this.centerY - newY);
+                break;
+            case 2: // SW - adjust radiusX and radiusY
+                this.radiusX = Math.abs(this.centerX - newX);
+                this.radiusY = Math.abs(newY - this.centerY);
+                break;
+            case 3: // SE - adjust radiusX and radiusY
+                this.radiusX = Math.abs(newX - this.centerX);
+                this.radiusY = Math.abs(newY - this.centerY);
+                break;
+            case 4: // N-Mid - adjust radiusY
+                this.radiusY = Math.abs(this.centerY - newY);
+                break;
+            case 5: // S-Mid - adjust radiusY
+                this.radiusY = Math.abs(newY - this.centerY);
+                break;
+            case 6: // W-Mid - adjust radiusX
+                this.radiusX = Math.abs(this.centerX - newX);
+                break;
+            case 7: // E-Mid - adjust radiusX
+                this.radiusX = Math.abs(newX - this.centerX);
+                break;
+        }
+        this.draw();
+    }
+
+    rotate(angle) {
+        // Circles don't rotate in the same way, but you can keep a rotation property if needed for group rotations later
+        // this.rotation = angle;
+        // this.draw(); // If you decide to implement rotation effect for groups including circles
     }
 }
 
+
+// --- Modified handleMouseDown, handleMouseMove, handleMouseUp in main script ---
+
+const handleMouseDown = (e) => {
+    // console.log(isSelectionToolActive, isSquareToolActive, isCircleToolActive);
+   if (isCircleToolActive) {
+        circleStartX = e.offsetX;
+        circleStartY = e.offsetY;
+        isDrawingCircle = true;
+        currentCircle = new Circle(circleStartX, circleStartY, 0, 0, { // Initial radius 0
+            stroke: circleStrokeColor,
+            fill: circleFillColor === "transparent" ? "rgba(0,0,0,0)" : circleFillColor,
+            fillStyle: circleFillStyle === "transparent" ? 'hachure' : circleFillStyle,
+            strokeWidth: circleStrokeThickness,
+            strokeDasharray: circleOutlineStyle === "dashed" ? "10,10" : (circleOutlineStyle === "dotted" ? "2,8" : "")
+        });
+        shapes.push(currentCircle);
+        currentShape = currentCircle; // For selection to work immediately after drawing
+    } else if (isSelectionToolActive) {
+        selectionManager.handleMouseDown(e);
+    }
+};
+
+const handleMouseMove = (e) => {
+    if (isDrawingCircle && isCircleToolActive && currentCircle) {
+        const radiusX = Math.abs(e.offsetX - circleStartX);
+        const radiusY = Math.abs(e.offsetY - circleStartY);
+        currentCircle.radiusX = radiusX;
+        currentCircle.radiusY = radiusY;
+        currentCircle.draw();
+    } else if (isSelectionToolActive) {
+        selectionManager.handleMouseMove(e);
+    }
+};
+
+const handleMouseUp = (e) => {
+    isDrawingCircle = false;
+    selectionManager.handleMouseUp(e);
+    currentCircle = null; // Reset currentCircle after drawing is complete
+};
+
+
+svg.addEventListener('mousedown', handleMouseDown);
+svg.addEventListener('mousemove', handleMouseMove);
+svg.addEventListener('mouseup', handleMouseUp);
+
+
+// --- Color and Style option listeners for Circle ---
 
 circleColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
         event.stopPropagation();
-        const previousColor = circleStrokeColor;
         circleColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         circleStrokeColor = span.getAttribute("data-id");
-
-        if (circleElement) {
-            circleElement.shape.setAttribute('stroke', circleStrokeColor);
-            const action = {
-                type: ACTION_MODIFY,
-                element: circleElement,
-                data: { property: 'stroke', newValue: circleStrokeColor, oldValue: previousColor }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Stroke Color:", circleStrokeColor);
+        console.log("Selected Circle Stroke Color:", circleStrokeColor);
     });
 });
 
 circleFillColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
         event.stopPropagation();
-        const previousColor = circleFillColor;
         circleFillColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         circleFillColor = span.getAttribute("data-id");
-
-        if (circleElement) {
-            if (circleElement.circleFillStyle !== "transparent") {
-                 circleElement.shape.setAttribute('fill', circleFillColor);
-                 circleElement.actualFillColor = circleFillColor;
-            }
-            const action = {
-                type: ACTION_MODIFY,
-                element: circleElement,
-                data: { property: 'fill', newValue: circleFillColor, oldValue: previousColor }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Background Color:", circleFillColor);
+        console.log("Selected Circle Fill Color:", circleFillColor);
     });
 });
 
 circleFillStyleOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
-        const previousFill = circleFillStyle;
-        circleFillStyleOptions.forEach((el) => el.classList.remove("selected"));
+        fillStyleOptions.forEach((el) => el.classList.remove("selected")); //Reusing fillStyleOptions for consistency or create new if needed
         span.classList.add("selected");
         circleFillStyle = span.getAttribute("data-id");
-
-        if (circleElement) {
-
-             let fillColor = circleFillColor;
-            if (circleFillStyle === "transparent") {
-                fillColor = "rgba(0,0,0,0)";
-            }
-
-            circleElement.shape.setAttribute('fill', fillColor);
-            circleElement.actualFillColor = fillColor;
-            circleElement.circleFillStyle = circleFillStyle;
-
-
-            const action = {
-                type: ACTION_MODIFY,
-                element: circleElement,
-                data: { property: 'fillStyle', newValue: circleFillStyle, oldValue: previousFill }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Fill Style:", circleFillStyle);
+        console.log("Selected Circle Fill Style:", circleFillStyle);
         event.stopPropagation()
     });
 });
 
 circleStrokeThicknessValue.forEach((span) => {
     span.addEventListener("click", (event) => {
-        const previousThickness = circleStrokeThickness;
-        circleStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
+        squareStrokeThicknessValue.forEach((el) => el.classList.remove("selected")); //Reusing squareStrokeThicknessValue for consistency or create new if needed
         span.classList.add("selected");
         circleStrokeThickness = parseInt(span.getAttribute("data-id"));
-
-        if (circleElement) {
-            circleElement.shape.setAttribute('strokeWidth', circleStrokeThickness);
-            const action = {
-                type: ACTION_MODIFY,
-                element: circleElement,
-                data: { property: 'strokeWidth', newValue: circleStrokeThickness, oldValue: previousThickness }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Stroke Thickness:", circleStrokeThickness);
+        console.log("Selected Circle Stroke Thickness:", circleStrokeThickness);
         event.stopPropagation()
     });
 });
 
 circleOutlineStyleValue.forEach((span) => {
     span.addEventListener("click", (event) => {
-        const previousOutlineStyle = circleOutlineStyle;
-        circleOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
+        squareOutlineStyleValue.forEach((el) => el.classList.remove("selected")); //Reusing squareOutlineStyleValue for consistency or create new if needed
         span.classList.add("selected");
         circleOutlineStyle = span.getAttribute("data-id");
-
-        if (circleElement) {
-            if (circleOutlineStyle === "dashed") {
-                circleElement.shape.setAttribute("stroke-dasharray", "10,10");
-            } else if (circleOutlineStyle === "dotted") {
-                 circleElement.shape.setAttribute("stroke-dasharray", "2,8");
-            } else {
-                circleElement.shape.setAttribute("stroke-dasharray", "");  // Remove dash array for solid
-            }
-            const action = {
-                type: ACTION_MODIFY,
-                element: circleElement,
-                data: { property: 'outlineStyle', newValue: circleOutlineStyle, oldValue: previousOutlineStyle }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Outline Style:", circleOutlineStyle);
-        event.stopPropagation()
+        console.log("Selected Circle Outline Style:", circleOutlineStyle);
+        event.stopPropagation();
     });
 });

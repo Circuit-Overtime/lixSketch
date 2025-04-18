@@ -1,265 +1,341 @@
-function drawArrowFromPoints(points) {
-  if (points.length < 2) return;
-  
-  // Remove any previous arrow preview.
-  if (arrowElementGroup) {
-    svg.removeChild(arrowElementGroup);
-    arrowElementGroup = null;
-  }
-  function screenToViewBoxPoint(x, y) {
-    return [
-      currentViewBox.x + x / currentZoom,
-      currentViewBox.y + y / currentZoom
-    ];
-  }
-  // Convert each point from screen to viewBox coordinates.
-  const convertedPoints = points.map(p => {
-    // If your points are objects like { x, y }:
-    const [vx, vy] = screenToViewBoxPoint(p.x, p.y);
-    return { x: vx, y: vy };
-  });
-  
-  const rc = rough.svg(svg);
-  
-  // Create the smooth path string using the converted points.
-  const d = getSmoothPath(convertedPoints);
-  const line = rc.path(d, {
-    stroke: arrowStrokeColor,
-    strokeWidth: arrowStrokeThickness,
-    roughness: 1,
-  });
-  
-  // Apply outline style if needed.
-  if (arrowOutlineStyle === "dashed") {
-    line.setAttribute("stroke-dasharray", "10,10");
-  } else if (arrowOutlineStyle === "dotted") {
-    line.setAttribute("stroke-dasharray", "2,8");
-  }
-  
-  // Compute the arrow head using the last two converted points.
-  const len = convertedPoints.length;
-  const lastPoint = convertedPoints[len - 1];
-  const secondLastPoint = convertedPoints[len - 2];
-  const angle = Math.atan2(lastPoint.y - secondLastPoint.y, lastPoint.x - secondLastPoint.x);
-  const arrowHead = createArrowHead(lastPoint.x, lastPoint.y, angle);
-  
-  // Group the line and arrow head together.
-  arrowElementGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  arrowElementGroup.appendChild(line);
-  arrowElementGroup.appendChild(arrowHead);
+// --- Arrow related variables ---
+let arrowPoints = [];
+let currentArrow = null;
+let isDrawingArrow = false; // Flag to track arrow drawing state
 
-  // Store data attributes on the group for undo/redo
-  arrowElementGroup.setAttribute('data-points', JSON.stringify(convertedPoints));  // Store all points
-  arrowElementGroup.setAttribute('data-stroke', arrowStrokeColor);
-  arrowElementGroup.setAttribute('data-strokeWidth', arrowStrokeThickness);
-  arrowElementGroup.setAttribute('data-outlineStyle', arrowOutlineStyle);
-  arrowElementGroup.setAttribute('data-arrowHeadStyle', arrowHeadStyle);
-  arrowElementGroup.setAttribute('data-arrowHeadLength', arrowHeadLength);
-  arrowElementGroup.setAttribute('data-arrowHeadAngleDeg', arrowHeadAngleDeg);
+let arrowStrokeColor = "#fff";
+let arrowStrokeThickness = 2;
+let arrowOutlineStyle = "solid";
+let arrowHeadStyle = "default";
+let arrowHeadLength = 20;
+let arrowHeadAngleDeg = 30;
+let arrowCurved = true; // Assuming curved arrow is the default based on your handlers
 
-  arrowElementGroup.line = line;   // Store the rough element
-  arrowElementGroup.arrowHead = arrowHead; // Store the arrow head element
-
-  svg.appendChild(arrowElementGroup);
-}
+let arrowColorOptions = document.querySelectorAll(".arrowStrokeSpan");
+let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
+let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
+let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyle");
+let arrowHeadLengthValue = document.querySelectorAll(".arrowHeadLength");
+let arrowHeadAngleValue = document.querySelectorAll(".arrowHeadAngle");
 
 
-function createArrowHead(tipX, tipY, angle) {
-  const rc = rough.svg(svg);
-  const arrowHeadAngle = arrowHeadAngleDeg * Math.PI / 180;
-  let points;
-  
-  if (arrowHeadStyle === "default") {
-    // Default V-shaped arrowhead.
-    points = [
-      [tipX, tipY],
-      [tipX - arrowHeadLength * Math.cos(angle - arrowHeadAngle), tipY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)],
-      [tipX - arrowHeadLength * Math.cos(angle + arrowHeadAngle), tipY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)]
-    ];
-  } 
-  
-  else if (arrowHeadStyle === "square") {
-    // Create a square arrow head (proper square end) that is filled.
-    // We'll treat arrowHeadLength as the side-length of the square.
-    const L = arrowHeadLength;
-    // v: unit vector along the arrow's direction.
-    const v = { x: Math.cos(angle), y: Math.sin(angle) };
-    // w: unit vector perpendicular to the arrow's direction.
-    const w = { x: -Math.sin(angle), y: Math.cos(angle) };
-  
-    // Define the square so that its left side is flush with the arrow tip.
-    // The arrow tip (tipX, tipY) will be the midpoint of the left side.
-    // Left side endpoints:
-    const A = [ tipX + (L/2) * w.x, tipY + (L/2) * w.y ]; // top-left
-    const B = [ tipX - (L/2) * w.x, tipY - (L/2) * w.y ]; // bottom-left
-    // Right side endpoints:
-    const D = [ tipX + L * v.x + (L/2) * w.x, tipY + L * v.y + (L/2) * w.y ]; // top-right
-    const C = [ tipX + L * v.x - (L/2) * w.x, tipY + L * v.y - (L/2) * w.y ]; // bottom-right
-    
-    // Build the points array in order.
-    const pointsList = [ A, B, C, D ];
-
-    // Create a filled polygon using Rough.js with a solid fill.
-    const rc = rough.svg(svg);
-    const arrowHeadElement = rc.polygon(pointsList, {
-        fill: arrowStrokeColor,
-        stroke: arrowStrokeColor,
-        fillStyle: 'solid', // Ensures a solid fill.
-        strokeWidth: arrowStrokeThickness,
-    });
-    
-    // Optionally, apply dash styles if needed.
-    if (arrowOutlineStyle === "dashed") {
-      arrowHeadElement.setAttribute("stroke-dasharray", "10,10");
-    } else if (arrowOutlineStyle === "dotted") {
-      arrowHeadElement.setAttribute("stroke-dasharray", "2,8");
-    }
-    
-    return arrowHeadElement;
-  }
-  
-  
-  
-  else if (arrowHeadStyle === "solid") {
-    // Create a circular filled arrow head.
-    // Here, we treat arrowHeadLength as the radius of the circle.
-    const rc = rough.svg(svg);
-    // rough.js circle takes the diameter as the size parameter.
-    const diameter = arrowHeadLength * 1;
-    const arrowHeadElement = rc.circle(tipX, tipY, diameter, {
-      fill: arrowStrokeColor,
-      stroke: arrowStrokeColor,
-      fillStyle: 'solid',
-      strokeWidth: 0.8,
-
-    });
-    
-    return arrowHeadElement;
-  }
-
-  
-  
-  else if (arrowHeadStyle === "outline") {
-    // Create a circular filled arrow head.
-    // Here, we treat arrowHeadLength as the radius of the circle.
-    const rc = rough.svg(svg);
-    // rough.js circle takes the diameter as the size parameter.
-    const diameter = arrowHeadLength * 1.2;
-    const arrowHeadElement = rc.circle(tipX, tipY, diameter, {
-      fill: arrowStrokeColor,
-      stroke: arrowStrokeColor,
-      fillStyle: 'none',
-      strokeWidth: 0.2,
-
-    });
-    
-    return arrowHeadElement;
-  }
-  
-  const arrowHeadElement = rc.polygon(points, {
-    fill: arrowStrokeColor,
-    stroke: arrowStrokeColor,
-    strokeWidth: arrowStrokeThickness,
-  });
-  
-  if (arrowOutlineStyle === "dashed") {
-    arrowHeadElement.setAttribute("stroke-dasharray", "10,10");
-  } else if (arrowOutlineStyle === "dotted") {
-    arrowHeadElement.setAttribute("stroke-dasharray", "2,8");
-  }
-  
-  return arrowHeadElement;
-}
-
-
-function getSmoothPath(points) {
-  if (points.length < 2) return "";
-  let d = `M ${points[0].x} ${points[0].y} `;
-
-  // If only two points, just draw a line.
-  if (points.length === 2) {
-    d += `L ${points[1].x} ${points[1].y}`;
-    return d;
-  }
-
-  // Convert the Catmull-Rom spline to cubic Bezier segments.
-  for (let i = 0; i < points.length - 1; i++) {
-    // Define p0, p1, p2, p3 with boundary conditions.
-    let p0 = i === 0 ? points[i] : points[i - 1];
-    let p1 = points[i];
-    let p2 = points[i + 1];
-    let p3 = i + 2 < points.length ? points[i + 2] : p2;
-
-    // Catmull-Rom to Cubic Bezier conversion matrix:
-    let cp1x = p1.x + (p2.x - p0.x) / 12;
-    let cp1y = p1.y + (p2.y - p0.y) / 12;
-    let cp2x = p2.x - (p3.x - p1.x) / 12;
-    let cp2y = p2.y - (p3.y - p1.y) / 12;
-
-    d += `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y} `;
-  }
-  return d;
-}
-
-
-
-svg.addEventListener('pointerdown', handlePointerDownCurveArrow);
-svg.addEventListener('pointerup', handlePointerUpCurveArrow);
-
-function handlePointerDownCurveArrow(e) {
-  if (arrowCurved) {
-    arrowPoints = [];
-    arrowPoints.push({ x: e.clientX, y: e.clientY });
-  }
-  svg.addEventListener("pointermove", handlePointerMoveCurveArrow);
-}
-
-function handlePointerMoveCurveArrow(e) {
-  if (isArrowToolActive) {
-    if (arrowCurved) {
-      arrowPoints.push({ x: e.clientX, y: e.clientY });
-      drawArrowFromPoints(arrowPoints);
-    } 
-}
-}
-
-function handlePointerUpCurveArrow(e) {
-  svg.removeEventListener("pointermove", handlePointerMoveCurveArrow);
-  if (isArrowToolActive) {
-    if (arrowCurved) {
-      drawArrowFromPoints(arrowPoints);
-      if (arrowElementGroup) {
-        // Retrieve data attributes
-        const pointsString = arrowElementGroup.getAttribute('data-points');
-        const points = JSON.parse(pointsString);  // Back to array of objects
-        const stroke = arrowElementGroup.getAttribute('data-stroke');
-        const strokeWidth = parseFloat(arrowElementGroup.getAttribute('data-strokeWidth'));
-        const outlineStyle = arrowElementGroup.getAttribute('data-outlineStyle');
-        const arrowHeadStyleValue = arrowElementGroup.getAttribute('data-arrowHeadStyle');
-        const arrowHeadLengthValue = arrowElementGroup.getAttribute('data-arrowHeadLength');
-        const arrowHeadAngleDegValue = arrowElementGroup.getAttribute('data-arrowHeadAngleDeg');
-
-        const action = {
-            type: ACTION_CREATE,
-            element: arrowElementGroup,
-            parent: arrowElementGroup.parentNode,
-            nextSibling: arrowElementGroup.nextSibling,
-            data: {
-                points: points,
-                stroke: stroke,
-                strokeWidth: strokeWidth,
-                outlineStyle: outlineStyle,
-                arrowHeadStyle: arrowHeadStyleValue,
-                arrowHeadLength: arrowHeadLengthValue,
-                arrowHeadAngleDeg: arrowHeadAngleDegValue,
-            }
+class Arrow {
+    constructor(points, options = {}) {
+        this.points = points;
+        this.options = {
+            stroke: arrowStrokeColor,
+            strokeWidth: arrowStrokeThickness,
+            roughness: 1,
+            strokeDasharray: arrowOutlineStyle === "dashed" ? "10,10" : (arrowOutlineStyle === "dotted" ? "2,8" : ""),
+            ...options
         };
-
-        history.push(action);
-        arrowElementGroup = null;
-        redoStack = [];
-        updateUndoRedoButtons();
-      }
+        this.arrowHeadStyle = arrowHeadStyle;
+        this.arrowHeadLength = arrowHeadLength;
+        this.arrowHeadAngleDeg = arrowHeadAngleDeg;
+        this.element = null; // Will hold the line path
+        this.headElement = null; // Will hold the arrow head shape
+        this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.isSelected = false; // For selection manager if needed later
+        this.anchors = []; // For selection manager if needed later
+        this.rotationAnchor = null; // For selection manager if needed later
+        this.selectionPadding = 8; // For selection manager if needed later
+        this.selectionOutline = null; // For selection manager if needed later
+        this.draw();
     }
-  }
+
+    draw() {
+        while (this.group.firstChild) {
+            this.group.removeChild(this.group.firstChild);
+        }
+        if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+            this.group.removeChild(this.selectionOutline);
+            this.selectionOutline = null;
+        }
+
+        if (this.points.length < 2) return;
+
+        const rc = rough.svg(svg);
+
+        // 1. Draw the smooth path line
+        const d = this.getSmoothPath(this.points);
+        const line = rc.path(d, this.options);
+        this.element = line;
+
+        // 2. Create and append the arrowhead
+        const len = this.points.length;
+        const lastPoint = this.points[len - 1];
+        const secondLastPoint = this.points[len - 2];
+        const angle = Math.atan2(lastPoint.y - secondLastPoint.y, lastPoint.x - secondLastPoint.x);
+        const arrowHead = this.createArrowHead(lastPoint.x, lastPoint.y, angle);
+        this.headElement = arrowHead;
+
+        this.group.appendChild(line);
+        this.group.appendChild(arrowHead);
+
+        // Store data attributes for undo/redo and potential future manipulations
+        this.group.setAttribute('data-points', JSON.stringify(this.points));
+        this.group.setAttribute('data-stroke', this.options.stroke);
+        this.group.setAttribute('data-strokeWidth', this.options.strokeWidth);
+        this.group.setAttribute('data-outlineStyle', arrowOutlineStyle); // Assuming global arrowOutlineStyle
+        this.group.setAttribute('data-arrowHeadStyle', this.arrowHeadStyle);
+        this.group.setAttribute('data-arrowHeadLength', this.arrowHeadLength);
+        this.group.setAttribute('data-arrowHeadAngleDeg', this.arrowHeadAngleDeg);
+
+        this.group.line = line;   // Store the rough element - might not be necessary now
+        this.group.arrowHead = arrowHead; // Store the arrow head element - might not be necessary now
+
+        svg.appendChild(this.group);
+    }
+
+
+    createArrowHead(tipX, tipY, angle) {
+        const rc = rough.svg(svg);
+        const arrowHeadAngleRad = this.arrowHeadAngleDeg * Math.PI / 180;
+        let arrowHeadElement;
+        let points;
+
+        if (this.arrowHeadStyle === "default") {
+            // Default V-shaped arrowhead.
+            points = [
+                [tipX, tipY],
+                [tipX - this.arrowHeadLength * Math.cos(angle - arrowHeadAngleRad), tipY - this.arrowHeadLength * Math.sin(angle - arrowHeadAngleRad)],
+                [tipX - this.arrowHeadLength * Math.cos(angle + arrowHeadAngleRad), tipY - this.arrowHeadLength * Math.sin(angle + arrowHeadAngleRad)]
+            ];
+            arrowHeadElement = rc.polygon(points, {
+                fill: this.options.stroke,
+                stroke: this.options.stroke,
+                strokeWidth: this.options.strokeWidth,
+            });
+
+        } else if (this.arrowHeadStyle === "square") {
+             // Square arrowhead logic - same as before
+            const L = this.arrowHeadLength;
+            const v = { x: Math.cos(angle), y: Math.sin(angle) };
+            const w = { x: -Math.sin(angle), y: Math.cos(angle) };
+            const A = [ tipX + (L/2) * w.x, tipY + (L/2) * w.y ];
+            const B = [ tipX - (L/2) * w.x, tipY - (L/2) * w.y ];
+            const D = [ tipX + L * v.x + (L/2) * w.x, tipY + L * v.y + (L/2) * w.y ];
+            const C = [ tipX + L * v.x - (L/2) * w.x, tipY + L * v.y - (L/2) * w.y ];
+            const pointsList = [ A, B, C, D ];
+
+            arrowHeadElement = rc.polygon(pointsList, {
+                fill: this.options.stroke,
+                stroke: this.options.stroke,
+                fillStyle: 'solid',
+                strokeWidth: this.options.strokeWidth,
+            });
+
+        } else if (this.arrowHeadStyle === "solid") {
+            const diameter = this.arrowHeadLength * 1;
+            arrowHeadElement = rc.circle(tipX, tipY, diameter, {
+                fill: this.options.stroke,
+                stroke: this.options.stroke,
+                fillStyle: 'solid',
+                strokeWidth: 0.8,
+            });
+
+        } else if (this.arrowHeadStyle === "outline") {
+            const diameter = this.arrowHeadLength * 1.2;
+            arrowHeadElement = rc.circle(tipX, tipY, diameter, {
+                fill: this.options.stroke,
+                stroke: this.options.stroke,
+                fillStyle: 'none',
+                strokeWidth: 0.2,
+            });
+        }
+
+        if (arrowOutlineStyle === "dashed") {
+            arrowHeadElement.setAttribute("stroke-dasharray", "10,10");
+        } else if (arrowOutlineStyle === "dotted") {
+            arrowHeadElement.setAttribute("stroke-dasharray", "2,8");
+        }
+
+        return arrowHeadElement;
+    }
+
+
+    getSmoothPath(points) {
+        if (points.length < 2) return "";
+        let d = `M ${points[0].x} ${points[0].y} `;
+
+        if (points.length === 2) {
+            d += `L ${points[1].x} ${points[1].y}`;
+            return d;
+        }
+
+        for (let i = 0; i < points.length - 1; i++) {
+            let p0 = i === 0 ? points[i] : points[i - 1];
+            let p1 = points[i];
+            let p2 = points[i + 1];
+            let p3 = i + 2 < points.length ? points[i + 2] : p2;
+
+            let cp1x = p1.x + (p2.x - p0.x) / 12;
+            let cp1y = p1.y + (p2.y - p0.y) / 12;
+            let cp2x = p2.x - (p3.x - p1.x) / 12;
+            let cp2y = p2.y - (p3.y - p1.y) / 12;
+
+            d += `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y} `;
+        }
+        return d;
+    }
+
+    // --- Methods for Selection Manager Integration (if needed in future) ---
+    contains(x, y) {
+        // Basic contains check - might need more sophisticated path hit detection for curves
+        // For now, just consider bounding box of points maybe? Or a simplified check.
+        return false; // Placeholder - Implement path hit detection if needed for selection
+    }
+
+    move(dx, dy) {
+        // Implement moving the arrow by adjusting all points
+        this.points = this.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+        this.draw();
+    }
+
+    updatePosition(anchorIndex, newX, newY) {
+        // Implement point update for resizing/reshaping if arrows are made resizable
+    }
+
+    addAnchors() {
+        // Implement anchor points for reshaping/resizing if arrows are made resizable
+    }
+
+    rotate(angle) {
+        // Implement rotation if needed
+    }
 }
+
+
+// --- Modified handleMouseDown, handleMouseMove, handleMouseUp in main script ---
+
+const handleMouseDown = (e) => {
+    console.log(isSelectionToolActive, isSquareToolActive, isCircleToolActive, isArrowToolActive);
+    if (isSquareToolActive) {
+        startX = e.offsetX;
+        startY = e.offsetY;
+        isDrawingSquare = true;
+        currentShape = new Rectangle(startX, startY, 0, 0, { /* ... */ });
+        shapes.push(currentShape);
+    } else if (isCircleToolActive) {
+        circleStartX = e.offsetX;
+        circleStartY = e.offsetY;
+        isDrawingCircle = true;
+        currentCircle = new Circle(circleStartX, circleStartY, 0, 0, { /* ... */ });
+        shapes.push(currentCircle);
+        currentShape = currentCircle;
+    } else if (isArrowToolActive) {
+        if (arrowCurved) { // Assuming arrowCurved controls curved arrow drawing
+            arrowPoints = [];
+            arrowPoints.push({ x: e.offsetX, y: e.offsetY }); // Using offsetX/Y for canvas coords
+            isDrawingArrow = true;
+            currentArrow = new Arrow(arrowPoints, {
+                stroke: arrowStrokeColor,
+                strokeWidth: arrowStrokeThickness
+                // ... other arrow styles can be passed here if needed at creation time ...
+            });
+            shapes.push(currentArrow); // Add arrow to shapes array for potential selection
+            currentShape = currentArrow; // For potential immediate selection after drawing
+        }
+    } else if (isSelectionToolActive) {
+        selectionManager.handleMouseDown(e);
+    }
+};
+
+
+const handleMouseMove = (e) => {
+    if (isDrawingSquare && isSquareToolActive && currentShape) {
+        currentShape.width = e.offsetX - startX;
+        currentShape.height = e.offsetY - startY;
+        currentShape.draw();
+    } else if (isDrawingCircle && isCircleToolActive && currentCircle) {
+        const radiusX = Math.abs(e.offsetX - circleStartX);
+        const radiusY = Math.abs(e.offsetY - circleStartY);
+        currentCircle.radiusX = radiusX;
+        currentCircle.radiusY = radiusY;
+        currentCircle.draw();
+    } else if (isDrawingArrow && isArrowToolActive && currentArrow && arrowCurved) {
+        arrowPoints.push({ x: e.offsetX, y: e.offsetY });
+        currentArrow.points = arrowPoints; // Update arrow's points
+        currentArrow.draw();
+    }
+    else if (isSelectionToolActive) {
+        selectionManager.handleMouseMove(e);
+    }
+};
+
+const handleMouseUp = (e) => {
+    isDrawingSquare = false;
+    isDrawingCircle = false;
+    isDrawingArrow = false;
+    selectionManager.handleMouseUp(e);
+    currentCircle = null;
+    currentArrow = null; // Reset currentArrow after drawing is complete
+};
+
+
+svg.addEventListener('mousedown', handleMouseDown);
+svg.addEventListener('mousemove', handleMouseMove);
+svg.addEventListener('mouseup', handleMouseUp);
+
+
+// --- Color and Style option listeners for Arrow ---
+
+arrowColorOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        event.stopPropagation();
+        arrowColorOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        arrowStrokeColor = span.getAttribute("data-id");
+        console.log("Selected Arrow Stroke Color:", arrowStrokeColor);
+    });
+});
+
+arrowStrokeThicknessValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        arrowStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        arrowStrokeThickness = parseInt(span.getAttribute("data-id"));
+        console.log("Selected Arrow Stroke Thickness:", arrowStrokeThickness);
+        event.stopPropagation()
+    });
+});
+
+arrowOutlineStyleValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        arrowOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        arrowOutlineStyle = span.getAttribute("data-id");
+        console.log("Selected Arrow Outline Style:", arrowOutlineStyle);
+        event.stopPropagation();
+    });
+});
+
+arrowHeadStyleValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        arrowHeadStyleValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        arrowHeadStyle = span.getAttribute("data-id");
+        console.log("Selected Arrow Head Style:", arrowHeadStyle);
+        event.stopPropagation();
+    });
+});
+
+arrowHeadLengthValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        arrowHeadLengthValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        arrowHeadLength = parseInt(span.getAttribute("data-id"));
+        console.log("Selected Arrow Head Length:", arrowHeadLength);
+        event.stopPropagation();
+    });
+});
+
+arrowHeadAngleValue.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        arrowHeadAngleValue.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+        arrowHeadAngleDeg = parseInt(span.getAttribute("data-id"));
+        console.log("Selected Arrow Head Angle:", arrowHeadAngleDeg);
+        event.stopPropagation();
+    });
+});

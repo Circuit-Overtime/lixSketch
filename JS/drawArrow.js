@@ -1,9 +1,13 @@
-let shapeEndpoints = []; // Store the endpoints of shapes for snapping
-let highlightCircle = null; // Highlight indicator for snapping
+// Assuming svg, rough, currentZoom, currentViewBox, shapes, currentShape,
+// isArrowToolActive, isSelectionToolActive are defined elsewhere and initialized.
 
+// --- Keep existing variable declarations ---
 let arrowStartX, arrowStartY;
-let arrowElementGroup = null;
-
+let currentArrow = null; // Keep track of the arrow being drawn
+let isResizing = false;  // Is an anchor being dragged?
+let isDragging = false;  // Is the whole shape being dragged?
+let activeAnchor = null; // Which anchor is being dragged (element)
+let isDrawingArrow = false; // Is a new arrow being drawn?
 let arrowStrokeColor = "#fff";
 let arrowStrokeThickness = 2;
 let arrowOutlineStyle = "solid";
@@ -11,9 +15,10 @@ let arrowCurved = false;
 let arrowCurveAmount = 20;
 let arrowHeadLength = 10;
 let arrowHeadAngleDeg = 30;
-let arrowPoints = [];
 let arrowHeadStyle = "default";
+let startX, startY; // Store *SCREEN* coordinates for drag delta calculation
 
+// --- Keep existing style option selectors ---
 let arrowStrokeColorOptions = document.querySelectorAll(".arrowStrokeSpan");
 let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
 let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
@@ -21,287 +26,423 @@ let arrowTypeStyleValue = document.querySelectorAll(".arrowTypeStyle");
 let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyleSpan");
 
 
-function screenToViewBoxPointArrow(x, y) {
-  return [
-    currentViewBox.x + x / currentZoom,
-    currentViewBox.y + y / currentZoom
-  ];
-}
+class Arrow {
+    constructor(startPoint, endPoint, options = {}) {
+        this.startPoint = startPoint; // Should be viewBox coordinates
+        this.endPoint = endPoint;   // Should be viewBox coordinates
+        this.options = {
+            stroke: options.stroke || arrowStrokeColor,
+            strokeWidth: options.strokeWidth || arrowStrokeThickness,
+            strokeDasharray: options.strokeDasharray || (arrowOutlineStyle === "dashed" ? "10,10" : (arrowOutlineStyle === "dotted" ? "2,8" : "")),
+            fill: 'none',
+        };
+        this.arrowHeadStyle = options.arrowHeadStyle || arrowHeadStyle;
+        this.arrowHeadLength = options.arrowHeadLength || arrowHeadLength;
+        this.arrowHeadAngleDeg = options.arrowHeadAngleDeg || arrowHeadAngleDeg;
 
-function drawArrow(x1, y1, x2, y2) {
-    // Remove old arrow element if it exists.
-    if (arrowElementGroup) {
-        //Remove all children to clear it
-        while (arrowElementGroup.firstChild) {
-          arrowElementGroup.removeChild(arrowElementGroup.firstChild);
-      }
-    }
-     // Snap endpoints if available.
-     const startSnap = getSnapPoint ? getSnapPoint(x1, y1) : {x: x1, y: y1};
-     const endSnap = getSnapPoint ? getSnapPoint(x2, y2) : {x: x2, y: y2};
-     x1 = startSnap.x;
-     y1 = startSnap.y;
-     x2 = endSnap.x;
-     y2 = endSnap.y;
- 
-     // Convert to viewBox coordinates.
-     const [vx1, vy1] = screenToViewBoxPointArrow(x1, y1);
-     const [vx2, vy2] = screenToViewBoxPointArrow(x2, y2);
-
-    const angle = Math.atan2(vy2 - vy1, vx2 - vx1);
-
-    // --- Create a SINGLE PATH for the arrow ---
-    let pathData = `M ${vx1} ${vy1} L ${vx2} ${vy2}`; // Main line
-
-    if (arrowHeadStyle === "default") {
-        // V-shaped arrowhead
-        const arrowHeadAngle = (arrowHeadAngleDeg * Math.PI) / 180;
-        const x3 = vx2 - arrowHeadLength * Math.cos(angle - arrowHeadAngle);
-        const y3 = vy2 - arrowHeadLength * Math.sin(angle - arrowHeadAngle);
-        const x4 = vx2 - arrowHeadLength * Math.cos(angle + arrowHeadAngle);
-        const y4 = vy2 - arrowHeadLength * Math.sin(angle + arrowHeadAngle);
-
-        pathData += ` M ${vx2} ${vy2} L ${x3} ${y3} M ${vx2} ${vy2} L ${x4} ${y4}`;
-    } else if (arrowHeadStyle === "solid") {
-        // Circle head
-        pathData += ` M ${vx2 - arrowHeadLength} ${vy2} A ${arrowHeadLength} ${arrowHeadLength} 0 1 1 ${vx2 + arrowHeadLength} ${vy2}`;
-    } else if (arrowHeadStyle === "square") {
-        // Square head
-        const L = arrowHeadLength;
-        const v = {x: Math.cos(angle), y: Math.sin(angle)};
-        const w = {x: -Math.sin(angle), y: Math.cos(angle)};
-
-        const A = [vx2 + (L / 2) * w.x, vy2 + (L / 2) * w.y];
-        const B = [vx2 - (L / 2) * w.x, vy2 - (L / 2) * w.y];
-        const C = [vx2 + L * v.x - (L / 2) * w.x, vy2 + L * v.y - (L / 2) * w.y];
-        const D = [vx2 + L * v.x + (L / 2) * w.x, vy2 + L * v.y + (L / 2) * w.y];
-
-        pathData += ` M ${A[0]} ${A[1]} L ${B[0]} ${B[1]} L ${C[0]} ${C[1]} L ${D[0]} ${D[1]} Z`;
+        this.element = null;
+        this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.isSelected = false;
+        this.anchors = [];
+        // Add the group to the SVG *once*
+        svg.appendChild(this.group);
+        this.draw(); // Initial draw
     }
 
-    // Create the single path element
-    const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    arrowPath.setAttribute("d", pathData);
-    arrowPath.setAttribute("stroke", arrowStrokeColor);
-    arrowPath.setAttribute("stroke-width", arrowStrokeThickness);
-    arrowPath.setAttribute("fill", "none");
-    if (arrowOutlineStyle === "dashed") {
-      arrowPath.setAttribute("stroke-dasharray", "10,10");
-    } else if (arrowOutlineStyle === "dotted") {
-      arrowPath.setAttribute("stroke-dasharray", "2,8");
+    draw() {
+        // Clear previous contents (path and anchors)
+        while (this.group.firstChild) {
+            this.group.removeChild(this.group.firstChild);
+        }
+
+        // --- Draw the Arrow Line ---
+        let pathData = `M ${this.startPoint.x} ${this.startPoint.y} L ${this.endPoint.x} ${this.endPoint.y}`;
+
+        // --- Draw the Arrow Head ---
+        if (this.arrowHeadStyle === "default" && !(this.startPoint.x === this.endPoint.x && this.startPoint.y === this.endPoint.y)) {
+            const arrowHeadAngleRad = (this.arrowHeadAngleDeg * Math.PI) / 180;
+            const angle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
+            const x3 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle - arrowHeadAngleRad);
+            const y3 = this.endPoint.y - this.arrowHeadLength * Math.sin(angle - arrowHeadAngleRad);
+            const x4 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle + arrowHeadAngleRad);
+            const y4 = this.endPoint.y - this.arrowHeadLength * Math.sin(angle + arrowHeadAngleRad);
+            pathData += ` M ${x3} ${y3} L ${this.endPoint.x} ${this.endPoint.y} L ${x4} ${y4}`;
+        }
+
+        // --- Create and Style the Path Element ---
+        const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        arrowPath.setAttribute("d", pathData);
+        arrowPath.setAttribute("stroke", this.isSelected ? "#5B57D1" : this.options.stroke);
+        arrowPath.setAttribute("stroke-width", this.options.strokeWidth);
+        arrowPath.setAttribute("fill", this.options.fill);
+        if(this.options.strokeDasharray) {
+             arrowPath.setAttribute("stroke-dasharray", this.options.strokeDasharray);
+        } else {
+            arrowPath.removeAttribute("stroke-dasharray"); // Ensure it's removed if not dashed/dotted
+        }
+        arrowPath.setAttribute("stroke-linecap", "round");
+        arrowPath.setAttribute("stroke-linejoin", "round");
+
+        this.element = arrowPath;
+        this.group.appendChild(this.element); // Add path to the group
+
+        // --- Add or Remove Anchors based on selection ---
+        // This now correctly adds/updates or removes anchors every time draw is called
+        if (this.isSelected) {
+            this.addOrUpdateAnchors();
+        } else {
+            this.removeAnchors(); // Ensures removal if deselected
+        }
     }
-     //Store properties
-    arrowPath.setAttribute("data-x1", vx1);
-    arrowPath.setAttribute("data-y1", vy1);
-    arrowPath.setAttribute("data-x2", vx2);
-    arrowPath.setAttribute("data-y2", vy2);
-    arrowPath.setAttribute("data-arrowStrokeColor", arrowStrokeColor);
-    arrowPath.setAttribute("data-arrowStrokeThickness", arrowStrokeThickness);
-    arrowPath.setAttribute("data-arrowOutlineStyle", arrowOutlineStyle);
-    arrowPath.setAttribute("data-arrowHeadStyle", arrowHeadStyle);
 
-    if(!arrowElementGroup){
-        arrowElementGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        arrowElementGroup.setAttribute("data-type", "arrow-group");
+    move(dxViewBox, dyViewBox) { // Expecting delta in viewBox coordinates
+        this.startPoint.x += dxViewBox;
+        this.startPoint.y += dyViewBox;
+        this.endPoint.x += dxViewBox;
+        this.endPoint.y += dyViewBox;
+        this.draw(); // Redraw the arrow and its anchors in the new position
     }
-    //Clean
-    while (arrowElementGroup.firstChild) {
-        arrowElementGroup.removeChild(arrowElementGroup.firstChild);
+
+   updatePosition(anchorIndex, newViewBoxX, newViewBoxY) { // Expecting new position in viewBox coordinates
+        if (anchorIndex === 0) { // Start anchor
+            this.startPoint.x = newViewBoxX;
+            this.startPoint.y = newViewBoxY;
+        } else if (anchorIndex === 1) { // End anchor
+            this.endPoint.x = newViewBoxX;
+            this.endPoint.y = newViewBoxY;
+        }
+        // Simply redraw. The draw() method will handle updating anchor positions correctly.
+        this.draw();
+   }
+
+    // Combined Add/Update function called by draw() when selected
+    addOrUpdateAnchors() {
+        const points = [this.startPoint, this.endPoint];
+        points.forEach((point, index) => {
+            let anchor = this.anchors[index];
+            if (!anchor) {
+                // Create anchor if it doesn't exist
+                anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                anchor.setAttribute("r", 6); // Fixed radius in SVG units
+                anchor.setAttribute("fill", "#FFFFFF");
+                anchor.setAttribute("stroke", "#5B57D1");
+                anchor.setAttribute("stroke-width", 1.5);
+                anchor.setAttribute("class", "anchor arrow-anchor"); // Add specific class
+                anchor.setAttribute("data-index", index);
+                anchor.style.cursor = "grab";
+                this.group.appendChild(anchor);
+                this.anchors[index] = anchor; // Store it
+            }
+            // Update position regardless of whether it was just created or already existed
+            anchor.setAttribute("cx", point.x);
+            anchor.setAttribute("cy", point.y);
+             // Optionally adjust radius based on zoom here if needed
+             // anchor.setAttribute("r", 6 / currentZoom);
+        });
     }
-     arrowElementGroup.appendChild(arrowPath);
 
-    
-    return arrowElementGroup;
-}
-  function getSnapPoint(x, y) {
-    const snapThreshold = 10; // If within 10px, snap to endpoint
-    for (let pt of shapeEndpoints) {
-      const dx = pt.x - x;
-      const dy = pt.y - y;
-      if (Math.sqrt(dx * dx + dy * dy) <= snapThreshold) {
-        return { x: pt.x, y: pt.y };
-      }
+    removeAnchors() {
+        this.anchors.forEach(anchor => {
+            if (anchor && anchor.parentNode === this.group) {
+                this.group.removeChild(anchor);
+            }
+        });
+        this.anchors = []; // Clear the array
     }
-    return { x, y };
-  }
 
+    // No changes needed in 'contains'
+    contains(viewBoxX, viewBoxY) {
+        const x1 = this.startPoint.x;
+        const y1 = this.startPoint.y;
+        const x2 = this.endPoint.x;
+        const y2 = this.endPoint.y;
+        const x = viewBoxX;
+        const y = viewBoxY;
 
-svg.addEventListener('pointerdown', handlePointerDownArrow);
-svg.addEventListener('pointerup', handlePointerUpArrow);
+        const strokeWidth = this.options.strokeWidth;
+        const tolerance = (strokeWidth / 2) + (5 / currentZoom); // Tolerance in viewbox units, adjust base pixel tolerance by zoom
 
-function handlePointerDownArrow(e) {
-    if (isArrowToolActive && !arrowCurved) {
-        //This is to handle the intitial draw in a single click
-        if(arrowElementGroup && arrowElementGroup.parentNode) svg.removeChild(arrowElementGroup);
-        arrowElementGroup = null;
-
-        arrowStartX = e.clientX;
-        arrowStartY = e.clientY;
+        const lenSq = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+        if (lenSq === 0) {
+            return Math.sqrt((x - x1) ** 2 + (y - y1) ** 2) < tolerance;
+        }
+        let t = ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const closestX = x1 + t * (x2 - x1);
+        const closestY = y1 + t * (y2 - y1);
+        const distSq = (x - closestX) ** 2 + (y - closestY) ** 2;
+        return distSq < tolerance ** 2;
     }
-    svg.addEventListener("pointermove", handlePointerMoveArrow);
-}
 
-function handlePointerMoveArrow(e) {
-    if (isArrowToolActive && !arrowCurved) {
-      //This is to handle a single click
-      if (arrowElementGroup && arrowElementGroup.parentNode) svg.removeChild(arrowElementGroup);
-      arrowElementGroup = null;
 
-        const arrow = drawArrow(arrowStartX, arrowStartY, e.clientX, e.clientY);
-        if(arrow)  {
-                if(arrow.parentNode != svg)
-                  svg.appendChild(arrow) //Add the arrow
+    // No changes needed in 'updateStyle'
+    updateStyle(newOptions) {
+        // Handle strokeDasharray explicitly if arrowOutlineStyle is passed
+        if (newOptions.arrowOutlineStyle) {
+            const style = newOptions.arrowOutlineStyle;
+            newOptions.strokeDasharray = style === "dashed" ? "10,10" : (style === "dotted" ? "2,8" : "");
+        }
+        // Merge options, ensuring explicit null/empty string removes dasharray
+        this.options = { ...this.options, ...newOptions };
+        if (!this.options.strokeDasharray) {
+            delete this.options.strokeDasharray; // Or set to null
+        }
+
+
+        // Update other direct properties if passed
+        if (newOptions.stroke !== undefined) this.options.stroke = newOptions.stroke;
+        if (newOptions.strokeWidth !== undefined) this.options.strokeWidth = newOptions.strokeWidth;
+        if (newOptions.arrowHeadStyle !== undefined) this.arrowHeadStyle = newOptions.arrowHeadStyle;
+
+        this.draw(); // Redraw with new styles
+    }
+
+    // No changes needed in 'destroy'
+    destroy() {
+        if (this.group && this.group.parentNode) {
+            this.group.parentNode.removeChild(this.group);
+        }
+        const index = shapes.indexOf(this);
+        if (index > -1) {
+            shapes.splice(index, 1);
+        }
+        if (currentShape === this) {
+            currentShape = null;
         }
     }
 }
 
-function handlePointerUpArrow(e) {
-    svg.removeEventListener("pointermove", handlePointerMoveArrow);
-    if (isArrowToolActive && !arrowCurved) {
-        const arrow = drawArrow(arrowStartX, arrowStartY, e.clientX, e.clientY);
-
-        if (arrow) {
-           svg.appendChild(arrow);
-          if (arrowElementGroup) {
-            const x1 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-x1"));
-            const y1 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-y1"));
-            const x2 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-x2"));
-            const y2 = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-y2"));
-            const arrowStrokeColorValue = arrowElementGroup.querySelector("path").getAttribute("data-arrowStrokeColor");
-            const arrowStrokeThicknessValue = parseFloat(arrowElementGroup.querySelector("path").getAttribute("data-arrowStrokeThickness"));
-            const arrowOutlineStyleValue = arrowElementGroup.querySelector("path").getAttribute("data-arrowOutlineStyle");
-            const arrowHeadStyleValue = arrowElementGroup.querySelector("path").getAttribute("data-arrowHeadStyle");
-
-            const action = {
-                type: ACTION_CREATE,
-                element: arrowElementGroup,
-                parent: arrowElementGroup.parentNode,
-                nextSibling: arrowElementGroup.nextSibling,
-                data: {
-                    x1: x1,
-                    y1: y1,
-                    x2: x2,
-                    y2: y2,
-                    arrowStrokeColor: arrowStrokeColorValue,
-                    arrowStrokeThickness: arrowStrokeThicknessValue,
-                    arrowOutlineStyle: arrowOutlineStyleValue,
-                    arrowHeadStyle: arrowHeadStyleValue
-                }
-            };
-            //svg.appendChild(arrowElementGroup) //Add the arrow
-
-            history.push(action);
-            arrowElementGroup = null;
-            redoStack = [];
-            updateUndoRedoButtons();
-          }
-       }
-    }
+// --- screenToViewBoxPointArrow (keep as is, ensure it's accurate for your setup) ---
+function screenToViewBoxPointArrow(screenX, screenY) {
+    const pt = svg.createSVGPoint();
+    pt.x = screenX;
+    pt.y = screenY;
+    const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return { x: svgP.x, y: svgP.y };
 }
+
+// --- EVENT HANDLERS ---
+
+const handleMouseDown = (e) => {
+    const mouseX = e.clientX; // Use clientX/Y for screen coordinates
+    const mouseY = e.clientY;
+    const viewBoxPoint = screenToViewBoxPointArrow(mouseX, mouseY); // Convert click to viewBox coords
+
+    if (isArrowToolActive) {
+        isDrawingArrow = true;
+        currentArrow = new Arrow(viewBoxPoint, { ...viewBoxPoint }, {
+            stroke: arrowStrokeColor,
+            strokeWidth: arrowStrokeThickness,
+            arrowOutlineStyle: arrowOutlineStyle, // Pass name, constructor handles dasharray
+            arrowHeadStyle: arrowHeadStyle,
+        });
+        shapes.push(currentArrow);
+        // Don't select immediately while drawing
+        // currentShape = currentArrow;
+    } else if (isSelectionToolActive) {
+        startX = mouseX; // Store initial SCREEN coords for drag/resize delta
+        startY = mouseY;
+        activeAnchor = null;
+        isResizing = false;
+        isDragging = false;
+
+        // 1. Check anchors of the CURRENTLY selected shape FIRST
+        if (currentShape instanceof Arrow && currentShape.isSelected && currentShape.anchors.length > 0) {
+             // Use a slightly larger click radius for anchors if needed
+            const anchorClickRadius = 8 / currentZoom; // 8 pixel radius adjusted for zoom
+
+            for (let i = 0; i < currentShape.anchors.length; i++) {
+                const anchor = currentShape.anchors[i];
+                const anchorCX = parseFloat(anchor.getAttribute("cx"));
+                const anchorCY = parseFloat(anchor.getAttribute("cy"));
+                // Calculate distance in viewBox space
+                const distSq = (viewBoxPoint.x - anchorCX) ** 2 + (viewBoxPoint.y - anchorCY) ** 2;
+
+                if (distSq <= anchorClickRadius ** 2) {
+                    isResizing = true;
+                    activeAnchor = anchor;
+                    anchor.style.cursor = 'grabbing';
+                    e.stopPropagation();
+                    return; // Stop checking after finding an anchor
+                }
+            }
+        }
+
+        // 2. Check if clicked on any shape's body (if no anchor was hit)
+        let clickedShape = null;
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            const shape = shapes[i];
+            if (shape instanceof Arrow && shape.contains(viewBoxPoint.x, viewBoxPoint.y)) {
+                 clickedShape = shape;
+                 break;
+            }
+            // Add checks for other shape types here
+        }
+
+        // 3. Handle selection logic
+        if (clickedShape) {
+            // If clicking a different shape than the currently selected one
+            if (currentShape !== clickedShape) {
+                if (currentShape) {
+                    currentShape.isSelected = false;
+                    currentShape.draw(); // Redraw old shape (removes anchors)
+                }
+                currentShape = clickedShape;
+                currentShape.isSelected = true;
+                currentShape.draw(); // Redraw new shape (adds anchors)
+            }
+             // If clicking the already selected shape (or just selected it)
+             // Prepare for dragging the whole shape
+            isDragging = true;
+            // Set grabbing cursor on body? Maybe not necessary.
+            e.stopPropagation();
+
+        } else {
+            // Clicked on empty space - deselect
+            if (currentShape) {
+                currentShape.isSelected = false;
+                currentShape.draw(); // Redraw (removes anchors)
+                currentShape = null;
+            }
+            // Potentially initiate canvas panning here
+        }
+    }
+};
+
+const handleMouseMove = (e) => {
+    // Optimization: If no relevant action is happening, exit early
+    if (!isDrawingArrow && !isResizing && !isDragging) {
+        return;
+    }
+
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    const currentViewBoxPoint = screenToViewBoxPointArrow(mouseX, mouseY); // Current mouse in viewBox coords
+
+    if (isDrawingArrow && currentArrow) {
+        currentArrow.endPoint = currentViewBoxPoint;
+        currentArrow.draw();
+    } else if (isResizing && currentShape instanceof Arrow && activeAnchor) {
+        const anchorIndex = parseInt(activeAnchor.getAttribute("data-index"));
+        // Pass the calculated viewBox coordinates directly
+        currentShape.updatePosition(anchorIndex, currentViewBoxPoint.x, currentViewBoxPoint.y);
+        // Update startX/Y for the *next* move event (important for smooth resizing)
+        startX = mouseX;
+        startY = mouseY;
+    } else if (isDragging && currentShape instanceof Arrow) {
+        // --- Corrected Drag Calculation ---
+        // 1. Get previous mouse position in viewBox coords (convert startX/Y)
+        const previousViewBoxPoint = screenToViewBoxPointArrow(startX, startY);
+
+        // 2. Calculate delta movement in VIEWBOX coordinates
+        const dxViewBox = currentViewBoxPoint.x - previousViewBoxPoint.x;
+        const dyViewBox = currentViewBoxPoint.y - previousViewBoxPoint.y;
+
+        // 3. Move the shape by the viewBox delta
+        currentShape.move(dxViewBox, dyViewBox);
+
+        // 4. Update startX/Y to the current SCREEN coordinates for the next mousemove event
+        startX = mouseX;
+        startY = mouseY;
+        // --- End Corrected Drag Calculation ---
+    }
+    // Add panning logic here if needed
+};
+
+const handleMouseUp = (e) => {
+    if (isDrawingArrow && currentArrow) {
+        // Optional: Remove arrow if too small (zero length)
+        if (Math.hypot(currentArrow.endPoint.x - currentArrow.startPoint.x, currentArrow.endPoint.y - currentArrow.startPoint.y) < 2) {
+             currentArrow.destroy();
+        } else {
+             // Maybe select the arrow after drawing?
+             // currentArrow.isSelected = true;
+             // currentArrow.draw();
+             // currentShape = currentArrow;
+        }
+        currentArrow = null;
+    }
+
+    if (isResizing && activeAnchor) {
+         activeAnchor.style.cursor = 'grab'; // Reset cursor
+    }
+    // Reset dragging cursor if one was set
+
+    // Reset states
+    isDrawingArrow = false;
+    isResizing = false;
+    isDragging = false;
+    activeAnchor = null;
+    // startX/Y don't need resetting here, they are set on mousedown
+};
+
+// --- Attach Listeners ---
+// Remove existing ones first to prevent duplicates if this code is run multiple times
+svg.removeEventListener('mousedown', handleMouseDown);
+document.removeEventListener('mousemove', handleMouseMove); // Use document/window
+document.removeEventListener('mouseup', handleMouseUp);   // Use document/window
+
+svg.addEventListener('mousedown', handleMouseDown);
+document.addEventListener('mousemove', handleMouseMove);
+document.addEventListener('mouseup', handleMouseUp);
+
+
+// --- Style Option Event Listeners (Refined application) ---
+
+const updateSelectedArrowStyle = (styleChanges) => {
+    if (currentShape instanceof Arrow && currentShape.isSelected) {
+        currentShape.updateStyle(styleChanges);
+    }
+};
 
 arrowStrokeColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
-        event.stopPropagation(); // Stop event propagation
-        const previousStroke = arrowStrokeColor
+        event.stopPropagation();
         arrowStrokeColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         arrowStrokeColor = span.getAttribute("data-id");
-
-         if (arrowElementGroup) {
-           const arrowPath = arrowElementGroup.querySelector("path")
-            if(arrowPath) arrowPath.setAttribute("stroke", arrowStrokeColor);
-
-            const action = {
-                type: ACTION_MODIFY,
-                element: arrowElementGroup,
-                data: { property: 'stroke', newValue: arrowStrokeColor, oldValue: previousStroke }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Stroke Color:", arrowStrokeColor);
+        updateSelectedArrowStyle({ stroke: arrowStrokeColor }); // Pass only the changed property
     });
 });
 
 arrowStrokeThicknessValue.forEach((span) => {
     span.addEventListener("click", (event) => {
-      const previousArrowStrokeThickness = arrowStrokeThickness
+        event.stopPropagation();
         arrowStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         arrowStrokeThickness = parseInt(span.getAttribute("data-id"));
-
-        if (arrowElementGroup) {
-           const arrowPath = arrowElementGroup.querySelector("path")
-           if(arrowPath) arrowPath.setAttribute("stroke-width", arrowStrokeThickness);
-            const action = {
-                type: ACTION_MODIFY,
-                element: arrowElementGroup,
-                data: { property: 'strokeWidth', newValue: arrowStrokeThickness, oldValue: previousArrowStrokeThickness }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Stroke Thickness:", arrowStrokeThickness);
-        event.stopPropagation()
+        updateSelectedArrowStyle({ strokeWidth: arrowStrokeThickness });
     });
 });
 
 arrowOutlineStyleValue.forEach((span) => {
     span.addEventListener("click", (event) => {
-      const previousArrowOutlineStyle = arrowOutlineStyle
+        event.stopPropagation();
         arrowOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         arrowOutlineStyle = span.getAttribute("data-id");
-
-         if (arrowElementGroup) {
-              const arrowPath = arrowElementGroup.querySelector("path")
-              let strokeLineDash = arrowOutlineStyle === "dashed" ? "10,10" : arrowOutlineStyle === "dotted" ? "2,8" : "";
-              if(arrowPath) arrowPath.setAttribute("stroke-dasharray", strokeLineDash);
-            const action = {
-                type: ACTION_MODIFY,
-                element: arrowElementGroup,
-                data: { property: 'outlineStyle', newValue: arrowOutlineStyle, oldValue: previousArrowOutlineStyle }
-            };
-            history.push(action);
-            redoStack = [];
-            updateUndoRedoButtons();
-        }
-        console.log("Selected Outline Style:", arrowOutlineStyle);
-        event.stopPropagation()
+        // Pass the style name, let updateStyle handle dasharray logic
+        updateSelectedArrowStyle({ arrowOutlineStyle: arrowOutlineStyle });
     });
 });
 
 arrowTypeStyleValue.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation();
         arrowTypeStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
-        arrowCurved = span.getAttribute("data-id");
-        console.log("Selected Arrow Style:", arrowCurved);
-        event.stopPropagation()
+        arrowCurved = span.getAttribute("data-id") === 'true';
+        // updateSelectedArrowStyle({ isCurved: arrowCurved }); // Needs draw logic update
+        // console.log("Curved style selected, but drawing not implemented.");
     });
-  });
+});
 
 arrowHeadStyleValue.forEach((span) => {
     span.addEventListener("click", (event) => {
-        const previousArrowHeadStyle = arrowHeadStyle
+        event.stopPropagation();
         arrowHeadStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         arrowHeadStyle = span.getAttribute("data-id");
-
-        //if (arrowElementGroup) {
-            // const action = {
-            //     type: ACTION_MODIFY,
-            //     element: arrowElementGroup,
-            //     data: { property: 'arrowHeadStyle', newValue: arrowHeadStyle, oldValue: previousArrowHeadStyle }
-            // };
-            // history.push(action);
-            // redoStack = [];
-            // updateUndoRedoButtons();
-        //}
-
-        console.log("Selected Arrow Head Style:", arrowHeadStyle);
-        event.stopPropagation()
+        updateSelectedArrowStyle({ arrowHeadStyle: arrowHeadStyle });
     });
-  });
+});
