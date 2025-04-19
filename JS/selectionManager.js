@@ -62,6 +62,8 @@ class SelectionManager {
         // Ensure the selection tool is active in the main script
         // if (!isSelectionToolActive) return; // Assuming isSelectionToolActive is global/accessible
 
+      
+
         const { x, y } = this.getSVGCoords(e);
         this.startX = x;
         this.startY = y;
@@ -117,6 +119,10 @@ class SelectionManager {
             }
         }
 
+        clickedShape = this.shapes.find(shape => 
+            shape instanceof Line && shape.contains(x, y)
+        );
+        
         // --- Handle Selection Logic ---
         const wasSelected = clickedShape ? clickedShape.isSelected : false;
 

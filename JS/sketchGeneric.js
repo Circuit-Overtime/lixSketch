@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-right-arrow-alt");
+let selectedTool = document.querySelector(".bxs-paint");
 let history = [];
 let redoStack = [];
 let shapes = [];

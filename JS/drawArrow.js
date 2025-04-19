@@ -17,7 +17,7 @@ let arrowHeadLength = 10;
 let arrowHeadAngleDeg = 30;
 let arrowHeadStyle = "default";
 let startX, startY; // Store *SCREEN* coordinates for drag delta calculation
-
+let startViewBoxX, startViewBoxY, dragOffsetX, dragOffsetY; // Store initial viewBox coordinates for drag
 // --- Keep existing style option selectors ---
 let arrowStrokeColorOptions = document.querySelectorAll(".arrowStrokeSpan");
 let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
@@ -113,13 +113,12 @@ class Arrow {
         // No explicit removeAnchors call needed here, as redraw clears the group
     }
 
-    // Method to move the entire arrow by a delta in viewBox coordinates
     move(dxViewBox, dyViewBox) {
         this.startPoint.x += dxViewBox;
         this.startPoint.y += dyViewBox;
         this.endPoint.x += dxViewBox;
         this.endPoint.y += dyViewBox;
-        this.draw(); // Redraw the arrow and its anchors in the new position
+        this.draw();
     }
 
     // Method to update one end of the arrow based on anchor drag
@@ -287,120 +286,102 @@ const handleMouseDown = (e) => {
         // Don't select immediately while drawing
         startX = mouseX; // Store screen coords for drawing delta
         startY = mouseY;
-    } else if (isSelectionToolActive) {
-        startX = mouseX; // Store initial SCREEN coords for drag/resize delta
+    } 
+    
+    else if (isSelectionToolActive) {
+        startX = mouseX;
         startY = mouseY;
+        startViewBoxX = viewBoxPoint.x; // Store initial viewBox coordinates
+        startViewBoxY = viewBoxPoint.y;
 
-        let clickedOnSomething = false; // Flag to prevent deselecting if clicking selected item
+        let clickedOnSomething = false;
 
-        // 1. Check anchors of the CURRENTLY selected shape FIRST
-        // Use optional chaining ?. in case currentShape is null or not an Arrow
-        if (currentShape?.isSelected && currentShape instanceof Arrow && currentShape.anchors?.length > 0) {
+        // Check anchors first
+        if (currentShape?.isSelected && currentShape instanceof Arrow) {
             for (let i = 0; i < currentShape.anchors.length; i++) {
                 const anchor = currentShape.anchors[i];
-                // Direct check using target (more reliable than distance for small elements)
                 if (e.target === anchor) {
                     isResizing = true;
-                    activeAnchor = anchor; // Store the actual anchor element
-                    anchor.style.cursor = 'grabbing';
+                    activeAnchor = anchor;
                     clickedOnSomething = true;
-                    e.stopPropagation(); // Prevent event bubbling further
-                    break; // Found the anchor, stop checking
+                    e.stopPropagation();
+                    break;
                 }
             }
         }
 
-        // 2. If not resizing, check if clicked on any shape's body
+        // Check shape body
         if (!isResizing) {
             let clickedShape = null;
-            // Iterate shapes in reverse draw order (topmost first)
             for (let i = shapes.length - 1; i >= 0; i--) {
                 const shape = shapes[i];
-                // Check if shape has a 'contains' method and if the point is inside
                 if (typeof shape.contains === 'function' && shape.contains(viewBoxPoint.x, viewBoxPoint.y)) {
-                    // Ensure not clicking an anchor of this shape if it happens to be selected
                     if (!(shape.isSelected && shape.anchors?.some(a => e.target === a))) {
-                          clickedShape = shape;
-                          break; // Found the topmost shape body
+                        clickedShape = shape;
+                        break;
                     }
                 }
             }
 
-            // 3. Handle selection logic based on the clicked shape
             if (clickedShape) {
-                clickedOnSomething = true; // Clicked on a shape body
-                // If clicking a different shape than the currently selected one
+                clickedOnSomething = true;
                 if (currentShape !== clickedShape) {
                     if (currentShape) {
                         currentShape.isSelected = false;
-                        currentShape.draw(); // Redraw old shape (removes anchors)
+                        currentShape.draw();
                     }
                     currentShape = clickedShape;
                     currentShape.isSelected = true;
-                    currentShape.draw(); // Redraw new shape (adds anchors)
+                    currentShape.draw();
                 }
-                // If clicking the already selected shape (or just selected it), prepare for dragging
                 isDragging = true;
-                svg.style.cursor = 'grabbing'; // Indicate dragging possible
-                e.stopPropagation(); // Prevent other actions
-
-            } else {
-                // Clicked on empty space - deselect if nothing was clicked
-                if (!clickedOnSomething && currentShape) {
-                    currentShape.isSelected = false;
-                    currentShape.draw(); // Redraw (removes anchors)
-                    currentShape = null;
-                }
-                // Reset cursor if needed
-                svg.style.cursor = 'default';
-                // Potentially initiate canvas panning here if applicable
+                
+                // Calculate offset between mouse and shape center
+                const shapeCenterX = (currentShape.startPoint.x + currentShape.endPoint.x) / 2;
+                const shapeCenterY = (currentShape.startPoint.y + currentShape.endPoint.y) / 2;
+                dragOffsetX = viewBoxPoint.x - shapeCenterX;
+                dragOffsetY = viewBoxPoint.y - shapeCenterY;
+                
+                svg.style.cursor = 'grabbing';
+                e.stopPropagation();
+            } else if (!clickedOnSomething && currentShape) {
+                currentShape.isSelected = false;
+                currentShape.draw();
+                currentShape = null;
             }
-        } // end if(!isResizing)
-    } // end if(isSelectionToolActive)
+        }
+    }
 };
 
 
 const handleMouseMove = (e) => {
-    // Optimization: If no relevant action is happening, exit early
-    if (!isDrawingArrow && !isResizing && !isDragging) {
-        // Optional: Add hover effects logic here if needed
-        return;
-    }
+    if (!isDrawingArrow && !isResizing && !isDragging) return;
 
     const mouseX = e.clientX;
     const mouseY = e.clientY;
-    const currentViewBoxPoint = screenToViewBoxPointArrow(mouseX, mouseY); // Current mouse in viewBox coords
+    const currentViewBoxPoint = screenToViewBoxPointArrow(mouseX, mouseY);
 
     if (isDrawingArrow && currentArrow) {
-        // Update the end point of the arrow being drawn
         currentArrow.endPoint = currentViewBoxPoint;
         currentArrow.draw();
     } else if (isResizing && currentShape && activeAnchor) {
         const anchorIndex = parseInt(activeAnchor.getAttribute("data-index"));
-        // Pass the calculated viewBox coordinates directly to updatePosition
         currentShape.updatePosition(anchorIndex, currentViewBoxPoint.x, currentViewBoxPoint.y);
-        // No need to update startX/Y during resizing, position is absolute
-
     } else if (isDragging && currentShape) {
-        // --- Corrected Drag Calculation ---
-        // 1. Get previous mouse position in viewBox coords (convert startX/Y)
-        const previousViewBoxPoint = screenToViewBoxPointArrow(startX, startY);
-
-        // 2. Calculate delta movement in VIEWBOX coordinates
-        const dxViewBox = currentViewBoxPoint.x - previousViewBoxPoint.x;
-        const dyViewBox = currentViewBoxPoint.y - previousViewBoxPoint.y;
-
-        // 3. Move the shape by the viewBox delta (check if move exists)
-        if (typeof currentShape.move === 'function' && (dxViewBox !== 0 || dyViewBox !== 0)) {
-             currentShape.move(dxViewBox, dyViewBox);
-        }
-
-        // 4. Update startX/Y to the current SCREEN coordinates for the next mousemove event
-        startX = mouseX;
-        startY = mouseY;
-        // --- End Corrected Drag Calculation ---
+        // Calculate new position based on current mouse minus initial offset
+        const targetX = currentViewBoxPoint.x - dragOffsetX;
+        const targetY = currentViewBoxPoint.y - dragOffsetY;
+        
+        // Calculate current center
+        const currentCenterX = (currentShape.startPoint.x + currentShape.endPoint.x) / 2;
+        const currentCenterY = (currentShape.startPoint.y + currentShape.endPoint.y) / 2;
+        
+        // Calculate delta needed to move to target position
+        const dx = targetX - currentCenterX;
+        const dy = targetY - currentCenterY;
+        
+        currentShape.move(dx, dy);
     }
-    // Add panning logic here if needed and check flags
 };
 
 
