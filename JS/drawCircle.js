@@ -36,7 +36,7 @@ class Circle {
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         this.isSelected = false;
         this.anchors = [];
-        this.rotationAnchor = null; // Circles don't rotate in the same way, but keep for consistency if needed for grouping later
+        this.rotationAnchor = null;
         this.selectionPadding = 8;
         this.selectionOutline = null;
         this.draw();
@@ -44,44 +44,92 @@ class Circle {
 
     draw() {
         while (this.group.firstChild) {
-            this.group.removeChild(this.group.firstChild);
+             // Only remove child nodes that are not anchors or the outline if they exist
+            if (!this.group.firstChild.classList || (!this.group.firstChild.classList.contains('anchor') && this.group.firstChild !== this.selectionOutline && this.group.firstChild !== this.rotationAnchor)) {
+                 this.group.removeChild(this.group.firstChild);
+            } else {
+                // If it's an anchor or outline, break the loop assuming shape element is first
+                 break;
+            }
         }
-        if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
-            this.group.removeChild(this.selectionOutline);
-            this.selectionOutline = null;
+        // Clear previous shape element if exists
+        if(this.element && this.element.parentNode === this.group) {
+            this.group.removeChild(this.element);
+            this.element = null;
+        }
+        // Clear previous overlay if exists
+        if (this.overlay && this.overlay.parentNode === this.group) {
+             this.group.removeChild(this.overlay);
+             this.overlay = null;
         }
 
-        const roughEllipse = rc.ellipse(this.centerX, this.centerY, this.radiusX * 2, this.radiusY * 2, this.options);
+
+        // Ensure radii are non-negative before drawing
+        const drawRadiusX = Math.max(1, this.radiusX); // Use a small minimum radius
+        const drawRadiusY = Math.max(1, this.radiusY);
+
+        const roughEllipse = rc.ellipse(this.centerX, this.centerY, drawRadiusX * 2, drawRadiusY * 2, this.options);
         this.element = roughEllipse;
-
 
         // Create an invisible overlay rectangle covering the circle's bounding box for better event handling.
         if (!this.overlay) {
             this.overlay = document.createElementNS("http://www.w3.org/2000/svg", "rect");
             this.overlay.setAttribute("fill", "rgba(0,0,0,0)"); // fully transparent
             this.overlay.style.pointerEvents = "all"; // capture pointer events
+            this.overlay.style.cursor = 'move'; // Default cursor for the shape body
         }
-        this.overlay.setAttribute("x", this.centerX - this.radiusX);
-        this.overlay.setAttribute("y", this.centerY - this.radiusY);
-        this.overlay.setAttribute("width", this.radiusX * 2);
-        this.overlay.setAttribute("height", this.radiusY * 2);
+        this.overlay.setAttribute("x", this.centerX - drawRadiusX);
+        this.overlay.setAttribute("y", this.centerY - drawRadiusY);
+        this.overlay.setAttribute("width", drawRadiusX * 2);
+        this.overlay.setAttribute("height", drawRadiusY * 2);
 
 
-        this.group.appendChild(roughEllipse);
-        this.group.appendChild(this.overlay); // Add overlay to the group
+        // Insert the shape and overlay at the beginning of the group's children
+        // This ensures anchors and outline are drawn on top
+        if (this.group.firstChild) {
+            this.group.insertBefore(this.overlay, this.group.firstChild);
+            this.group.insertBefore(roughEllipse, this.overlay);
+        } else {
+            this.group.appendChild(roughEllipse);
+            this.group.appendChild(this.overlay);
+        }
 
+
+        // Update anchors and outline if selected
         if (this.isSelected) {
-            this.addAnchors();
+            this.addAnchors(); // This will redraw anchors based on new dimensions
         }
 
-        svg.appendChild(this.group);
+        // Ensure group is in the SVG
+        if (!this.group.parentNode) {
+             svg.appendChild(this.group);
+        }
     }
+
 
     addAnchors() {
         const anchorSize = 10;
         const anchorStrokeWidth = 2;
-        const self = this;
+        const self = this; // Keep reference to 'this' for event listeners
 
+        // Remove existing anchors and outline first
+        this.anchors.forEach(anchor => {
+            if (anchor.parentNode === this.group) {
+                this.group.removeChild(anchor);
+            }
+        });
+        if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
+            this.group.removeChild(this.rotationAnchor);
+            this.rotationAnchor = null; // Reset rotation anchor if needed
+        }
+        if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+            this.group.removeChild(this.selectionOutline);
+            this.selectionOutline = null;
+        }
+        this.anchors = []; // Reset the anchors array
+
+
+        // Calculate anchor positions based on current dimensions + padding
         const expandedX = this.centerX - this.radiusX - this.selectionPadding;
         const expandedY = this.centerY - this.radiusY - this.selectionPadding;
         const expandedWidth = this.radiusX * 2 + 2 * this.selectionPadding;
@@ -99,38 +147,13 @@ class Circle {
         ];
 
         const anchorDirections = {
-            0: 'nwse',
-            1: 'nesw',
-            2: 'nesw',
-            3: 'nwse',
-            4: 'ns',
-            5: 'ns',
-            6: 'ew',
-            7: 'ew'
+            0: 'nwse', 1: 'nesw', 2: 'nesw', 3: 'nwse',
+            4: 'ns',   5: 'ns',   6: 'ew',   7: 'ew'
         };
 
-        const outlinePoints = [
-            [positions[0].x, positions[0].y],
-            [positions[1].x, positions[1].y],
-            [positions[3].x, positions[3].y],
-            [positions[2].x, positions[2].y],
-            [positions[0].x, positions[0].y]
-        ];
-
-
-        this.anchors.forEach(anchor => {
-            if (anchor.parentNode === this.group) {
-                this.group.removeChild(anchor);
-            }
-        });
-        if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
-            this.group.removeChild(this.rotationAnchor);
-        }
-        this.anchors = [];
-
+        // Create and add new anchors
         positions.forEach((pos, i) => {
             const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-
             anchor.setAttribute('x', pos.x - anchorSize / 2);
             anchor.setAttribute('y', pos.y - anchorSize / 2);
             anchor.setAttribute('width', anchorSize);
@@ -145,18 +168,23 @@ class Circle {
             anchor.addEventListener('mouseover', function () {
                 const index = parseInt(this.getAttribute('data-index'));
                 const baseDirection = anchorDirections[index];
-                svg.style.cursor = baseDirection + '-resize'; // No rotation for circle resize cursors for now.
+                svg.style.cursor = baseDirection + '-resize';
             });
-
             anchor.addEventListener('mouseout', function () {
                 svg.style.cursor = 'default';
             });
 
-            this.group.appendChild(anchor);
-            this.anchors[i] = anchor;
+            this.group.appendChild(anchor); // Add anchor to the group
+            this.anchors[i] = anchor;       // Store reference
         });
 
 
+        // Create and add new selection outline
+        const outlinePoints = [
+            [positions[0].x, positions[0].y], [positions[1].x, positions[1].y],
+            [positions[3].x, positions[3].y], [positions[2].x, positions[2].y],
+            [positions[0].x, positions[0].y] // Close the polyline
+        ];
         const pointsAttr = outlinePoints.map(p => p.join(',')).join(' ');
         const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
         outline.setAttribute('points', pointsAttr);
@@ -164,66 +192,158 @@ class Circle {
         outline.setAttribute('stroke', '#5B57D1');
         outline.setAttribute('stroke-width', 1.5);
         outline.setAttribute('stroke-dasharray', '4 2');
-        outline.setAttribute('style', 'pointer-events: none;');
+        outline.setAttribute('style', 'pointer-events: none;'); // Outline doesn't capture events
         this.group.appendChild(outline);
         this.selectionOutline = outline;
     }
 
 
     contains(x, y) {
-        // Check if point (x, y) is inside the ellipse
-        const normalizedX = (x - this.centerX) / this.radiusX;
-        const normalizedY = (y - this.centerY) / this.radiusY;
+        // Use non-zero radii for containment check
+        const checkRadiusX = Math.max(Number.EPSILON, this.radiusX); // Avoid division by zero
+        const checkRadiusY = Math.max(Number.EPSILON, this.radiusY);
+        const normalizedX = (x - this.centerX) / checkRadiusX;
+        const normalizedY = (y - this.centerY) / checkRadiusY;
         return (normalizedX * normalizedX + normalizedY * normalizedY) <= 1;
     }
 
     move(dx, dy) {
         this.centerX += dx;
         this.centerY += dy;
-        this.draw();
+        this.draw(); // Redraw calls addAnchors if selected
     }
 
+    // --- NEW updatePosition Method ---
     updatePosition(anchorIndex, newX, newY) {
-        const dx = newX - this.centerX;
-        const dy = newY - this.centerY;
+        // Store original state for calculating fixed points/edges
+        const originalCenterX = this.centerX;
+        const originalCenterY = this.centerY;
+        const originalRadiusX = this.radiusX;
+        const originalRadiusY = this.radiusY;
+
+        // Calculate original bounding box corners (without padding)
+        const originalNW_X = originalCenterX - originalRadiusX;
+        const originalNW_Y = originalCenterY - originalRadiusY;
+        const originalSE_X = originalCenterX + originalRadiusX;
+        const originalSE_Y = originalCenterY + originalRadiusY;
+        const originalNE_X = originalCenterX + originalRadiusX;
+        const originalNE_Y = originalCenterY - originalRadiusY;
+        const originalSW_X = originalCenterX - originalRadiusX;
+        const originalSW_Y = originalCenterY + originalRadiusY;
+
+
+        let newCenterX = originalCenterX;
+        let newCenterY = originalCenterY;
+        let newRadiusX = originalRadiusX;
+        let newRadiusY = originalRadiusY;
+
+        let fixedX, fixedY, newWidth, newHeight;
+        const minSize = 1; // Minimum radius/dimension
 
         switch (anchorIndex) {
-            case 0: // NW - adjust both radiusX and radiusY based on NW anchor
-                this.radiusX = Math.abs(this.centerX - newX);
-                this.radiusY = Math.abs(this.centerY - newY);
+            case 0: // NW anchor dragged to (newX, newY), SE corner fixed
+                fixedX = originalSE_X;
+                fixedY = originalSE_Y;
+                newWidth = Math.max(minSize*2, fixedX - newX); // Ensure minimum width
+                newHeight = Math.max(minSize*2, fixedY - newY); // Ensure minimum height
+                newRadiusX = newWidth / 2;
+                newRadiusY = newHeight / 2;
+                newCenterX = fixedX - newRadiusX; // Calculate new center based on fixed SE and new width/height
+                newCenterY = fixedY - newRadiusY;
                 break;
-            case 1: // NE - adjust radiusX and radiusY
-                this.radiusX = Math.abs(newX - this.centerX);
-                this.radiusY = Math.abs(this.centerY - newY);
+
+            case 1: // NE anchor dragged to (newX, newY), SW corner fixed
+                fixedX = originalSW_X;
+                fixedY = originalSW_Y;
+                newWidth = Math.max(minSize*2, newX - fixedX);
+                newHeight = Math.max(minSize*2, fixedY - newY);
+                newRadiusX = newWidth / 2;
+                newRadiusY = newHeight / 2;
+                newCenterX = fixedX + newRadiusX;
+                newCenterY = fixedY - newRadiusY;
                 break;
-            case 2: // SW - adjust radiusX and radiusY
-                this.radiusX = Math.abs(this.centerX - newX);
-                this.radiusY = Math.abs(newY - this.centerY);
+
+            case 2: // SW anchor dragged to (newX, newY), NE corner fixed
+                fixedX = originalNE_X;
+                fixedY = originalNE_Y;
+                newWidth = Math.max(minSize*2, fixedX - newX);
+                newHeight = Math.max(minSize*2, newY - fixedY);
+                newRadiusX = newWidth / 2;
+                newRadiusY = newHeight / 2;
+                newCenterX = fixedX - newRadiusX;
+                newCenterY = fixedY + newRadiusY;
                 break;
-            case 3: // SE - adjust radiusX and radiusY
-                this.radiusX = Math.abs(newX - this.centerX);
-                this.radiusY = Math.abs(newY - this.centerY);
+
+            case 3: // SE anchor dragged to (newX, newY), NW corner fixed
+                fixedX = originalNW_X;
+                fixedY = originalNW_Y;
+                newWidth = Math.max(minSize*2, newX - fixedX);
+                newHeight = Math.max(minSize*2, newY - fixedY);
+                newRadiusX = newWidth / 2;
+                newRadiusY = newHeight / 2;
+                newCenterX = fixedX + newRadiusX;
+                newCenterY = fixedY + newRadiusY;
                 break;
-            case 4: // N-Mid - adjust radiusY
-                this.radiusY = Math.abs(this.centerY - newY);
+
+            case 4: // N-Mid anchor dragged to newY, S edge fixed
+                fixedY = originalSE_Y; // Y-coordinate of the South edge
+                newHeight = Math.max(minSize*2, fixedY - newY);
+                newRadiusY = newHeight / 2;
+                newCenterY = fixedY - newRadiusY; // New center Y based on fixed S edge
+                // Keep original X center and radius X
+                newCenterX = originalCenterX;
+                newRadiusX = originalRadiusX;
                 break;
-            case 5: // S-Mid - adjust radiusY
-                this.radiusY = Math.abs(newY - this.centerY);
+
+            case 5: // S-Mid anchor dragged to newY, N edge fixed
+                fixedY = originalNW_Y; // Y-coordinate of the North edge
+                newHeight = Math.max(minSize*2, newY - fixedY);
+                newRadiusY = newHeight / 2;
+                newCenterY = fixedY + newRadiusY; // New center Y based on fixed N edge
+                // Keep original X center and radius X
+                newCenterX = originalCenterX;
+                newRadiusX = originalRadiusX;
                 break;
-            case 6: // W-Mid - adjust radiusX
-                this.radiusX = Math.abs(this.centerX - newX);
+
+            case 6: // W-Mid anchor dragged to newX, E edge fixed
+                fixedX = originalSE_X; // X-coordinate of the East edge
+                newWidth = Math.max(minSize*2, fixedX - newX);
+                newRadiusX = newWidth / 2;
+                newCenterX = fixedX - newRadiusX; // New center X based on fixed E edge
+                 // Keep original Y center and radius Y
+                newCenterY = originalCenterY;
+                newRadiusY = originalRadiusY;
                 break;
-            case 7: // E-Mid - adjust radiusX
-                this.radiusX = Math.abs(newX - this.centerX);
+
+            case 7: // E-Mid anchor dragged to newX, W edge fixed
+                fixedX = originalNW_X; // X-coordinate of the West edge
+                newWidth = Math.max(minSize*2, newX - fixedX);
+                newRadiusX = newWidth / 2;
+                newCenterX = fixedX + newRadiusX; // New center X based on fixed W edge
+                // Keep original Y center and radius Y
+                newCenterY = originalCenterY;
+                newRadiusY = originalRadiusY;
                 break;
         }
+
+        // Update the circle's properties
+        this.radiusX = newRadiusX;
+        this.radiusY = newRadiusY;
+        this.centerX = newCenterX;
+        this.centerY = newCenterY;
+
+        // Redraw the circle which will also update anchor positions
         this.draw();
     }
+     // --- End of NEW updatePosition Method ---
+
 
     rotate(angle) {
-        // Circles don't rotate in the same way, but you can keep a rotation property if needed for group rotations later
-        // this.rotation = angle;
-        // this.draw(); // If you decide to implement rotation effect for groups including circles
+        // Rotation for ellipses is more complex if not circular.
+        // Usually involves transforming the group. Keep this stub.
+        // console.log("Rotate called on circle/ellipse - currently no-op");
+        // If implementing group rotation later, apply transform here:
+        // this.group.setAttribute('transform', `rotate(${angle}, ${this.centerX}, ${this.centerY})`);
     }
 }
 
@@ -252,10 +372,22 @@ const handleMouseDown = (e) => {
 
 const handleMouseMove = (e) => {
     if (isDrawingCircle && isCircleToolActive && currentCircle) {
-        const radiusX = Math.abs(e.offsetX - circleStartX);
-        const radiusY = Math.abs(e.offsetY - circleStartY);
-        currentCircle.radiusX = radiusX;
-        currentCircle.radiusY = radiusY;
+        const endX = e.offsetX;
+        const endY = e.offsetY;
+
+        // Calculate the new center and radius based on drag direction
+        const newCenterX = (circleStartX + endX) / 2;
+        const newCenterY = (circleStartY + endY) / 2;
+        const newRadiusX = Math.abs(endX - circleStartX) / 2;
+        const newRadiusY = Math.abs(endY - circleStartY) / 2;
+
+        // Update the circle's properties
+        currentCircle.centerX = newCenterX;
+        currentCircle.centerY = newCenterY;
+        currentCircle.radiusX = newRadiusX;
+        currentCircle.radiusY = newRadiusY;
+
+        // Redraw the circle
         currentCircle.draw();
     } else if (isSelectionToolActive) {
         selectionManager.handleMouseMove(e);
