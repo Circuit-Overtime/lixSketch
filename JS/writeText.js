@@ -91,7 +91,7 @@ function addText(event) {
 }
 
 function makeTextEditable(textElement, initialPosition = null) {
-  deselectAll(); // Deselect all elements
+  
   console.log("Making text editable");
   let input = document.createElement("textarea"); // Use textarea for multiline editing
 
@@ -244,7 +244,6 @@ function renderText(input, textElement, deleteIfEmpty = false) {
   gElement.style.display = 'block';
 
   document.body.removeChild(input);
-  selectElement(gElement);
   selectedTool = document.querySelector(".bxs-pointer");
   toolExtraPopup();
 }

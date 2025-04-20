@@ -119,9 +119,13 @@ class SelectionManager {
             }
         }
 
-        clickedShape = this.shapes.find(shape => 
-            shape instanceof Line && shape.contains(x, y)
-        );
+        // try {
+        //     clickedShape = this.shapes.find(shape => 
+        //         shape instanceof Line && shape.contains(x, y)
+        //     );
+        // } catch (error) {
+        //     console.log("not a straight line");
+        // }
         
         // --- Handle Selection Logic ---
         const wasSelected = clickedShape ? clickedShape.isSelected : false;
@@ -298,12 +302,12 @@ class SelectionManager {
              if (shape.rotationAnchor) {
                  // Basic bounding box check for rotation anchor - refine if needed
                  const rotationHandleSize = 12; // Example size
-                 const anchorPos = shape.getRotationAnchorPosition(); // Assume this method exists or calculate it
-                 if (anchorPos && x >= anchorPos.x - rotationHandleSize/2 && x <= anchorPos.x + rotationHandleSize/2 &&
-                     y >= anchorPos.y - rotationHandleSize/2 && y <= anchorPos.y + rotationHandleSize/2) {
-                    this.svg.style.cursor = 'crosshair'; // Or a specific rotation cursor
-                    return;
-                 }
+                //  const anchorPos = shape.getRotationAnchorPosition(); // Assume this method exists or calculate it
+                //  if (anchorPos && x >= anchorPos.x - rotationHandleSize/2 && x <= anchorPos.x + rotationHandleSize/2 &&
+                //      y >= anchorPos.y - rotationHandleSize/2 && y <= anchorPos.y + rotationHandleSize/2) {
+                //     this.svg.style.cursor = 'crosshair'; // Or a specific rotation cursor
+                //     return;
+                //  }
              }
              for (let i = 0; i < shape.anchors.length; i++) {
                  const anchor = shape.anchors[i];

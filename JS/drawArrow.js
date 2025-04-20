@@ -251,10 +251,12 @@ function screenToViewBoxPointArrow(screenX, screenY) {
     pt.x = screenX;
     pt.y = screenY;
     const ctm = svg.getScreenCTM();
-     if (!ctm) {
-          console.error("SVG CTM not available for coordinate conversion.");
-          return { x: screenX, y: screenY }; // Fallback, might be inaccurate
-     }
+    if (!ctm) {
+        console.error("SVG CTM not available in screenToViewBoxPointArrow!");
+        console.error("svg:", svg); // Log the svg variable itself
+        console.trace(); // Print stack trace to see where this is called from
+        return { x: screenX, y: screenY }; // Fallback
+    }
     const svgP = pt.matrixTransform(ctm.inverse());
     return { x: svgP.x, y: svgP.y };
 }

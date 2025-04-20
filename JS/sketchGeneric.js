@@ -47,7 +47,7 @@ let currentViewBox = {
 };
 
 
-let ispaintToolActive = false;
+let isPaintToolActive = false;
 let isTextToolActive = false;
 let isCircleToolActive = false;
 let isSquareToolActive = false;
@@ -94,7 +94,7 @@ function toolExtraPopup() {
         disableAllTools();
         disSelectAllTools();
         document.querySelector(".bxs-paint").classList.add("selected");
-        ispaintToolActive = true;
+        isPaintToolActive = true;
         svg.style.cursor = "crosshair"
         disableAllSideBars();
         paintBrushSideBar.classList.remove("hidden");
@@ -221,7 +221,7 @@ function disableAllSideBars()
 }
 function disableAllTools() 
 {
-  ispaintToolActive = false;
+  isPaintToolActive = false;
   isSquareToolActive = false;
   isCircleToolActive = false;
   isArrowToolActive = false;
