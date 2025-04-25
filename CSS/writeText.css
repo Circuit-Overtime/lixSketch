@@ -82,3 +82,8 @@ textarea {
     box-sizing: border-box;
 }
 
+textarea.svg-text-editor
+{
+    background: transparent;
+}
+
