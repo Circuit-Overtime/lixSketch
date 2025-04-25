@@ -15,7 +15,7 @@ let circleFillStyleOptions = document.querySelectorAll(".circleFillStyleSpan");
 let circleStrokeThicknessValue = document.querySelectorAll(".circleStrokeThickSpan");
 let circleOutlineStyleValue = document.querySelectorAll(".circleOutlineStyle");
 const selectionManager = new SelectionManager(svg, shapes);
-
+const rc = rough.svg(svg); // Initialize RoughSVG with your SVG element
 class Circle {
     constructor(centerX, centerY, radiusX, radiusY, options = {}) {
         this.centerX = centerX;

@@ -1,6 +1,8 @@
 // --- Import SelectionManager ---
 import { SelectionManager } from './selectionManager.js';
+
 let isDrawingSquare = false;
+const rc = rough.svg(svg); // Initialize RoughSVG with your SVG element
 let startX, startY;
 let squareStrokecolor = "#fff";
 let squareBackgroundColor = "#ffc";
