@@ -276,7 +276,6 @@ const handleMouseDown = (e) => {
 
     if (isArrowToolActive) {
         isDrawingArrow = true;
-        // Create arrow with initial zero length at the click point
         currentArrow = new Arrow({ ...viewBoxPoint }, { ...viewBoxPoint }, {
             stroke: arrowStrokeColor,
             strokeWidth: arrowStrokeThickness,

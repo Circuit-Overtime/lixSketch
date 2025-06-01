@@ -1,12 +1,9 @@
-// --- Import SelectionManager ---
-import { SelectionManager } from './selectionManager.js';
-
 let isDrawingSquare = false;
 const rc = rough.svg(svg); // Initialize RoughSVG with your SVG element
 let startX, startY;
 let squareStrokecolor = "#fff";
-let squareBackgroundColor = "#ffc";
-let squareFillStyleValue = "hachure";
+let squareBackgroundColor = "transparent";
+let squareFillStyleValue = "none";
 let squareStrokeThicknes = 2;
 let squareOutlineStyle = "solid";
 let SquarecolorOptions = document.querySelectorAll(".squareStrokeSpan");
@@ -14,9 +11,6 @@ let backgroundColorOptionsSquare = document.querySelectorAll(".squareBackgroundS
 let fillStyleOptions = document.querySelectorAll(".squareFillStyleSpan");
 let squareStrokeThicknessValue = document.querySelectorAll(".squareStrokeThickSpan");
 let squareOutlineStyleValue = document.querySelectorAll(".squareOutlineStyle");
-
-// --- Instantiate SelectionManager ---
-const selectionManager = new SelectionManager(svg, shapes);
 
 class Rectangle {
     constructor(x, y, width, height, options = {}) {
@@ -92,14 +86,14 @@ class Rectangle {
         const expandedHeight = this.height + 2 * this.selectionPadding;
 
         const positions = [
-            { x: expandedX, y: expandedY }, // 0
-            { x: expandedX + expandedWidth, y: expandedY }, // 1
-            { x: expandedX, y: expandedY + expandedHeight }, // 2
-            { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, // 3
-            { x: expandedX + expandedWidth / 2, y: expandedY }, // 4
-            { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, // 5
-            { x: expandedX, y: expandedY + expandedHeight / 2 }, // 6
-            { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 } // 7
+            { x: expandedX, y: expandedY }, 
+            { x: expandedX + expandedWidth, y: expandedY }, 
+            { x: expandedX, y: expandedY + expandedHeight }, 
+            { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, 
+            { x: expandedX + expandedWidth / 2, y: expandedY }, 
+            { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, 
+            { x: expandedX, y: expandedY + expandedHeight / 2 }, 
+            { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 } 
         ];
 
         const anchorDirections = {
@@ -254,9 +248,7 @@ class Rectangle {
     }
 }
 
-// --- Modified Event Listeners ---
 const handleMouseDown = (e) => {
-    // console.log(isSelectionToolActive, isSquareToolActive)
     if (isSquareToolActive) {
         startX = e.offsetX;
         startY = e.offsetY;
@@ -281,11 +273,7 @@ const handleMouseDown = (e) => {
 
         currentShape = new Rectangle(startX, startY, 0, 0, initialOptions);
         shapes.push(currentShape);
-        // Inform SelectionManager about the updated shapes array if needed,
-        // though in this setup, it's not strictly necessary as it's passed in constructor.
-        selectionManager.setShapes(shapes);
     } else if (isSelectionToolActive) {
-        selectionManager.handleMouseDown(e); // Delegate to SelectionManager
     }
 };
 
@@ -295,13 +283,13 @@ const handleMouseMove = (e) => {
         currentShape.height = e.offsetY - startY;
         currentShape.draw();
     } else if (isSelectionToolActive) {
-        selectionManager.handleMouseMove(e); // Delegate to SelectionManager
+        
     }
 };
 
 const handleMouseUp = (e) => {
     isDrawingSquare = false;
-    selectionManager.handleMouseUp(e); // Delegate to SelectionManager
+
 };
 
 

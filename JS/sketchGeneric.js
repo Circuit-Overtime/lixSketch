@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-text");
+let selectedTool = document.querySelector(".bx-square");
 let history = [];
 let redoStack = [];
 let shapes = [];

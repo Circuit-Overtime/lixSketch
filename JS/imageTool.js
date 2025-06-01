@@ -7,27 +7,45 @@ let scaleFactor = 0.2; // Adjust this to control initial miniature size
 let currentImageElement = null; // Keep track of the miniature image element
 // Assumes isImageToolActive, svg, selectedTool, etc., are already defined in the scope.
 
+// Selection functionality
+let selectedImage = null;
+
+let originalX, originalY, originalWidth, originalHeight;
+let currentAnchor = null; // Keep track of which anchor is being dragged
+
+// Dragging variables
+let isDragging = false;
+let dragOffsetX, dragOffsetY;
+
+// Minimum image size
+const MIN_IMAGE_SIZE = 20; // Adjust as needed
+
+
 document.getElementById("importImage").addEventListener('click', () => {
     isImageToolActive = true; // Assuming isImageToolActive is defined elsewhere
-    // Create a dummy file input
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*';  // Allow all image types
-    fileInput.style.display = 'none'; // Hide the input element
 
-    // Add an event listener to the file input
-    fileInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        handleImageUpload(file);
-
-        // Remove the file input after use
-        document.body.removeChild(fileInput);
-    });
-
-    // Append the file input to the body and trigger the click
-    document.body.appendChild(fileInput); //  Important:  Append to body (or another valid container)
-    fileInput.click();
+    // Use a hardcoded image instead of file input
+    const hardcodedImagePath = './test.jpg'; // Adjust the path if necessary
+    loadHardcodedImage(hardcodedImagePath);
 });
+
+const loadHardcodedImage = (imagePath) => {
+    const img = new Image();
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        imageToPlace = canvas.toDataURL(); // Convert the image to a data URL
+        isDraggingImage = true;
+    };
+    img.onerror = () => {
+        console.error('Failed to load the hardcoded image.');
+    };
+    img.src = imagePath;
+};
+
 
 const handleImageUpload = (file) => {
     if (!file || !isImageToolActive) return; // Also check isImageToolActive
@@ -142,21 +160,8 @@ svg.addEventListener('click', async (e) => {
 
         svg.appendChild(finalImage);
 
-        const action = {
-            type: ACTION_CREATE,
-            element: finalImage,
-            parent: finalImage.parentNode,
-            nextSibling: finalImage.nextSibling,
-            data: {
-                href: imageToPlace,
-                x: placedX - placedImageWidth / 2,
-                y: placedY - placedImageHeight / 2,
-                width: placedImageWidth,
-                height: placedImageHeight
-            }
-        };
-        history.push(action);
-        updateUndoRedoButtons();
+        // Add click event to the newly added image
+        finalImage.addEventListener('click', selectImage);
 
     } catch (error) {
         console.error("Error placing image:", error);
@@ -164,9 +169,271 @@ svg.addEventListener('click', async (e) => {
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.
     } finally {
-        
+
         isDraggingImage = false;
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.
+    }
+});
+
+
+// Selection and manipulation logic starts here
+function selectImage(event) {
+    if (!isSelectionToolActive) return;
+
+    event.stopPropagation(); // Prevent click from propagating to the SVG
+
+    if (selectedImage) {
+        removeSelectionOutline();
+    }
+
+    selectedImage = event.target;
+    addSelectionOutline();
+
+    // Store original dimensions for resizing
+    originalX = parseFloat(selectedImage.getAttribute('x'));
+    originalY = parseFloat(selectedImage.getAttribute('y'));
+    originalWidth = parseFloat(selectedImage.getAttribute('width'));
+    originalHeight = parseFloat(selectedImage.getAttribute('height'));
+
+     // Add drag event listeners to the selected image
+     selectedImage.addEventListener('mousedown', startDrag);
+     selectedImage.addEventListener('mouseup', stopDrag);
+     selectedImage.addEventListener('mouseleave', stopDrag); //Stop drag if mouse leaves the image
+}
+
+
+function addSelectionOutline() {
+    if (!selectedImage) return;
+
+    const x = parseFloat(selectedImage.getAttribute('x'));
+    const y = parseFloat(selectedImage.getAttribute('y'));
+    const width = parseFloat(selectedImage.getAttribute('width'));
+    const height = parseFloat(selectedImage.getAttribute('height'));
+
+    const selectionPadding = 8; // Padding around the selection
+    const expandedX = x - selectionPadding;
+    const expandedY = y - selectionPadding;
+    const expandedWidth = width + 2 * selectionPadding;
+    const expandedHeight = height + 2 * selectionPadding;
+
+    // Create a dashed outline
+    const outlinePoints = [
+        [expandedX, expandedY],
+        [expandedX + expandedWidth, expandedY],
+        [expandedX + expandedWidth, expandedY + expandedHeight],
+        [expandedX, expandedY + expandedHeight],
+        [expandedX, expandedY]
+    ];
+    const pointsAttr = outlinePoints.map(p => p.join(',')).join(' ');
+    const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    outline.setAttribute("points", pointsAttr);
+    outline.setAttribute("fill", "none");
+    outline.setAttribute("stroke", "#5B57D1");
+    outline.setAttribute("stroke-width", 1.5);
+    outline.setAttribute("stroke-dasharray", "4 2");
+    outline.setAttribute("style", "pointer-events: none;");
+    outline.setAttribute("class", "selection-outline");
+
+    svg.appendChild(outline);
+
+    // Add resize anchors
+    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight);
+}
+
+function removeSelectionOutline() {
+    // Remove the selection outline
+    const outline = svg.querySelector(".selection-outline");
+    if (outline) {
+        svg.removeChild(outline);
+    }
+
+    // Remove resize anchors
+    removeResizeAnchors();
+
+      // Remove drag event listeners
+    if (selectedImage) {
+        selectedImage.removeEventListener('mousedown', startDrag);
+        selectedImage.removeEventListener('mouseup', stopDrag);
+        selectedImage.removeEventListener('mouseleave', stopDrag);
+    }
+}
+
+function addResizeAnchors(x, y, width, height) {
+    const anchorSize = 10; // Size of the resize anchors
+    const anchorStrokeWidth = 2;
+
+    const positions = [
+        { x: x, y: y }, // Top-left
+        { x: x + width, y: y }, // Top-right
+        { x: x, y: y + height }, // Bottom-left
+        { x: x + width, y: y + height } // Bottom-right
+    ];
+
+    positions.forEach((pos, i) => {
+        const anchor = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        anchor.setAttribute("x", pos.x - anchorSize / 2);
+        anchor.setAttribute("y", pos.y - anchorSize / 2);
+        anchor.setAttribute("width", anchorSize);
+        anchor.setAttribute("height", anchorSize);
+        anchor.setAttribute("fill", "#121212");
+        anchor.setAttribute("stroke", "#5B57D1");
+        anchor.setAttribute("stroke-width", anchorStrokeWidth);
+        anchor.setAttribute("class", "resize-anchor");
+        anchor.style.cursor = ["nw-resize", "ne-resize", "sw-resize", "se-resize"][i];
+
+        svg.appendChild(anchor);
+
+        // Add event listeners for resizing
+        anchor.addEventListener('mousedown', startResize);
+        anchor.addEventListener('mouseup', stopResize);
+    });
+}
+
+function addAnchor(x, y, cursor) {
+    const anchorSize = 8;
+    const anchor = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    anchor.setAttribute("x", x);
+    anchor.setAttribute("y", y);
+    anchor.setAttribute("width", anchorSize);
+    anchor.setAttribute("height", anchorSize);
+    anchor.setAttribute("fill", "white");
+    anchor.setAttribute("stroke", "black");
+    anchor.setAttribute("stroke-width", "1");
+    anchor.setAttribute("class", "resize-anchor"); // For easy removal
+    anchor.style.cursor = cursor;
+
+    svg.appendChild(anchor);
+
+    // Add event listeners for dragging
+    anchor.addEventListener('mousedown', startResize);
+    anchor.addEventListener('mouseup', stopResize);
+
+}
+
+
+function removeResizeAnchors() {
+    const anchors = svg.querySelectorAll(".resize-anchor");
+    anchors.forEach(anchor => svg.removeChild(anchor));
+}
+
+function startResize(event) {
+    event.preventDefault();
+    event.stopPropagation(); // Prevent dragging the image itself
+
+    currentAnchor = event.target;
+    svg.addEventListener('mousemove', resizeImage); // Start resizing
+    document.addEventListener('mouseup', stopResize); // Listen for mouseup on the entire document
+}
+
+
+function stopResize(event) {
+    stopInteracting(); // Call the combined stop function
+    document.removeEventListener('mouseup', stopResize); // Remove the global mouseup listener
+}
+
+function resizeImage(event) {
+    if (!selectedImage || !currentAnchor) return;
+
+    const rect = svg.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    let newWidth = originalWidth;
+    let newHeight = originalHeight;
+
+    const anchorSize = 8;
+
+    // Determine which anchor is being dragged and resize accordingly
+    switch (currentAnchor.style.cursor) {
+        case "nw-resize":
+            newWidth = originalWidth - (mouseX - originalX); //resize without moving x,y
+            newHeight = originalHeight - (mouseY - originalY);
+            break;
+        case "ne-resize":
+            newWidth = mouseX - originalX;
+            newHeight = originalHeight - (mouseY - originalY);
+            break;
+        case "sw-resize":
+            newWidth = originalWidth - (mouseX - originalX);
+            newHeight = mouseY - originalY;
+            break;
+        case "se-resize":
+            newWidth = mouseX - originalX;
+            newHeight = mouseY - originalY;
+            break;
+    }
+
+    // Keep width and height within bounds
+    newWidth = Math.max(MIN_IMAGE_SIZE, newWidth);
+    newHeight = Math.max(MIN_IMAGE_SIZE, newHeight);
+
+    selectedImage.setAttribute('width', newWidth);
+    selectedImage.setAttribute('height', newHeight);
+
+    // Update the selection outline and anchors
+    removeSelectionOutline();
+    addSelectionOutline();
+}
+
+function startDrag(event) {
+    if (!isSelectionToolActive || !selectedImage) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    isDragging = true;
+
+    const rect = svg.getBoundingClientRect();
+    dragOffsetX = event.clientX - rect.left - parseFloat(selectedImage.getAttribute('x'));
+    dragOffsetY = event.clientY - rect.top - parseFloat(selectedImage.getAttribute('y'));
+
+    svg.addEventListener('mousemove', dragImage); // Drag the image itself
+    document.addEventListener('mouseup', stopDrag); // Listen for mouseup on the entire document
+}
+function dragImage(event) {
+    if (!isDragging || !selectedImage) return;
+
+    const rect = svg.getBoundingClientRect();
+    let x = event.clientX - rect.left - dragOffsetX;
+    let y = event.clientY - rect.top - dragOffsetY;
+
+    selectedImage.setAttribute('x', x);
+    selectedImage.setAttribute('y', y);
+
+    // Update the selection outline and anchors
+    removeSelectionOutline();
+    addSelectionOutline();
+}
+
+function stopDrag(event) {
+    stopInteracting(); // Call the combined stop function
+    document.removeEventListener('mouseup', stopDrag); // Remove the global mouseup listener
+}
+
+function stopInteracting() {
+    isDragging = false;
+    svg.removeEventListener('mousemove', dragImage);
+    svg.removeEventListener('mousemove', resizeImage);  // Remove resize listener as well
+    currentAnchor = null;
+
+    // Update originalX, originalY, originalWidth and originalHeight after dragging/resizing is complete
+    if (selectedImage) {
+        originalX = parseFloat(selectedImage.getAttribute('x'));
+        originalY = parseFloat(selectedImage.getAttribute('y'));
+        originalWidth = parseFloat(selectedImage.getAttribute('width'));
+        originalHeight = parseFloat(selectedImage.getAttribute('height'));
+    }
+}
+
+
+
+svg.addEventListener('click', (e) => {
+    if (isSelectionToolActive) {
+        // If selection tool is active, this click means we want to de-select the image.
+        if (selectedImage) {
+            removeSelectionOutline();
+            selectedImage = null;
+        }
     }
 });
