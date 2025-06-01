@@ -1,5 +1,5 @@
 let isDrawingSquare = false;
-const rc = rough.svg(svg); // Initialize RoughSVG with your SVG element
+const rc = rough.svg(svg); 
 let startX, startY;
 let squareStrokecolor = "#fff";
 let squareBackgroundColor = "transparent";
@@ -35,6 +35,7 @@ class Rectangle {
         this.rotationAnchor = null;
         this.selectionPadding = 8;
         this.selectionOutline = null;
+        this.shapeName = 'rectangle';
         this.draw();
     }
 
@@ -51,7 +52,7 @@ class Rectangle {
         this.group.appendChild(roughRect);
 
         this.group.setAttribute('transform', `rotate(${this.rotation} ${this.x + this.width / 2} ${this.y + this.height / 2})`);
-
+        this.group.setAttribute('data-shape', this.shapeName);
         if (this.isSelected) {
             this.addAnchors();
         }
@@ -127,7 +128,6 @@ class Rectangle {
 
         positions.forEach((pos, i) => {
             const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-
             anchor.setAttribute('x', pos.x - anchorSize / 2);
             anchor.setAttribute('y', pos.y - anchorSize / 2);
             anchor.setAttribute('width', anchorSize);
@@ -183,6 +183,41 @@ class Rectangle {
         outline.setAttribute('style', 'pointer-events: none;');
         this.group.appendChild(outline);
         this.selectionOutline = outline;
+        console.log(this.shapeName)
+        disableAllSideBars();
+        squareSideBar.classList.remove("hidden");
+        }
+    
+        select() {
+            // Deselect all other shapes if needed (optional, handled elsewhere)
+            this.isSelected = true;
+            this.addAnchors();
+            // Show the sidebar for rectangle
+            disableAllSideBars && disableAllSideBars();
+            squareSideBar && squareSideBar.classList.remove("hidden");
+        }
+        
+    deselect() {
+        if (this.isSelected) {
+            this.isSelected = false;
+            // Remove anchors and selection outline if present
+            this.anchors.forEach(anchor => {
+                if (anchor.parentNode === this.group) {
+                    this.group.removeChild(anchor);
+                }
+            });
+            this.anchors = [];
+            if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+                this.group.removeChild(this.selectionOutline);
+                this.selectionOutline = null;
+            }
+            if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
+                this.group.removeChild(this.rotationAnchor);
+                this.rotationAnchor = null;
+            }
+            // Hide sidebar if needed
+            disableAllSideBars && disableAllSideBars();
+        }
     }
 
     contains(x, y) {
@@ -253,7 +288,6 @@ const handleMouseDown = (e) => {
         startX = e.offsetX;
         startY = e.offsetY;
         isDrawingSquare = true;
-
         let initialOptions = {};
         if (isSquareToolActive) {
             initialOptions = {
@@ -307,9 +341,14 @@ SquarecolorOptions.forEach((span) => {
         span.classList.add("selected");
         squareStrokecolor = span.getAttribute("data-id");
         console.log("Selected Square Stroke Color:", squareStrokecolor);
+
+        // Update selected rectangle if any
+        if (currentShape && currentShape.shapeName === 'rectangle' && currentShape.isSelected) {
+            currentShape.options.stroke = squareStrokecolor;
+            currentShape.draw();
+        }
     });
 });
-
 
 backgroundColorOptionsSquare.forEach((span) => {
     span.addEventListener("click", (event) => {
@@ -318,39 +357,64 @@ backgroundColorOptionsSquare.forEach((span) => {
         span.classList.add("selected");
         squareBackgroundColor = span.getAttribute("data-id");
         console.log("Selected Square Background Color:", squareBackgroundColor);
+
+        if (currentShape && currentShape.shapeName === 'rectangle' && currentShape.isSelected) {
+            currentShape.options.fill = squareBackgroundColor;
+            currentShape.draw();
+        }
     });
 });
 
-
 fillStyleOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation()
         fillStyleOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         squareFillStyleValue = span.getAttribute("data-id");
         console.log("Selected Square Fill Style:", squareFillStyleValue);
-        event.stopPropagation()
+        
+        if(currentShape && currentShape.shapeName === 'rectangle' && currentShape.isSelected) {
+            currentShape.options.fillStyle = squareFillStyleValue;
+            currentShape.draw();
+        }
     });
 });
 
 
 squareStrokeThicknessValue.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation()
         squareStrokeThicknessValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         squareStrokeThicknes = parseInt(span.getAttribute("data-id"));
         console.log("Selected Square Stroke Thickness:", squareStrokeThicknes);
-        event.stopPropagation()
+        
+        if (currentShape && currentShape.shapeName === 'rectangle' && currentShape.isSelected) {
+            currentShape.options.strokeWidth = squareStrokeThicknes;
+            currentShape.draw();
+        }
     });
 });
 
 
 squareOutlineStyleValue.forEach((span) => {
     span.addEventListener("click", (event) => {
+        event.stopPropagation();
         squareOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         squareOutlineStyle = span.getAttribute("data-id");
         console.log("Selected Square Outline Style:", squareOutlineStyle);
-        event.stopPropagation();
+        
+        if (currentShape && currentShape.shapeName === 'rectangle' && currentShape.isSelected) {
+            if (squareOutlineStyle === "dashed") {
+                currentShape.options.strokeDasharray = "10,10";
+            } else if (squareOutlineStyle === "dotted") {
+                currentShape.options.strokeDasharray = "2,8";
+            } else {
+                currentShape.options.strokeDasharray = "";
+            }
+            currentShape.draw();
+        }
     });
 });
 

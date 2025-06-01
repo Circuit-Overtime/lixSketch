@@ -1,21 +1,20 @@
-// selectionManager.js
 
 class SelectionManager {
     constructor(svgElement, shapesArray) {
         this.svg = svgElement;
-        this.shapes = shapesArray; // Reference to the main shapes array
-        this.selectedShapes = []; // Use an array for potential multi-select later
-        this.currentShape = null; // Keep for single-shape operations like resize/rotate
+        this.shapes = shapesArray; 
+        this.selectedShapes = []; 
+        this.currentShape = null; 
         this.isResizing = false;
         this.isRotating = false;
         this.isDragging = false;
-        this.activeAnchorIndex = -1; // Store index instead of element
+        this.activeAnchorIndex = -1; 
         this.startX = 0;
         this.startY = 0;
-        this.lastX = 0; // Store last mouse position for delta calculation
+        this.lastX = 0; 
         this.lastY = 0;
         this.rotationStartAngle = 0;
-        // Offsets are less necessary if using delta movement, but keep startX/Y
+        
     }
 
     // Helper to get SVG coordinates from a mouse event

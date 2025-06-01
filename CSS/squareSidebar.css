@@ -107,7 +107,13 @@
 .squareBackground span:nth-child(2) { background-color: #ffcccb;  } 
 .squareBackground span:nth-child(3) { background-color: #90ee90;  } 
 .squareBackground span:nth-child(4) { background-color: #add8e6;  } 
-.squareBackground span:nth-child(5) { background-color: #ffffe0;  } 
+.squareBackground span:nth-child(5) { 
+    background-color: #ffffe000;  
+    background-image: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), 
+                      linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
+    background-size: 12px 12px;
+    background-position: 0 0, 6px 6px;
+} 
 
 
 /* Thickness styles */
