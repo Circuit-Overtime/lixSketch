@@ -22,12 +22,31 @@ export function pushTransformAction(shape, oldPos, newPos) {
     undoStack.push({
         type: 'transform',
         shape: shape,
-        oldPos: { x: oldPos.x, y: oldPos.y, height: oldPos.height, width: oldPos.width, rotation: oldPos.rotate },
-        newPos: { x: newPos.x, y: newPos.y, height: newPos.height, width: newPos.width, rotation: newPos.rotate }
+        oldPos: { 
+            x: oldPos.x, 
+            y: oldPos.y, 
+            height: oldPos.height, 
+            width: oldPos.width, 
+            rotation: oldPos.rotation // <-- FIXED HERE
+        },
+        newPos: { 
+            x: newPos.x, 
+            y: newPos.y, 
+            height: newPos.height, 
+            width: newPos.width, 
+            rotation: newPos.rotation // <-- FIXED HERE
+        }
     });
     console.log(undoStack)
 }
 
+export function pushOptionsChangeAction(shape, oldOptions) {
+    undoStack.push({
+        type: 'optionsChange',
+        shape: shape,
+        oldOptions: oldOptions
+    });
+}
 
 
 export function undo() {
@@ -51,6 +70,12 @@ export function undo() {
         action.shape.height = action.oldPos.height;
         action.shape.width = action.oldPos.width;
         action.shape.rotation = action.oldPos.rotation;
+        action.shape.draw();
+        redoStack.push(action);
+    }
+    else if (action.type === 'optionsChange')
+    {
+        action.shape.options = action.oldOptions;
         action.shape.draw();
         redoStack.push(action);
     }
