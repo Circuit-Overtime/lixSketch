@@ -1,90 +1,95 @@
-function undo() {
-    if (history.length > 0) {
-        const action = history.pop();
+
+// Stacks for undo/redo
+const undoStack = [];
+const redoStack = [];
+
+// Call this after creating a new shape (e.g., Rectangle)
+export function pushCreateAction(shape) {
+    undoStack.push({
+        type: 'create',
+        shape: shape
+    });
+}
+
+export function pushDeleteAction(shape) {
+    undoStack.push({
+        type: 'delete',
+        shape: shape
+    });
+}
+
+export function pushTransformAction(shape, oldPos, newPos) {
+    undoStack.push({
+        type: 'transform',
+        shape: shape,
+        oldPos: { x: oldPos.x, y: oldPos.y },
+        newPos: { x: newPos.x, y: newPos.y }
+    });
+    console.log(undoStack)
+}
+
+export function undo() {
+    if (undoStack.length === 0) return;
+    const action = undoStack.pop();
+    if (action.type === 'create') {
+        const idx = shapes.indexOf(action.shape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (action.shape.group.parentNode) {
+            action.shape.group.parentNode.removeChild(action.shape.group);
+        }
         redoStack.push(action);
-
-        if (action.type === ACTION_DELETE) {
-            // Restore the deleted element
-            if (action.parent) {
-                // Check if the nextSibling is still in the DOM and is a child of the parent
-                if (action.nextSibling && action.parent.contains(action.nextSibling)) {
-                    action.parent.insertBefore(action.element, action.nextSibling);
-                } else {
-                    action.parent.appendChild(action.element);
-                }
-
-                // Restore the original opacity (if recorded)
-                if (action.originalOpacity !== undefined) {
-                    action.element.style.opacity = action.originalOpacity;
-                }
-            }
-        } else if (action.type === ACTION_CREATE) {
-            // Delete the created element
-            if (action.element && action.element.parentNode) {
-                action.parent.removeChild(action.element);
-            }
-        } else if (action.type === ACTION_MODIFY) {
-            // Revert the transformation
-            if (action.data.property === "transform") {
-                const { initialTransforms } = action.data;
-                action.elements.forEach(el => {
-                    el.setAttribute("transform", initialTransforms[el] || "translate(0,0)");
-                    el.setAttribute("data-transform", initialTransforms[el] || "translate(0,0)");
-                });
-            }
-        } else if (action.type === ACTION_PASTE) {
-            // Remove pasted elements
-            action.elements.forEach(el => {
-                if (el && el.parentNode) {  //Check if parent exists before removing
-                    action.parent.removeChild(el);
-                }
-            });
-        }
-
-        updateUndoRedoButtons();
-        deselectAll();
+    } else if (action.type === 'delete') {
+        shapes.push(action.shape);
+        svg.appendChild(action.shape.group);
+        redoStack.push(action);
+    }
+    else if (action.type === 'transform') {
+        action.shape.x = action.oldPos.x;
+        action.shape.y = action.oldPos.y;
+        action.shape.draw();
+        redoStack.push(action);
     }
 }
 
-function redo() {
-    if (redoStack.length > 0) {
-        const action = redoStack.pop();
-        history.push(action);
-
-        if (action.type === ACTION_DELETE) {
-            // Re-delete the element
-            if (action.element && action.element.parentNode) {
-                action.parent.removeChild(action.element);
-            }
-        } else if (action.type === ACTION_CREATE) {
-            // Re-create the element
-            if (action.nextSibling) {
-                action.parent.insertBefore(action.element, action.nextSibling);
-            } else {
-                action.parent.appendChild(action.element);
-            }
-        } else if (action.type === ACTION_MODIFY) {
-            // Reapply the transformation
-            if (action.data.property === "transform") {
-                const { finalTransforms } = action.data;
-                action.elements.forEach(el => {
-                    el.setAttribute("transform", finalTransforms[el] || "translate(0,0)");
-                    el.setAttribute("data-transform", finalTransforms[el] || "translate(0,0)");
-                });
-            }
-        } else if (action.type === ACTION_PASTE) {
-            // Re-add pasted elements
-            action.elements.forEach(el => {
-                action.parent.appendChild(el);
-            });
+export function redo() {
+    if (redoStack.length === 0) return;
+    const action = redoStack.pop();
+    if (action.type === 'create') {
+        shapes.push(action.shape);
+        svg.appendChild(action.shape.group);
+        undoStack.push(action);
+    } else if (action.type === 'delete') {
+        const idx = shapes.indexOf(action.shape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (action.shape.group.parentNode) {
+            action.shape.group.parentNode.removeChild(action.shape.group);
         }
-
-        updateUndoRedoButtons();
-        deselectAll();
+        undoStack.push(action);
+    }
+    else if (action.type === 'transform') {
+        action.shape.x = action.newPos.x;
+        action.shape.y = action.newPos.y;
+        action.shape.draw();
+        undoStack.push(action);
     }
 }
 
-function updateUndoRedoButtons() {
-    undoButton.classList.toggle("disabled", history.length === 0);
-    redoButton.classList.toggle("disabled", redoStack.length === 0);
-}
+
+// Optional: Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        undo();
+       
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault();
+        redo();
+       
+    }
+});
+
+
+// Attach to buttons
+document.getElementById('undo').addEventListener('click', undo);
+document.getElementById('redo').addEventListener('click', redo);

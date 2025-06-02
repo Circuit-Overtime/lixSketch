@@ -60,10 +60,6 @@ let isSelectionToolActive = false;
 let isPanningToolActive = false;
 
 
-
-const undoButton = document.getElementById("undo");
-const redoButton = document.getElementById("redo");
-
 const paintBrushSideBar = document.getElementById("paintBrushSideBar");
 const lineSideBar = document.getElementById("lineSideBar");
 const squareSideBar = document.getElementById("squareSideBar");
@@ -234,19 +230,6 @@ function disableAllTools()
   isPanningToolActive = false;
 }
 
-document.addEventListener("keydown", function(event) {
-  if (event.ctrlKey && event.key === 'z') {
-    event.preventDefault();
-    undo();
-  }
-});
-
-document.addEventListener("keydown", function(event) {
-  if (event.ctrlKey && event.key === 'y') {
-    event.preventDefault();
-    redo();
-  }
-});
 
 tools.forEach(tool => tool.addEventListener("click", handleToolSelection));
 function handleToolSelection(event) {
@@ -257,14 +240,9 @@ function handleToolSelection(event) {
   toolExtraPopup();
 }
 
-
-undoButton.addEventListener("click", undo);
-redoButton.addEventListener("click", redo);
-
-
 window.onload = () => {
   toolExtraPopup();
-  updateUndoRedoButtons();
+  // updateUndoRedoButtons();
   resizeCanvas();
 
 };

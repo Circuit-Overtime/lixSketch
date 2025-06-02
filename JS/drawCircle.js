@@ -11,6 +11,8 @@ let circleFillColorOptions = document.querySelectorAll(".circleBackgroundSpan");
 let circleFillStyleOptions = document.querySelectorAll(".circleFillStyleSpan");
 let circleStrokeThicknessOptions = document.querySelectorAll(".circleStrokeThickSpan");
 let circleOutlineStyleOptions = document.querySelectorAll(".circleOutlineStyle");
+let hasDragged = false;
+const MIN_DRAG_DIST = 5;
 
 const rc = rough.svg(svg);
 
@@ -352,16 +354,9 @@ const handleMouseDown = (e) => {
         circleStartX = e.offsetX;
         circleStartY = e.offsetY;
         isDrawingCircle = true;
+        hasDragged = false;
         shapes.forEach(shape => shape.deselect());
-        currentCircle = new Circle(circleStartX, circleStartY, 0, 0, {
-            stroke: circleStrokeColor,
-            fill: circleFillColor === "transparent" ? "rgba(0,0,0,0)" : circleFillColor,
-            fillStyle: circleFillStyle === "transparent" ? 'hachure' : circleFillStyle,
-            strokeWidth: circleStrokeThickness,
-            strokeDasharray: circleOutlineStyle === "dashed" ? "10,10" : (circleOutlineStyle === "dotted" ? "2,8" : "")
-        });
-        shapes.push(currentCircle);
-        currentShape = currentCircle;
+        currentCircle = null;
     } else if (isSelectionToolActive) {
         let shapeClicked = false;
         for (let i = shapes.length - 1; i >= 0; i--) {
@@ -379,27 +374,60 @@ const handleMouseDown = (e) => {
 };
 
 const handleMouseMove = (e) => {
-    if (isDrawingCircle && isCircleToolActive && currentCircle) {
+    if (isDrawingCircle && isCircleToolActive) {
         const endX = e.offsetX;
         const endY = e.offsetY;
+        const dragDist = Math.hypot(endX - circleStartX, endY - circleStartY);
 
-        const newCenterX = (circleStartX + endX) / 2;
-        const newCenterY = (circleStartY + endY) / 2;
-        const newRadiusX = Math.abs(endX - circleStartX) / 2;
-        const newRadiusY = Math.abs(endY - circleStartY) / 2;
+        if (!hasDragged && dragDist >= MIN_DRAG_DIST) {
+            // Only now create the circle
+            hasDragged = true;
+            currentCircle = new Circle(
+                (circleStartX + endX) / 2,
+                (circleStartY + endY) / 2,
+                Math.abs(endX - circleStartX) / 2,
+                Math.abs(endY - circleStartY) / 2,
+                {
+                    stroke: circleStrokeColor,
+                    fill: circleFillColor === "transparent" ? "rgba(0,0,0,0)" : circleFillColor,
+                    fillStyle: circleFillStyle === "transparent" ? 'hachure' : circleFillStyle,
+                    strokeWidth: circleStrokeThickness,
+                    strokeDasharray: circleOutlineStyle === "dashed" ? "10,10" : (circleOutlineStyle === "dotted" ? "2,8" : "")
+                }
+            );
+            shapes.push(currentCircle);
+            currentShape = currentCircle;
+        }
 
-        currentCircle.centerX = newCenterX;
-        currentCircle.centerY = newCenterY;
-        currentCircle.radiusX = newRadiusX;
-        currentCircle.radiusY = newRadiusY;
+        if (hasDragged && currentCircle) {
+            const newCenterX = (circleStartX + endX) / 2;
+            const newCenterY = (circleStartY + endY) / 2;
+            const newRadiusX = Math.abs(endX - circleStartX) / 2;
+            const newRadiusY = Math.abs(endY - circleStartY) / 2;
 
-        currentCircle.draw();
+            currentCircle.centerX = newCenterX;
+            currentCircle.centerY = newCenterY;
+            currentCircle.radiusX = newRadiusX;
+            currentCircle.radiusY = newRadiusY;
+
+            currentCircle.draw();
+        }
     }
 };
 
 const handleMouseUp = (e) => {
-    isDrawingCircle = false;
-    currentCircle = null;
+    if (isDrawingCircle) {
+        isDrawingCircle = false;
+        if (!hasDragged && currentCircle) {
+            // Remove accidental circle if created
+            const idx = shapes.indexOf(currentCircle);
+            if (idx !== -1) shapes.splice(idx, 1);
+            if (currentCircle.group.parentNode) {
+                currentCircle.group.parentNode.removeChild(currentCircle.group);
+            }
+        }
+        currentCircle = null;
+    }
 };
 
 svg.addEventListener('mousedown', handleMouseDown);

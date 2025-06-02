@@ -1,17 +1,19 @@
 let isDrawingSquare = false;
-const rc = rough.svg(svg); 
+let isDraggingShape = false;
+const rc = rough.svg(svg); // Initialize RoughSVG with your SVG element
 let startX, startY;
 let squareStrokecolor = "#fff";
 let squareBackgroundColor = "transparent";
 let squareFillStyleValue = "none";
 let squareStrokeThicknes = 2;
 let squareOutlineStyle = "solid";
+let dragOldPos = null;
 let SquarecolorOptions = document.querySelectorAll(".squareStrokeSpan");
 let backgroundColorOptionsSquare = document.querySelectorAll(".squareBackgroundSpan");
 let fillStyleOptions = document.querySelectorAll(".squareFillStyleSpan");
 let squareStrokeThicknessValue = document.querySelectorAll(".squareStrokeThickSpan");
 let squareOutlineStyleValue = document.querySelectorAll(".squareOutlineStyle");
-
+import {pushCreateAction, pushDeleteAction, pushTransformAction } from './undoAndRedo.js';
 class Rectangle {
     constructor(x, y, width, height, options = {}) {
         this.x = x;
@@ -35,7 +37,7 @@ class Rectangle {
         this.rotationAnchor = null;
         this.selectionPadding = 8;
         this.selectionOutline = null;
-        this.shapeName = 'rectangle';
+        this.shapeName = 'rectangle'; 
         this.draw();
     }
 
@@ -52,12 +54,13 @@ class Rectangle {
         this.group.appendChild(roughRect);
 
         this.group.setAttribute('transform', `rotate(${this.rotation} ${this.x + this.width / 2} ${this.y + this.height / 2})`);
-        this.group.setAttribute('data-shape', this.shapeName);
+
         if (this.isSelected) {
             this.addAnchors();
         }
 
         svg.appendChild(this.group);
+        
     }
 
     getRotatedCursor(direction, angle) {
@@ -75,6 +78,8 @@ class Rectangle {
 
         return directions[rotatedIndex];
     }
+
+    
 
     addAnchors() {
         const anchorSize = 10;
@@ -128,6 +133,7 @@ class Rectangle {
 
         positions.forEach((pos, i) => {
             const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+
             anchor.setAttribute('x', pos.x - anchorSize / 2);
             anchor.setAttribute('y', pos.y - anchorSize / 2);
             anchor.setAttribute('width', anchorSize);
@@ -183,41 +189,8 @@ class Rectangle {
         outline.setAttribute('style', 'pointer-events: none;');
         this.group.appendChild(outline);
         this.selectionOutline = outline;
-        console.log(this.shapeName)
         disableAllSideBars();
         squareSideBar.classList.remove("hidden");
-        }
-    
-        select() {
-            // Deselect all other shapes if needed (optional, handled elsewhere)
-            this.isSelected = true;
-            this.addAnchors();
-            // Show the sidebar for rectangle
-            disableAllSideBars && disableAllSideBars();
-            squareSideBar && squareSideBar.classList.remove("hidden");
-        }
-        
-    deselect() {
-        if (this.isSelected) {
-            this.isSelected = false;
-            // Remove anchors and selection outline if present
-            this.anchors.forEach(anchor => {
-                if (anchor.parentNode === this.group) {
-                    this.group.removeChild(anchor);
-                }
-            });
-            this.anchors = [];
-            if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
-                this.group.removeChild(this.selectionOutline);
-                this.selectionOutline = null;
-            }
-            if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
-                this.group.removeChild(this.rotationAnchor);
-                this.rotationAnchor = null;
-            }
-            // Hide sidebar if needed
-            disableAllSideBars && disableAllSideBars();
-        }
     }
 
     contains(x, y) {
@@ -275,6 +248,7 @@ class Rectangle {
         }
 
         this.draw();
+       
     }
 
     rotate(angle) {
@@ -283,11 +257,30 @@ class Rectangle {
     }
 }
 
+function deleteCurrentShape() {
+    if (currentShape && currentShape.shapeName === 'rectangle') {
+        const idx = shapes.indexOf(currentShape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (currentShape.group.parentNode) {
+            currentShape.group.parentNode.removeChild(currentShape.group);
+        }
+        pushDeleteAction(currentShape);
+        currentShape = null;
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && currentShape && currentShape.shapeName === 'rectangle') {
+        deleteCurrentShape();
+    }
+});
+
 const handleMouseDown = (e) => {
     if (isSquareToolActive) {
         startX = e.offsetX;
         startY = e.offsetY;
         isDrawingSquare = true;
+
         let initialOptions = {};
         if (isSquareToolActive) {
             initialOptions = {
@@ -306,8 +299,12 @@ const handleMouseDown = (e) => {
         }
 
         currentShape = new Rectangle(startX, startY, 0, 0, initialOptions);
-        shapes.push(currentShape);
-    } else if (isSelectionToolActive) {
+    }
+    else if(isSelectionToolActive && currentShape && currentShape.shapeName === 'rectangle') {
+            isDraggingShape = true;
+            dragOldPos = { x: currentShape.x, y: currentShape.y };
+            console.log("Dragging shape:", dragOldPos);
+      
     }
 };
 
@@ -322,15 +319,26 @@ const handleMouseMove = (e) => {
 };
 
 const handleMouseUp = (e) => {
+    if (isDrawingSquare && currentShape) {
+        shapes.push(currentShape);
+        svg.appendChild(currentShape.group);
+        pushCreateAction(currentShape); 
+    }
+    if (isDraggingShape && dragOldPos && currentShape) {
+        console.log(dragOldPos.x, dragOldPos.y, currentShape.x, currentShape.y);
+
+        if (dragOldPos.x !== currentShape.x || dragOldPos.y !== currentShape.y) {
+            pushTransformAction(currentShape, dragOldPos, { x: currentShape.x, y: currentShape.y });
+        }
+        dragOldPos = null;
+    }
     isDrawingSquare = false;
-
+    isDraggingShape = false;
 };
-
 
 svg.addEventListener('mousedown', handleMouseDown);
 svg.addEventListener('mousemove', handleMouseMove);
 svg.addEventListener('mouseup', handleMouseUp);
-
 
 
 
@@ -417,7 +425,3 @@ squareOutlineStyleValue.forEach((span) => {
         }
     });
 });
-
-
-
-
