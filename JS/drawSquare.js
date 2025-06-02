@@ -13,6 +13,7 @@ let backgroundColorOptionsSquare = document.querySelectorAll(".squareBackgroundS
 let fillStyleOptions = document.querySelectorAll(".squareFillStyleSpan");
 let squareStrokeThicknessValue = document.querySelectorAll(".squareStrokeThickSpan");
 let squareOutlineStyleValue = document.querySelectorAll(".squareOutlineStyle");
+
 import {pushCreateAction, pushDeleteAction, pushTransformAction } from './undoAndRedo.js';
 class Rectangle {
     constructor(x, y, width, height, options = {}) {
@@ -302,7 +303,7 @@ const handleMouseDown = (e) => {
     }
     else if(isSelectionToolActive && currentShape && currentShape.shapeName === 'rectangle') {
             isDraggingShape = true;
-            dragOldPos = { x: currentShape.x, y: currentShape.y };
+            dragOldPos = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation };
             console.log("Dragging shape:", dragOldPos);
       
     }
@@ -327,8 +328,8 @@ const handleMouseUp = (e) => {
     if (isDraggingShape && dragOldPos && currentShape) {
         console.log(dragOldPos.x, dragOldPos.y, currentShape.x, currentShape.y);
 
-        if (dragOldPos.x !== currentShape.x || dragOldPos.y !== currentShape.y) {
-            pushTransformAction(currentShape, dragOldPos, { x: currentShape.x, y: currentShape.y });
+        if (dragOldPos.x !== currentShape.x || dragOldPos.y !== currentShape.y || dragOldPos.width !== currentShape.width || dragOldPos.height !== currentShape.height || dragOldPos.rotation !== currentShape.rotation) {
+            pushTransformAction(currentShape, dragOldPos, { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation });
         }
         dragOldPos = null;
     }

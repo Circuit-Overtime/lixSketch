@@ -22,11 +22,13 @@ export function pushTransformAction(shape, oldPos, newPos) {
     undoStack.push({
         type: 'transform',
         shape: shape,
-        oldPos: { x: oldPos.x, y: oldPos.y },
-        newPos: { x: newPos.x, y: newPos.y }
+        oldPos: { x: oldPos.x, y: oldPos.y, height: oldPos.height, width: oldPos.width, rotation: oldPos.rotate },
+        newPos: { x: newPos.x, y: newPos.y, height: newPos.height, width: newPos.width, rotation: newPos.rotate }
     });
     console.log(undoStack)
 }
+
+
 
 export function undo() {
     if (undoStack.length === 0) return;
@@ -46,6 +48,9 @@ export function undo() {
     else if (action.type === 'transform') {
         action.shape.x = action.oldPos.x;
         action.shape.y = action.oldPos.y;
+        action.shape.height = action.oldPos.height;
+        action.shape.width = action.oldPos.width;
+        action.shape.rotation = action.oldPos.rotation;
         action.shape.draw();
         redoStack.push(action);
     }
