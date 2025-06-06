@@ -19,24 +19,45 @@ export function pushDeleteAction(shape) {
 }
 
 export function pushTransformAction(shape, oldPos, newPos) {
-    undoStack.push({
-        type: 'transform',
-        shape: shape,
-        oldPos: { 
-            x: oldPos.x, 
-            y: oldPos.y, 
-            height: oldPos.height, 
-            width: oldPos.width, 
-            rotation: oldPos.rotation // <-- FIXED HERE
-        },
-        newPos: { 
-            x: newPos.x, 
-            y: newPos.y, 
-            height: newPos.height, 
-            width: newPos.width, 
-            rotation: newPos.rotation // <-- FIXED HERE
-        }
-    });
+    if (shape.shapeName === 'circle') {
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: { 
+                centerX: oldPos.centerX, 
+                centerY: oldPos.centerY, 
+                radiusX: oldPos.radiusX, 
+                radiusY: oldPos.radiusY, 
+                rotation: oldPos.rotation
+            },
+            newPos: { 
+                centerX: newPos.centerX, 
+                centerY: newPos.centerY, 
+                radiusX: newPos.radiusX, 
+                radiusY: newPos.radiusY, 
+                rotation: newPos.rotation
+            }
+        });
+    } else {
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: { 
+                x: oldPos.x, 
+                y: oldPos.y, 
+                width: oldPos.width, 
+                height: oldPos.height, 
+                rotation: oldPos.rotation
+            },
+            newPos: { 
+                x: newPos.x, 
+                y: newPos.y, 
+                width: newPos.width, 
+                height: newPos.height, 
+                rotation: newPos.rotation
+            }
+        });
+    }
     console.log(undoStack)
 }
 
@@ -65,12 +86,25 @@ export function undo() {
         redoStack.push(action);
     }
     else if (action.type === 'transform') {
-        action.shape.x = action.oldPos.x;
-        action.shape.y = action.oldPos.y;
-        action.shape.height = action.oldPos.height;
-        action.shape.width = action.oldPos.width;
-        action.shape.rotation = action.oldPos.rotation;
-        action.shape.draw();
+        if (action.shape.shapeName === 'circle') {
+            action.shape.centerX = action.oldPos.centerX;
+            action.shape.centerY = action.oldPos.centerY;
+            action.shape.radiusX = action.oldPos.radiusX;
+            action.shape.radiusY = action.oldPos.radiusY;
+            action.shape.rotation = action.oldPos.rotation;
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        } else {
+            action.shape.x = action.oldPos.x;
+            action.shape.y = action.oldPos.y;
+            action.shape.height = action.oldPos.height;
+            action.shape.width = action.oldPos.width;
+            action.shape.rotation = action.oldPos.rotation;
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        }
         redoStack.push(action);
     }
     else if (action.type === 'optionsChange')
@@ -97,9 +131,25 @@ export function redo() {
         undoStack.push(action);
     }
     else if (action.type === 'transform') {
-        action.shape.x = action.newPos.x;
-        action.shape.y = action.newPos.y;
-        action.shape.draw();
+        if (action.shape.shapeName === 'circle') {
+            action.shape.centerX = action.newPos.centerX;
+            action.shape.centerY = action.newPos.centerY;
+            action.shape.radiusX = action.newPos.radiusX;
+            action.shape.radiusY = action.newPos.radiusY;
+            action.shape.rotation = action.newPos.rotation;
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        } else {
+            action.shape.x = action.newPos.x;
+            action.shape.y = action.newPos.y;
+            action.shape.height = action.newPos.height;
+            action.shape.width = action.newPos.width;
+            action.shape.rotation = action.newPos.rotation;
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        }
         undoStack.push(action);
     }
 }
