@@ -907,7 +907,7 @@ const handleMouseDown = (e) => {
 };
 
 const handleMouseMove = (e) => {
-    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
+   const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
     const svgRect = svg.getBoundingClientRect();
 
     if (typeof lastMousePos !== 'undefined') {
