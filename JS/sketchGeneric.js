@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-square");
+let selectedTool = document.querySelector(".bx-circle");
 let history = [];
 let redoStack = [];
 let shapes = [];
@@ -73,16 +73,16 @@ const ACTION_DELETE = "delete";
 const ACTION_MODIFY = "modify";  
 const ACTION_PASTE = "paste";
 
-document.addEventListener("click", function(event) {
-  const menuIcon = document.getElementById("menuIcon");
-  const menu = document.querySelector(".menu");
+// document.addEventListener("click", function(event) {
+//   const menuIcon = document.getElementById("menuIcon");
+//   const menu = document.querySelector(".menu");
 
-  if (event.target === menuIcon) {
-    menu.classList.toggle("hidden");
-  } else {
-    menu.classList.add("hidden");
-  }
-});
+//   if (event.target === menuIcon) {
+//     menu.classList.toggle("hidden");
+//   } else {
+//     menu.classList.add("hidden");
+//   }
+// });
 
 
 function toolExtraPopup() {
@@ -209,12 +209,12 @@ function disSelectAllTools()
 
 function disableAllSideBars()
 {
-  paintBrushSideBar.classList.add("hidden");
-  lineSideBar.classList.add("hidden");
+  // paintBrushSideBar.classList.add("hidden");
+  // lineSideBar.classList.add("hidden");
   squareSideBar.classList.add("hidden");
   circleSideBar.classList.add("hidden");
-  arrowSideBar.classList.add("hidden");
-  textSideBar.classList.add("hidden");
+  // arrowSideBar.classList.add("hidden");
+  // textSideBar.classList.add("hidden");
 }
 function disableAllTools() 
 {

@@ -473,6 +473,18 @@ class Rectangle {
     }
 }
 
+function getSVGCoordsFromMouse(e) {
+    // Use the SVG's current viewBox to map mouse to SVG coordinates
+    const viewBox = svg.viewBox.baseVal;
+    const rect = svg.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const svgX = viewBox.x + (mouseX / rect.width) * viewBox.width;
+    const svgY = viewBox.y + (mouseY / rect.height) * viewBox.height;
+    return { x: svgX, y: svgY };
+}
+
+
 function deleteCurrentShape() {
     if (currentShape && currentShape.shapeName === 'rectangle') {
         const idx = shapes.indexOf(currentShape);
@@ -492,13 +504,15 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+
 const handleMouseDown = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
 
     if (isSquareToolActive) {
-        startX = mouseX;
-        startY = mouseY;
+        const { x, y } = getSVGCoordsFromMouse(e);
+        startX = x;
+        startY = y;
         isDrawingSquare = true;
 
         if (currentShape) {
@@ -602,6 +616,7 @@ const handleMouseMove = (e) => {
     };
 
     if (isDrawingSquare && isSquareToolActive && currentShape) {
+        const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
         let width = mouseX - startX;
         let height = mouseY - startY;
         currentShape.x = width < 0 ? startX + width : startX;
