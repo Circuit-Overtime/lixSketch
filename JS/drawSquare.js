@@ -14,7 +14,7 @@ let squareFillStyleValue = "none";
 let squareStrokeThicknes = 2;
 let squareOutlineStyle = "solid";
 let dragOldPosSquare = null;
-let oldOptions = null;
+
 let SquarecolorOptions = document.querySelectorAll(".squareStrokeSpan");
 let backgroundColorOptionsSquare = document.querySelectorAll(".squareBackgroundSpan");
 let fillStyleOptions = document.querySelectorAll(".squareFillStyleSpan");
