@@ -414,11 +414,9 @@ class Rectangle {
     }
 
     rotate(angle) {
-         // Normalize angle
         angle = angle % 360;
         if (angle < 0) angle += 360;
         this.rotation = angle;
-        // No need to call draw() here, mousemove handler calls it after updating state
     }
 
      // Method to update the sidebar based on the shape's current options
@@ -653,6 +651,7 @@ const handleMouseMove = (e) => {
             svg.style.cursor = 'grabbing'; 
         } else {
              isRotatingShapeSquare = false;
+             svg.style.cursor = 'default';
         }
     } else if (isSelectionToolActive && !isDrawingSquare && currentShape && currentShape.isSelected) {
           const anchorInfo = currentShape.isNearAnchor(mouseX, mouseY);
