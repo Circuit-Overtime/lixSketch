@@ -1,4 +1,3 @@
-
 // Stacks for undo/redo
 const undoStack = [];
 const redoStack = [];
@@ -23,22 +22,24 @@ export function pushTransformAction(shape, oldPos, newPos) {
         undoStack.push({
             type: 'transform',
             shape: shape,
-            oldPos: { 
-                centerX: oldPos.centerX, 
-                centerY: oldPos.centerY, 
-                radiusX: oldPos.radiusX, 
-                radiusY: oldPos.radiusY, 
+            oldPos: {
+                x: oldPos.x,
+                y: oldPos.y,
+                rx: oldPos.rx,
+                ry: oldPos.ry,
                 rotation: oldPos.rotation
             },
-            newPos: { 
-                centerX: newPos.centerX, 
-                centerY: newPos.centerY, 
-                radiusX: newPos.radiusX, 
-                radiusY: newPos.radiusY, 
+            newPos: {
+                x: newPos.x,
+                y: newPos.y,
+                rx: newPos.rx,
+                ry: newPos.ry,
                 rotation: newPos.rotation
             }
         });
-    } else {
+    }
+    
+    else {
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -69,7 +70,6 @@ export function pushOptionsChangeAction(shape, oldOptions) {
     });
 }
 
-
 export function undo() {
     if (undoStack.length === 0) return;
     const action = undoStack.pop();
@@ -87,15 +87,17 @@ export function undo() {
     }
     else if (action.type === 'transform') {
         if (action.shape.shapeName === 'circle') {
-            action.shape.centerX = action.oldPos.centerX;
-            action.shape.centerY = action.oldPos.centerY;
-            action.shape.radiusX = action.oldPos.radiusX;
-            action.shape.radiusY = action.oldPos.radiusY;
+            action.shape.x = action.oldPos.x;
+            action.shape.y = action.oldPos.y;
+            action.shape.rx = action.oldPos.rx;
+            action.shape.ry = action.oldPos.ry;
             action.shape.rotation = action.oldPos.rotation;
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else {
+        }
+        
+        else {
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
             action.shape.height = action.oldPos.height;
@@ -132,15 +134,16 @@ export function redo() {
     }
     else if (action.type === 'transform') {
         if (action.shape.shapeName === 'circle') {
-            action.shape.centerX = action.newPos.centerX;
-            action.shape.centerY = action.newPos.centerY;
-            action.shape.radiusX = action.newPos.radiusX;
-            action.shape.radiusY = action.newPos.radiusY;
+            action.shape.x = action.newPos.x;
+            action.shape.y = action.newPos.y;
+            action.shape.rx = action.newPos.rx;
+            action.shape.ry = action.newPos.ry;
             action.shape.rotation = action.newPos.rotation;
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else {
+        }
+         else {
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;
             action.shape.height = action.newPos.height;
@@ -153,7 +156,6 @@ export function redo() {
         undoStack.push(action);
     }
 }
-
 
 // Optional: Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
@@ -168,7 +170,6 @@ document.addEventListener('keydown', (e) => {
        
     }
 });
-
 
 // Attach to buttons
 document.getElementById('undo').addEventListener('click', undo);

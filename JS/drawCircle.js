@@ -451,11 +451,10 @@ function deleteCurrentShape() {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' && currentShape && currentShape.shapeName === 'rectangle') {
+    if (e.key === 'Delete' && currentShape && currentShape.shapeName === 'circle') {
         deleteCurrentShape();
     }
 });
-
 const handleMouseDown = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
@@ -498,7 +497,13 @@ const handleMouseDown = (e) => {
         {
             const anchorInfo = currentShape.isNearAnchor(mouseX, mouseY);
             if (anchorInfo) {
-                dragOldPosCircle = { x: currentShape.x, y: currentShape.y };
+                dragOldPosCircle = { 
+                    x: currentShape.x, 
+                    y: currentShape.y, 
+                    rx: currentShape.rx, 
+                    ry: currentShape.ry, 
+                    rotation: currentShape.rotation 
+                };
                 if(anchorInfo.type === 'resize') 
                 {
                     isResizingShapeCircle = true;
@@ -527,7 +532,13 @@ const handleMouseDown = (e) => {
             else if (currentShape.contains(mouseX, mouseY)) 
             {
                 isDraggingShapeCircle = true;
-                dragOldPosCircle = { x: currentShape.x, y: currentShape.y };
+                dragOldPosCircle = { 
+                    x: currentShape.x, 
+                    y: currentShape.y, 
+                    rx: currentShape.rx, 
+                    ry: currentShape.ry, 
+                    rotation: currentShape.rotation 
+                };
                 startX = mouseX;
                 startY = mouseY;
                 clickedOnShape = true;
@@ -554,7 +565,13 @@ const handleMouseDown = (e) => {
                 currentShape.isSelected = true;
                 currentShape.draw();
                 isDraggingShapeCircle = true;
-                dragOldPosCircle = { x: currentShape.x, y: currentShape.y };
+                dragOldPosCircle = { 
+                    x: currentShape.x, 
+                    y: currentShape.y, 
+                    rx: currentShape.rx, 
+                    ry: currentShape.ry, 
+                    rotation: currentShape.rotation 
+                };
                 startX = mouseX;
                 startY = mouseY;
                 clickedOnShape = true;
@@ -685,9 +702,24 @@ const handleMouseUp = (e) => {
     {
         const newPos = { x: currentShape.x, y: currentShape.y, rx: currentShape.rx, ry: currentShape.ry, rotation: currentShape.rotation };
         const stateChanged = dragOldPosCircle.x !== newPos.x || dragOldPosCircle.y !== newPos.y ||
-                              dragOldPosCircle.rx !== newPos.rx || dragOldPosCircle.ry !== newPos.ry || dragOldPosCircle.rotation !== newPos.rotation;
+                              dragOldPosCircle.rx !== newPos.rx || dragOldPosCircle.ry !== newPos.ry || 
+                              dragOldPosCircle.rotation !== newPos.rotation;
         if (stateChanged) {
-            pushTransformAction(currentShape, dragOldPosCircle, newPos);
+            const oldPosForUndo = {
+                x: dragOldPosCircle.x,
+                y: dragOldPosCircle.y,
+                rx: dragOldPosCircle.rx,
+                ry: dragOldPosCircle.ry,
+                rotation: dragOldPosCircle.rotation
+            };
+            const newPosForUndo = {
+                x: newPos.x,
+                y: newPos.y,
+                rx: newPos.rx,
+                ry: newPos.ry,
+                rotation: newPos.rotation
+            };
+            pushTransformAction(currentShape, oldPosForUndo, newPosForUndo);
         }
         dragOldPosCircle = null;
     }
@@ -841,10 +873,9 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
         if (copiedShapeData) {
-            e.preventDefault(); 
+            e.preventDefault();
             let pasteX, pasteY;
-            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') 
-            {
+            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') {
                 const svgPoint = svg.createSVGPoint();
                 svgPoint.x = lastMousePos.x;
                 svgPoint.y = lastMousePos.y;
@@ -852,12 +883,10 @@ document.addEventListener('keydown', (e) => {
                 const userPoint = svgPoint.matrixTransform(CTM);
                 pasteX = userPoint.x;
                 pasteY = userPoint.y;
-            }
-            else 
-            {
-                const svgCircle = svg.getBoundingClientRect();
-                pasteX = svgCircle.width / 2;
-                pasteY = svgCircle.height / 2;
+            } else {
+                const svgRect = svg.getBoundingClientRect();
+                pasteX = svgRect.width / 2;
+                pasteY = svgRect.height / 2;
                 const svgPoint = svg.createSVGPoint();
                 svgPoint.x = pasteX;
                 svgPoint.y = pasteY;
@@ -867,32 +896,31 @@ document.addEventListener('keydown', (e) => {
                 pasteY = userPoint.y;
             }
 
-            let newX = pasteX - copiedShapeData.radius;
-            let newY = pasteY - copiedShapeData.radius;
-            newX += 10;
-            newY += 10;
+            let newX = pasteX + 10;
+            let newY = pasteY + 10;
+
             shapes.forEach(shape => {
-                if(shape.isSelected)
-                {
+                if (shape.isSelected) {
                     shape.removeSelection();
                 }
-            })
+            });
+
             currentShape = null;
             disableAllSideBars();
             const newCircle = new Circle(
-                newX, 
-                newY, 
-                copiedShapeData.radius, 
+                newX,
+                newY,
+                copiedShapeData.rx,
+                copiedShapeData.ry,
                 cloneOptions(copiedShapeData.options)
             );
             newCircle.rotation = copiedShapeData.rotation;
             shapes.push(newCircle);
             newCircle.isSelected = true;
             currentShape = newCircle;
-            newCircle.draw()
+            newCircle.draw();
             pushCreateAction(newCircle);
             newCircle.addAnchors();
-
         }
     }
 });
