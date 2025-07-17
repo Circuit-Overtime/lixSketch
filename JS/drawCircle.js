@@ -288,45 +288,48 @@ class Circle {
         return ((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry)) <= 1.05; 
     }
     isNearAnchor(x, y) {
-         if (!this.isSelected) return null;
-         const buffer = 10; 
-         const anchorSize = 10; 
+        if (!this.isSelected) return null;
+        const buffer = 10 / currentZoom; // Scale buffer by zoom level
+        const anchorSize = 10 / currentZoom; // Scale anchor size by zoom level
 
-         // Iterate through anchors
-         for (let i = 0; i < this.anchors.length; i++) {
-             const anchor = this.anchors[i];
-             const anchorLocalX = parseFloat(anchor.getAttribute('x')) + anchorSize / 2;
-             const anchorLocalY = parseFloat(anchor.getAttribute('y')) + anchorSize / 2;
-             const svgPoint = svg.createSVGPoint();
-             svgPoint.x = anchorLocalX;
-             svgPoint.y = anchorLocalY;
-             const transformedPoint = svgPoint.matrixTransform(this.group.getCTM());
-             const anchorLeft = transformedPoint.x - anchorSize/2 - buffer;
-             const anchorRight = transformedPoint.x + anchorSize/2 + buffer;
-             const anchorTop = transformedPoint.y - anchorSize/2 - buffer;
-             const anchorBottom = transformedPoint.y + anchorSize/2 + buffer;
-             if (x >= anchorLeft && x <= anchorRight && y >= anchorTop && y <= anchorBottom) {
-                 return { type: 'resize', index: i };
-             }
-         }
+        // Iterate through anchors
+        for (let i = 0; i < this.anchors.length; i++) {
+            const anchor = this.anchors[i];
+            const anchorLocalX = parseFloat(anchor.getAttribute('x')) + anchorSize / 2;
+            const anchorLocalY = parseFloat(anchor.getAttribute('y')) + anchorSize / 2;
+            const svgPoint = svg.createSVGPoint();
+            svgPoint.x = anchorLocalX;
+            svgPoint.y = anchorLocalY;
+            const transformedPoint = svgPoint.matrixTransform(this.group.getCTM());
+            
+            const anchorLeft = transformedPoint.x - anchorSize/2 - buffer;
+            const anchorRight = transformedPoint.x + anchorSize/2 + buffer;
+            const anchorTop = transformedPoint.y - anchorSize/2 - buffer;
+            const anchorBottom = transformedPoint.y + anchorSize/2 + buffer;
+            
+            if (x >= anchorLeft && x <= anchorRight && y >= anchorTop && y <= anchorBottom) {
+                return { type: 'resize', index: i };
+            }
+        }
 
-         // Check rotation anchor
-         if (this.rotationAnchor) {
-             const rotateAnchorLocalX = parseFloat(this.rotationAnchor.getAttribute('cx'));
-             const rotateAnchorLocalY = parseFloat(this.rotationAnchor.getAttribute('cy'));
-             const svgPoint = svg.createSVGPoint();
-             svgPoint.x = rotateAnchorLocalX;
-             svgPoint.y = rotateAnchorLocalY;
-             const transformedPoint = svgPoint.matrixTransform(this.group.getCTM());
-             const rotateAnchorRadius = parseFloat(this.rotationAnchor.getAttribute('r'));
-             const distSq = (x - transformedPoint.x)**2 + (y - transformedPoint.y)**2;
-             if (distSq <= (rotateAnchorRadius + buffer)**2) {
-                 return { type: 'rotate' };
-             }
-         }
+        // Check rotation anchor
+        if (this.rotationAnchor) {
+            const rotateAnchorLocalX = parseFloat(this.rotationAnchor.getAttribute('cx'));
+            const rotateAnchorLocalY = parseFloat(this.rotationAnchor.getAttribute('cy'));
+            const svgPoint = svg.createSVGPoint();
+            svgPoint.x = rotateAnchorLocalX;
+            svgPoint.y = rotateAnchorLocalY;
+            const transformedPoint = svgPoint.matrixTransform(this.group.getCTM());
+            
+            const rotateAnchorRadius = parseFloat(this.rotationAnchor.getAttribute('r')) / currentZoom;
+            const distSq = (x - transformedPoint.x)**2 + (y - transformedPoint.y)**2;
+            if (distSq <= (rotateAnchorRadius + buffer)**2) {
+                return { type: 'rotate' };
+            }
+        }
 
-         return null;
-     }
+        return null;
+    }
      move(dx, dy) {
         this.x += dx;
         this.y += dy;
@@ -456,14 +459,13 @@ document.addEventListener('keydown', (e) => {
     }
 });
 const handleMouseDown = (e) => {
-    const mouseX = e.offsetX;
-    const mouseY = e.offsetY;
+    // Convert to SVG coordinates from the start
+    const {x: svgMouseX, y: svgMouseY} = getSVGCoordsFromMouse(e);
 
     if(isCircleToolActive)
     {
-        const {x,y} = getSVGCoordsFromMouse(e);
-        startX = x;
-        startY = y;
+        startX = svgMouseX;
+        startY = svgMouseY;
         isDrawingCircle = true;
 
         if(currentShape) 
@@ -495,7 +497,7 @@ const handleMouseDown = (e) => {
         let clickedOnShape = false;
         if (currentShape && currentShape.shapeName === 'circle' && currentShape.isSelected)
         {
-            const anchorInfo = currentShape.isNearAnchor(mouseX, mouseY);
+            const anchorInfo = currentShape.isNearAnchor(svgMouseX, svgMouseY);
             if (anchorInfo) {
                 dragOldPosCircle = { 
                     x: currentShape.x, 
@@ -516,10 +518,10 @@ const handleMouseDown = (e) => {
                     if(CTM)
                     {
                         const svgPoint = svg.createSVGPoint();
-                        svgPoint.x = currentShape.rx;
-                        svgPoint.y = currentShape.ry;
+                        svgPoint.x = currentShape.x;
+                        svgPoint.y = currentShape.y;
                         const centerSVGPoint = svgPoint.matrixTransform(CTM);
-                        startRotationMouseAngleCircle = Math.atan2(mouseY - centerSVGPoint.y, mouseX - centerSVGPoint.x) * (180 / Math.PI);
+                        startRotationMouseAngleCircle = Math.atan2(svgMouseY - centerSVGPoint.y, svgMouseX - centerSVGPoint.x) * (180 / Math.PI);
                         startShapeRotationCircle = currentShape.rotation;
                     }
                     else 
@@ -529,7 +531,7 @@ const handleMouseDown = (e) => {
                 }
                 clickedOnShape = true;
             }
-            else if (currentShape.contains(mouseX, mouseY)) 
+            else if (currentShape.contains(svgMouseX, svgMouseY)) 
             {
                 isDraggingShapeCircle = true;
                 dragOldPosCircle = { 
@@ -539,25 +541,25 @@ const handleMouseDown = (e) => {
                     ry: currentShape.ry, 
                     rotation: currentShape.rotation 
                 };
-                startX = mouseX;
-                startY = mouseY;
+                startX = svgMouseX;
+                startY = svgMouseY;
                 clickedOnShape = true;
             }
-    }
-    if (!clickedOnShape) 
-    {
-        let shapeToSelect = null;
-        for (let i = shapes.length - 1; i >= 0; i--) {
+        }
+        if (!clickedOnShape) 
+        {
+            let shapeToSelect = null;
+            for (let i = shapes.length - 1; i >= 0; i--) {
                 const shape = shapes[i];
-                if (shape.shapeName === 'circle' && shape.contains(mouseX, mouseY)) {
+                if (shape.shapeName === 'circle' && shape.contains(svgMouseX, svgMouseY)) {
                     shapeToSelect = shape;
                     break; 
                 }
             }
             if (currentShape && currentShape !== shapeToSelect) {
-                 currentShape.removeSelection();
-                 currentShape = null;
-                 disableAllSideBars();
+                currentShape.removeSelection();
+                currentShape = null;
+                disableAllSideBars();
             }
             if(shapeToSelect)
             {
@@ -572,47 +574,50 @@ const handleMouseDown = (e) => {
                     ry: currentShape.ry, 
                     rotation: currentShape.rotation 
                 };
-                startX = mouseX;
-                startY = mouseY;
+                startX = svgMouseX;
+                startY = svgMouseY;
                 clickedOnShape = true;
             }
-    }
-    if(!clickedOnShape && currentShape) {
-        currentShape.removeSelection();
-        currentShape = null;
-        disableAllSideBars();
+        }
+        if(!clickedOnShape && currentShape) {
+            currentShape.removeSelection();
+            currentShape = null;
+            disableAllSideBars();
         }
     }
 };
 
 const handleMouseMove = (e) => {
-    const mouseX = e.offsetX;
-    const mouseY = e.offsetY;
+    // Convert to SVG coordinates consistently
+    const {x: svgMouseX, y: svgMouseY} = getSVGCoordsFromMouse(e);
+    
+    // Keep lastMousePos in screen coordinates for other functions
     const svgRect = svg.getBoundingClientRect();
     lastMousePos = {
         x: e.clientX - svgRect.left, 
         y: e.clientY - svgRect.top
     };
+
     if(isDrawingCircle && isCircleToolActive && currentShape)   
     {
-        const {x: mouseX, y: mouseY} = getSVGCoordsFromMouse(e);
-        currentShape.x = (startX + mouseX) / 2;
-        currentShape.y = (startY + mouseY) / 2;
-        currentShape.rx = Math.abs(mouseX - startX) / 2;
-        currentShape.ry = Math.abs(mouseY - startY) / 2;
+        currentShape.x = (startX + svgMouseX) / 2;
+        currentShape.y = (startY + svgMouseY) / 2;
+        currentShape.rx = Math.abs(svgMouseX - startX) / 2;
+        currentShape.ry = Math.abs(svgMouseY - startY) / 2;
         currentShape.draw();
     }
     else if (isDraggingShapeCircle && currentShape && currentShape.isSelected) {
-        const dx = mouseX - startX;
-        const dy = mouseY - startY;
+        const dx = svgMouseX - startX;
+        const dy = svgMouseY - startY;
         currentShape.move(dx, dy);
-        startX = mouseX;
-        startY = mouseY;
+        startX = svgMouseX;
+        startY = svgMouseY;
         currentShape.draw();
-    }   
+    }
+       
     else if(isResizingShapeCircle && currentShape && currentShape.isSelected) 
     {
-        currentShape.updatePosition(resizingAnchorIndexCircle, mouseX, mouseY);
+        currentShape.updatePosition(resizingAnchorIndexCircle, svgMouseX, svgMouseY);
         currentShape.draw();
     }
     else if (isRotatingShapeCircle && currentShape && currentShape.isSelected) 
@@ -620,16 +625,16 @@ const handleMouseMove = (e) => {
         const CTM = currentShape.group.getCTM();
         if(CTM) {
             const svgPoint = svg.createSVGPoint();
-            svgPoint.x = currentShape.rx;
-            svgPoint.y = currentShape.ry;
+            svgPoint.x = currentShape.x;
+            svgPoint.y = currentShape.y;
             const centerSVGPoint = svgPoint.matrixTransform(CTM);
-            const currentMouseAngle = Math.atan2(mouseY - centerSVGPoint.y, mouseX - centerSVGPoint.x) * (180 / Math.PI);
+            const currentMouseAngle = Math.atan2(svgMouseY - centerSVGPoint.y, svgMouseX - centerSVGPoint.x) * (180 / Math.PI);
             const angleDiff = currentMouseAngle - startRotationMouseAngleCircle;
-            const newRotation = startShapeRotationCircle + angleDiff;
+            let newRotation = startShapeRotationCircle + angleDiff;
             const snapAngle = 15;
-             if (e.shiftKey) { 
-                  newRotation = Math.round(newRotation / snapAngle) * snapAngle;
-             }
+            if (e.shiftKey) { 
+                newRotation = Math.round(newRotation / snapAngle) * snapAngle;
+            }
             currentShape.rotate(newRotation);
             currentShape.draw(); 
             svg.style.cursor = 'grabbing'; 
@@ -642,7 +647,7 @@ const handleMouseMove = (e) => {
     }
     else if (isSelectionToolActive && !isDrawingCircle && currentShape && currentShape.isSelected) 
     {
-        const anchorInfo = currentShape.isNearAnchor(mouseX, mouseY);
+        const anchorInfo = currentShape.isNearAnchor(svgMouseX, svgMouseY);
         if(anchorInfo)
         {
             if(anchorInfo.type === 'resize') {
@@ -653,22 +658,21 @@ const handleMouseMove = (e) => {
             else if(anchorInfo.type === 'rotate') {
                 svg.style.cursor = 'grab';
             }
-            else if(currentShape.contains(mouseX, mouseY)) {
-                svg.style.cursor = 'move';
-            }
-            else 
-            {
-                svg.style.cursor = 'default';
-            }
+        }
+        else if(currentShape.contains(svgMouseX, svgMouseY)) {
+            svg.style.cursor = 'move';
+        }
+        else 
+        {
+            svg.style.cursor = 'default';
         }
     }
-
     else if (isSelectionToolActive && !isDrawingCircle && !isDraggingShapeCircle && !isResizingShapeCircle && !isRotatingShapeCircle) 
     {
         let hoveredShape = null;
         for (let i = shapes.length - 1; i >= 0; i--) {
             const shape = shapes[i];
-            if (shape.shapeName === 'circle' && shape.contains(mouseX, mouseY)) {
+            if (shape.shapeName === 'circle' && shape.contains(svgMouseX, svgMouseY)) {
                 hoveredShape = shape;
                 break; 
             }
