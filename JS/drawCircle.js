@@ -80,7 +80,7 @@ class Circle {
             if (this.element && this.element.parentNode === this.group) {
                 this.group.removeChild(this.element);
             }
-            // Draw ellipse centered at (this.x, this.y)
+            
             const roughEllipse = rc.ellipse(0, 0, this.rx * 2, this.ry * 2, this.options);
             this.element = roughEllipse;
             this.group.appendChild(roughEllipse);
@@ -137,8 +137,8 @@ class Circle {
         const anchorSize = 10;
         const anchorStrokeWidth = 2;
         const self = this;
-        const expandedX = -this.selectionPadding; 
-        const expandedY = -this.selectionPadding; 
+        const expandedX = -this.rx - this.selectionPadding;
+        const expandedY = -this.ry - this.selectionPadding; 
         const expandedWidth = this.rx * 2 + 2 * this.selectionPadding;
         const expandedHeight = this.ry * 2 + 2 * this.selectionPadding;
 
