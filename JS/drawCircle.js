@@ -743,11 +743,11 @@ colorOptionsCircle.forEach(span => {
         event.stopPropagation();
         if (currentShape && currentShape.shapeName === 'circle' && currentShape.isSelected) {
             const color = this.getAttribute('data-id');
+            const oldOptions = {...currentShape.options};
             currentShape.options.stroke = color;
             currentShape.draw();
             currentShape.updateSidebar();
-            pushOptionsChangeAction(currentShape, {...currentShape.options });
-
+            pushOptionsChangeAction(currentShape, oldOptions);
         }
         else 
         {
@@ -764,10 +764,11 @@ backgroundColorOptionsCircle.forEach(span => {
         event.stopPropagation();
         if (currentShape && currentShape.shapeName === 'circle' && currentShape.isSelected) {
             const color = this.getAttribute('data-id');
+            const oldOptions = {...currentShape.options};
             currentShape.options.fill = color;
             currentShape.draw();
             currentShape.updateSidebar();
-            pushOptionsChangeAction(currentShape, {...currentShape.options });
+            pushOptionsChangeAction(currentShape, oldOptions);
         }
         else 
         {
@@ -784,10 +785,11 @@ fillStyleOptionsCircle.forEach(span => {
         event.stopPropagation();
         if (currentShape && currentShape.shapeName === 'circle' && currentShape.isSelected) {
             const style = this.getAttribute('data-id');
+            const oldOptions = {...currentShape.options};
             currentShape.options.fillStyle = style;
             currentShape.draw();
             currentShape.updateSidebar();
-            pushOptionsChangeAction(currentShape, {...currentShape.options });
+            pushOptionsChangeAction(currentShape, oldOptions);
         }
         else 
         {
@@ -804,10 +806,11 @@ strokeThicknessValueCircle.forEach(span => {
         event.stopPropagation();
         if (currentShape && currentShape.shapeName === 'circle' && currentShape.isSelected) {
             const thick = parseInt(this.getAttribute('data-id'), 10);
+            const oldOptions = {...currentShape.options};
             currentShape.options.strokeWidth = thick;
             currentShape.draw();
             currentShape.updateSidebar();
-            pushOptionsChangeAction(currentShape, {...currentShape.options });
+            pushOptionsChangeAction(currentShape, oldOptions);
         }
         else 
         {
@@ -824,6 +827,7 @@ outlineStyleValueCircle.forEach(span => {
         event.stopPropagation();
         if (currentShape && currentShape.shapeName === 'circle' && currentShape.isSelected) {
             const style = this.getAttribute('data-id');
+            const oldOptions = {...currentShape.options};
             if (style === "dashed") {
                 currentShape.options.strokeDasharray = "5,5";
             } else if (style === "dotted") {
@@ -833,7 +837,7 @@ outlineStyleValueCircle.forEach(span => {
             }
             currentShape.draw();
             currentShape.updateSidebar();
-            pushOptionsChangeAction(currentShape, {...currentShape.options });
+            pushOptionsChangeAction(currentShape, oldOptions);
         }
         else 
         {
