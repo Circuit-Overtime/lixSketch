@@ -333,74 +333,40 @@ class Circle {
     }
     updatePosition(anchorIndex, newMouseX, newMouseY) {
         const CTM = this.group.getCTM();
-        if (!CTM) return; 
+        if (!CTM) return;
+    
         const inverseCTM = CTM.inverse();
         const svgPoint = svg.createSVGPoint();
         svgPoint.x = newMouseX;
         svgPoint.y = newMouseY;
         const transformedPoint = svgPoint.matrixTransform(inverseCTM);
-        let oldX = 0; 
-        let oldY = 0; 
-        let oldWidth = this.rx * 2;
-        let oldHeight = this.ry * 2;
-
-        let newLocalX = 0; 
-        let newLocalY = 0; 
-        let newWidth = oldWidth;
-        let newHeight = oldHeight;
-
+    
+        const dx = transformedPoint.x;
+        const dy = transformedPoint.y;
+    
+        const MIN_RADIUS = 10;
+    
         switch (anchorIndex) {
-            case 0: 
-                newLocalX = transformedPoint.x;
-                newLocalY = transformedPoint.y;
-                newWidth = oldWidth - newLocalX;
-                newHeight = oldHeight - newLocalY;
+            case 0: // top-left
+            case 1: // top-right
+            case 2: // bottom-left
+            case 3: // bottom-right
+                this.rx = Math.max(Math.abs(dx), MIN_RADIUS);
+                this.ry = Math.max(Math.abs(dy), MIN_RADIUS);
                 break;
-            case 1: 
-                newLocalY = transformedPoint.y;
-                newWidth = transformedPoint.x - oldX;
-                newHeight = oldHeight - newLocalY;
+    
+            case 4: // top-center
+            case 5: // bottom-center
+                this.ry = Math.max(Math.abs(dy), MIN_RADIUS);
                 break;
-            case 2: 
-                newLocalX = transformedPoint.x;
-                newWidth = oldWidth - newLocalX;
-                newHeight = transformedPoint.y - oldY;
-                break;
-            case 3: 
-                newWidth = transformedPoint.x - oldX;
-                newHeight = transformedPoint.y - oldY;
-                break;
-            case 4: 
-                newLocalY = transformedPoint.y;
-                newHeight = oldHeight - newLocalY;
-                break;
-            case 5: 
-                newHeight = transformedPoint.y - oldY;
-                break;
-            case 6: 
-                newLocalX = transformedPoint.x;
-                newWidth = oldWidth - newLocalX;
-                break;
-            case 7: 
-                newWidth = transformedPoint.x - oldX;
+    
+            case 6: // left-center
+            case 7: // right-center
+                this.rx = Math.max(Math.abs(dx), MIN_RADIUS);
                 break;
         }
-        if (newWidth < 0) {
-            this.x += newLocalX + newWidth; 
-            this.width = Math.abs(newWidth);
-        } else {
-             this.x += newLocalX; 
-             this.width = newWidth;
-        }
-
-        if (newHeight < 0) {
-            this.y += newLocalY + newHeight; 
-            this.radius = Math.abs(newHeight);
-        } else {
-            this.y += newLocalY; 
-            this.radius = newHeight;
-        }   
     }
+    
     rotate(angle) {
         angle = angle % 360;
         if (angle < 0) angle += 360;
