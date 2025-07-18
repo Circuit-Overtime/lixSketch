@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-circle");
+let selectedTool = document.querySelector(".bx-image-alt");
 let history = [];
 let redoStack = [];
 let shapes = [];
