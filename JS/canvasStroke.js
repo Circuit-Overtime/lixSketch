@@ -19,6 +19,12 @@ let startShapeRotation = null;
 let copiedShapeData = null;
 let startX, startY;
 
+// Enhanced mouse tracking with better point collection
+let lastPoint = null;
+let lastTime = 0;
+const minDistance = 2; // Minimum distance between points
+const maxDistance = 15; // Maximum distance for interpolation
+
 function getSvgCoordinates(event) {
     const rect = svg.getBoundingClientRect();
     const scaleX = currentViewBox.width / rect.width;
@@ -32,21 +38,35 @@ function getSvgCoordinates(event) {
 
 function getSvgPathFromStroke(stroke) {
     if (!stroke.length) return '';
-    const d = stroke.reduce(
-        (acc, [x0, y0], i, arr) => {
-            const [x1, y1] = arr[i + 1] || arr[i];
-            acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-            return acc;
-        },
-        ['M', ...stroke[0], 'Q']
-    );
-    d.push('Z');
-    return d.join(' ');
+    
+    // Use more sophisticated curve fitting
+    const pathData = [];
+    pathData.push('M', stroke[0][0], stroke[0][1]);
+    
+    for (let i = 1; i < stroke.length - 1; i++) {
+        const curr = stroke[i];
+        const next = stroke[i + 1];
+        
+        // Calculate control points for smoother curves
+        const cpX = curr[0] + (next[0] - curr[0]) * 0.5;
+        const cpY = curr[1] + (next[1] - curr[1]) * 0.5;
+        
+        pathData.push('Q', curr[0], curr[1], cpX, cpY);
+    }
+    
+    // Add final point
+    if (stroke.length > 1) {
+        const lastPoint = stroke[stroke.length - 1];
+        pathData.push('L', lastPoint[0], lastPoint[1]);
+    }
+    
+    return pathData.join(' ');
 }
 
 class FreehandStroke {
     constructor(points = [], options = {}) {
         this.points = points;
+        this.rawPoints = []; // Store original points for better smoothing
         this.options = {
             stroke: strokeColor,
             strokeWidth: strokeThickness,
@@ -69,19 +89,84 @@ class FreehandStroke {
         this.draw();
     }
 
-    // Convert points to SVG path data
+    // Enhanced smoothing algorithm
+    smoothPoints(points, factor = 0.8) {
+        if (points.length < 3) return points;
+        
+        const smoothed = [points[0]]; // Keep first point
+        
+        for (let i = 1; i < points.length - 1; i++) {
+            const prev = points[i - 1];
+            const curr = points[i];
+            const next = points[i + 1];
+            
+            // Apply weighted average smoothing
+            const smoothedX = curr[0] * (1 - factor) + (prev[0] + next[0]) * factor * 0.5;
+            const smoothedY = curr[1] * (1 - factor) + (prev[1] + next[1]) * factor * 0.5;
+            const pressure = curr[2] || 0.5;
+            
+            smoothed.push([smoothedX, smoothedY, pressure]);
+        }
+        
+        smoothed.push(points[points.length - 1]); // Keep last point
+        return smoothed;
+    }
+
+    // Interpolate points for smoother curves
+    interpolatePoints(points, steps = 2) {
+        if (points.length < 2) return points;
+        
+        const interpolated = [points[0]];
+        
+        for (let i = 0; i < points.length - 1; i++) {
+            const curr = points[i];
+            const next = points[i + 1];
+            
+            for (let j = 1; j <= steps; j++) {
+                const t = j / (steps + 1);
+                const x = curr[0] + (next[0] - curr[0]) * t;
+                const y = curr[1] + (next[1] - curr[1]) * t;
+                const pressure = curr[2] + (next[2] - curr[2]) * t;
+                interpolated.push([x, y, pressure]);
+            }
+            
+            if (i < points.length - 2) {
+                interpolated.push(next);
+            }
+        }
+        
+        interpolated.push(points[points.length - 1]);
+        return interpolated;
+    }
+
+    // Enhanced path generation with better curve fitting
     getPathData() {
         if (this.points.length < 2) return '';
-        const stroke = getStroke(this.points, {
+        
+        // Apply multiple smoothing passes for ultra-smooth results
+        let smoothedPoints = this.interpolatePoints(this.points, 1);
+        smoothedPoints = this.smoothPoints(smoothedPoints, 0.6);
+        smoothedPoints = this.smoothPoints(smoothedPoints, 0.4);
+        
+        const stroke = getStroke(smoothedPoints, {
             size: this.options.strokeWidth,
-            thinning: 0.5,
-            smoothing: 0.8,
-            streamline: 0.2,
-            easing: (t) => t,
-            start: { taper: 0, easing: (t) => t, cap: true },
-            end: { taper: 0, easing: (t) => t, cap: true },
+            thinning: 0.3, // Reduced for more consistent width
+            smoothing: 0.9, // Increased for smoother curves
+            streamline: 0.4, // Increased for better flow
+            easing: (t) => Math.sin(t * Math.PI * 0.5), // Smoother easing
+            start: { 
+                taper: 5, // Subtle taper for natural start
+                easing: (t) => t * t, 
+                cap: true 
+            },
+            end: { 
+                taper: 5, // Subtle taper for natural end
+                easing: (t) => --t * t * t + 1, 
+                cap: true 
+            },
             simulatePressure: true
         });
+        
         return getSvgPathFromStroke(stroke);
     }
 
@@ -446,7 +531,10 @@ function handleMouseDown(e) {
     
     if (isPaintToolActive) {
         isDrawingStroke = true;
-        points = [[x, y, e.pressure]];
+        const pressure = e.pressure || 0.5;
+        points = [[x, y, pressure]];
+        lastPoint = [x, y, pressure];
+        lastTime = Date.now();
 
         currentStroke = new FreehandStroke(points, {
             stroke: strokeColor,
@@ -538,11 +626,47 @@ function handleMouseDown(e) {
 
 function handleMouseMove(e) {
     const { x, y } = getSvgCoordinates(e);
+    const currentTime = Date.now();
     
     if (isDrawingStroke && isPaintToolActive) {
-        points.push([x, y, e.pressure]);
-        currentStroke.points = points;
-        currentStroke.draw();
+        const pressure = e.pressure || 0.5;
+        
+        if (lastPoint) {
+            const dx = x - lastPoint[0];
+            const dy = y - lastPoint[1];
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Only add point if it's far enough from the last one
+            if (distance >= minDistance) {
+                // If distance is too large, interpolate points
+                if (distance > maxDistance) {
+                    const steps = Math.ceil(distance / maxDistance);
+                    for (let i = 1; i < steps; i++) {
+                        const t = i / steps;
+                        const interpX = lastPoint[0] + dx * t;
+                        const interpY = lastPoint[1] + dy * t;
+                        const interpPressure = lastPoint[2] + (pressure - lastPoint[2]) * t;
+                        points.push([interpX, interpY, interpPressure]);
+                    }
+                }
+                
+                // Calculate velocity-based pressure
+                const timeDelta = currentTime - lastTime;
+                const velocity = distance / Math.max(timeDelta, 1);
+                const velocityPressure = Math.min(1, Math.max(0.1, 1 - velocity * 0.02));
+                const finalPressure = (pressure + velocityPressure) * 0.5;
+                
+                points.push([x, y, finalPressure]);
+                currentStroke.points = points;
+                currentStroke.draw();
+                
+                lastPoint = [x, y, finalPressure];
+                lastTime = currentTime;
+            }
+        } else {
+            lastPoint = [x, y, pressure];
+            lastTime = currentTime;
+        }
     } else if (isDraggingStroke && currentShape && currentShape.isSelected) {
         const dx = x - startX;
         const dy = y - startY;
@@ -565,17 +689,18 @@ function handleMouseMove(e) {
 function handleMouseUp(e) {
     if (isDrawingStroke) {
         isDrawingStroke = false;
+        lastPoint = null;
         
-        // Check if stroke is too small
-        if (currentStroke.points.length < 2) {
+        // Final smoothing pass after drawing is complete
+        if (currentStroke && currentStroke.points.length >= 2) {
+            currentStroke.draw(); // Redraw with final smoothing
+            pushCreateAction(currentStroke);
+        } else if (currentStroke) {
+            // Remove strokes that are too small
             shapes.pop();
             if (currentStroke.group.parentNode) {
                 currentStroke.group.parentNode.removeChild(currentStroke.group);
             }
-            currentStroke = null;
-            currentShape = null;
-        } else {
-            pushCreateAction(currentStroke);
         }
         
         currentStroke = null;
