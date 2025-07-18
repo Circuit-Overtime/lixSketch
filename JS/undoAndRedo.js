@@ -18,7 +18,27 @@ export function pushDeleteAction(shape) {
 }
 
 export function pushTransformAction(shape, oldPos, newPos) {
-    if (shape.shapeName === 'circle') {
+    if (shape.type === 'image') {
+        // Handle image transforms
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: {
+                x: oldPos.x,
+                y: oldPos.y,
+                width: oldPos.width,
+                height: oldPos.height,
+                rotation: oldPos.rotation
+            },
+            newPos: {
+                x: newPos.x,
+                y: newPos.y,
+                width: newPos.width,
+                height: newPos.height,
+                rotation: newPos.rotation
+            }
+        });
+    } else if (shape.shapeName === 'circle') {
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -37,9 +57,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 rotation: newPos.rotation
             }
         });
-    }
-    
-    else {
+    } else {
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -59,7 +77,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
             }
         });
     }
-    console.log(undoStack)
+    console.log(undoStack);
 }
 
 export function pushOptionsChangeAction(shape, oldOptions) {
@@ -73,20 +91,37 @@ export function pushOptionsChangeAction(shape, oldOptions) {
 export function undo() {
     if (undoStack.length === 0) return;
     const action = undoStack.pop();
+    
     if (action.type === 'create') {
-        const idx = shapes.indexOf(action.shape);
-        if (idx !== -1) shapes.splice(idx, 1);
-        if (action.shape.group.parentNode) {
-            action.shape.group.parentNode.removeChild(action.shape.group);
+        if (action.shape.type === 'image') {
+            // Handle image creation undo
+            action.shape.remove();
+        } else {
+            // Handle other shape creation undo
+            const idx = shapes.indexOf(action.shape);
+            if (idx !== -1) shapes.splice(idx, 1);
+            if (action.shape.group.parentNode) {
+                action.shape.group.parentNode.removeChild(action.shape.group);
+            }
         }
         redoStack.push(action);
     } else if (action.type === 'delete') {
-        shapes.push(action.shape);
-        svg.appendChild(action.shape.group);
+        if (action.shape.type === 'image') {
+            // Handle image deletion undo
+            action.shape.restore();
+        } else {
+            // Handle other shape deletion undo
+            shapes.push(action.shape);
+            svg.appendChild(action.shape.group);
+        }
         redoStack.push(action);
     }
     else if (action.type === 'transform') {
-        if (action.shape.shapeName === 'circle') {
+        if (action.shape.type === 'image') {
+            // Handle image transform undo
+            action.shape.restore(action.oldPos);
+        } else if (action.shape.shapeName === 'circle') {
+            // Handle circle transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
             action.shape.rx = action.oldPos.rx;
@@ -95,9 +130,8 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        }
-        
-        else {
+        } else {
+            // Handle other shape transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
             action.shape.height = action.oldPos.height;
@@ -109,8 +143,7 @@ export function undo() {
         }
         redoStack.push(action);
     }
-    else if (action.type === 'optionsChange')
-    {
+    else if (action.type === 'optionsChange') {
         action.shape.options = action.oldOptions;
         action.shape.draw();
         redoStack.push(action);
@@ -120,20 +153,37 @@ export function undo() {
 export function redo() {
     if (redoStack.length === 0) return;
     const action = redoStack.pop();
+    
     if (action.type === 'create') {
-        shapes.push(action.shape);
-        svg.appendChild(action.shape.group);
+        if (action.shape.type === 'image') {
+            // Handle image creation redo
+            action.shape.restore();
+        } else {
+            // Handle other shape creation redo
+            shapes.push(action.shape);
+            svg.appendChild(action.shape.group);
+        }
         undoStack.push(action);
     } else if (action.type === 'delete') {
-        const idx = shapes.indexOf(action.shape);
-        if (idx !== -1) shapes.splice(idx, 1);
-        if (action.shape.group.parentNode) {
-            action.shape.group.parentNode.removeChild(action.shape.group);
+        if (action.shape.type === 'image') {
+            // Handle image deletion redo
+            action.shape.remove();
+        } else {
+            // Handle other shape deletion redo
+            const idx = shapes.indexOf(action.shape);
+            if (idx !== -1) shapes.splice(idx, 1);
+            if (action.shape.group.parentNode) {
+                action.shape.group.parentNode.removeChild(action.shape.group);
+            }
         }
         undoStack.push(action);
     }
     else if (action.type === 'transform') {
-        if (action.shape.shapeName === 'circle') {
+        if (action.shape.type === 'image') {
+            // Handle image transform redo
+            action.shape.restore(action.newPos);
+        } else if (action.shape.shapeName === 'circle') {
+            // Handle circle transform redo
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;
             action.shape.rx = action.newPos.rx;
@@ -142,8 +192,8 @@ export function redo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        }
-         else {
+        } else {
+            // Handle other shape transform redo
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;
             action.shape.height = action.newPos.height;

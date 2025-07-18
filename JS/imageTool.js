@@ -1,3 +1,5 @@
+import { pushCreateAction, pushDeleteAction, pushTransformAction } from './undoAndRedo.js';
+
 let isDraggingImage = false;
 let imageToPlace = null;
 let imageX = 0;
@@ -134,7 +136,7 @@ svg.addEventListener('click', async (e) => {
         // Create a new SVG image element for the final image
         const finalImage = document.createElementNS("http://www.w3.org/2000/svg", "image");
         finalImage.setAttribute("href", imageToPlace);
-        finalImage.setAttribute("x", placedX - placedImageWidth / 2);  // Center the final image
+        finalImage.setAttribute("x", placedX - placedImageWidth / 2);
         finalImage.setAttribute("y", placedY - placedImageHeight / 2);
         finalImage.setAttribute("width", placedImageWidth);
         finalImage.setAttribute("height", placedImageHeight);
@@ -148,6 +150,20 @@ svg.addEventListener('click', async (e) => {
         finalImage.setAttribute('data-height', placedImageHeight);
 
         svg.appendChild(finalImage);
+
+        // Add to undo stack for image creation
+        pushCreateAction({
+            type: 'image',
+            element: finalImage,
+            remove: () => {
+                if (finalImage.parentNode) {
+                    finalImage.parentNode.removeChild(finalImage);
+                }
+            },
+            restore: () => {
+                svg.appendChild(finalImage);
+            }
+        });
 
         // Add click event to the newly added image
         finalImage.addEventListener('click', selectImage);
@@ -374,7 +390,7 @@ function removeResizeAnchors() {
 
 function startResize(event) {
     event.preventDefault();
-    event.stopPropagation(); // Prevent dragging the image itself
+    event.stopPropagation();
 
     currentAnchor = event.target;
     
@@ -384,9 +400,19 @@ function startResize(event) {
     originalWidth = parseFloat(selectedImage.getAttribute('width'));
     originalHeight = parseFloat(selectedImage.getAttribute('height'));
     
-    svg.addEventListener('mousemove', resizeImage); // Start resizing
-    document.addEventListener('mouseup', stopResize); // Listen for mouseup on the entire document
+    // Store original rotation
+    const transform = selectedImage.getAttribute('transform');
+    if (transform) {
+        const rotateMatch = transform.match(/rotate\(([^,]+)/);
+        if (rotateMatch) {
+            imageRotation = parseFloat(rotateMatch[1]);
+        }
+    }
+    
+    svg.addEventListener('mousemove', resizeImage);
+    document.addEventListener('mouseup', stopResize);
 }
+
 function stopResize(event) {
     stopInteracting(); // Call the combined stop function
     document.removeEventListener('mouseup', stopResize); // Remove the global mouseup listener
@@ -581,16 +607,16 @@ function rotateImage(event) {
 }
 
 function stopRotation(event) {
-    if (!isRotatingImage) return;
     
+    if (!isRotatingImage) return;
+    stopInteracting();
     isRotatingImage = false;
     startRotationMouseAngle = null;
     startImageRotation = null;
-    
     svg.removeEventListener('mousemove', rotateImage);
     document.removeEventListener('mouseup', stopRotation);
-    
     svg.style.cursor = 'default';
+    
 }
 
 function startDrag(event) {
@@ -600,13 +626,28 @@ function startDrag(event) {
     event.stopPropagation();
 
     isDragging = true;
+    
+    // Store original values at the start of drag
+    originalX = parseFloat(selectedImage.getAttribute('x'));
+    originalY = parseFloat(selectedImage.getAttribute('y'));
+    originalWidth = parseFloat(selectedImage.getAttribute('width'));
+    originalHeight = parseFloat(selectedImage.getAttribute('height'));
+    
+    // Store original rotation
+    const transform = selectedImage.getAttribute('transform');
+    if (transform) {
+        const rotateMatch = transform.match(/rotate\(([^,]+)/);
+        if (rotateMatch) {
+            imageRotation = parseFloat(rotateMatch[1]);
+        }
+    }
 
     const rect = svg.getBoundingClientRect();
     dragOffsetX = event.clientX - rect.left - parseFloat(selectedImage.getAttribute('x'));
     dragOffsetY = event.clientY - rect.top - parseFloat(selectedImage.getAttribute('y'));
 
-    svg.addEventListener('mousemove', dragImage); // Drag the image itself
-    document.addEventListener('mouseup', stopDrag); // Listen for mouseup on the entire document
+    svg.addEventListener('mousemove', dragImage);
+    document.addEventListener('mouseup', stopDrag);
 }
 
 function dragImage(event) {
@@ -624,11 +665,11 @@ function dragImage(event) {
     const newCenterY = y + parseFloat(selectedImage.getAttribute('height')) / 2;
     selectedImage.setAttribute('transform', `rotate(${imageRotation}, ${newCenterX}, ${newCenterY})`);
 
-    // Update original values for consistent behavior
-    originalX = x;
-    originalY = y;
-    originalWidth = parseFloat(selectedImage.getAttribute('width'));
-    originalHeight = parseFloat(selectedImage.getAttribute('height'));
+    // // Update original values for consistent behavior
+    // originalX = x;
+    // originalY = y;
+    // originalWidth = parseFloat(selectedImage.getAttribute('width'));
+    // originalHeight = parseFloat(selectedImage.getAttribute('height'));
 
     // Update the selection outline and anchors
     removeSelectionOutline();
@@ -643,6 +684,61 @@ function stopDrag(event) {
 
 
 function stopInteracting() {
+    // Store transform data before stopping interaction
+    if (selectedImage && (isDragging || isRotatingImage || currentAnchor)) {
+        const newPos = {
+            x: parseFloat(selectedImage.getAttribute('x')),
+            y: parseFloat(selectedImage.getAttribute('y')),
+            width: parseFloat(selectedImage.getAttribute('width')),
+            height: parseFloat(selectedImage.getAttribute('height')),
+            rotation: imageRotation
+        };
+        
+        // Get the original rotation from the stored start rotation or current rotation
+        let originalRotation = imageRotation;
+        if (isRotatingImage && startImageRotation !== null) {
+            originalRotation = startImageRotation;
+        }
+        
+        const oldPos = {
+            x: originalX,
+            y: originalY,
+            width: originalWidth,
+            height: originalHeight,
+            rotation: originalRotation
+        };
+        console.log(oldPos, newPos);
+        console.log(oldPos.x, newPos.x)
+        // Only push transform action if something actually changed
+        if (newPos.x !== oldPos.x || newPos.y !== oldPos.y || 
+            newPos.width !== oldPos.width || newPos.height !== oldPos.height ||
+            newPos.rotation !== oldPos.rotation) {
+            
+            pushTransformAction({
+                type: 'image',
+                element: selectedImage,
+                restore: (pos) => {
+                    selectedImage.setAttribute('x', pos.x);
+                    selectedImage.setAttribute('y', pos.y);
+                    selectedImage.setAttribute('width', pos.width);
+                    selectedImage.setAttribute('height', pos.height);
+                    const centerX = pos.x + pos.width / 2;
+                    const centerY = pos.y + pos.height / 2;
+                    selectedImage.setAttribute('transform', `rotate(${pos.rotation}, ${centerX}, ${centerY})`);
+                    imageRotation = pos.rotation;
+                    
+                    // Update selection outline if image is selected
+                    if (selectedImage) {
+                        removeSelectionOutline();
+                        addSelectionOutline();
+                    }
+                    console.log("Pushed the transform")
+                }
+            }, oldPos, newPos);
+            
+        }
+    }
+
     isDragging = false;
     isRotatingImage = false;
     svg.removeEventListener('mousemove', dragImage);
@@ -669,7 +765,6 @@ function stopInteracting() {
         }
     }
 }
-
 
 svg.addEventListener('click', (e) => {
     if (isSelectionToolActive) {
