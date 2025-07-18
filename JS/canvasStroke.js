@@ -1,6 +1,4 @@
-import { SelectionManager } from './selectionManager.js';
-const selectionManager = new SelectionManager(svg, shapes);
-
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
 
 const strokeColors = document.querySelectorAll(".strokeColors span");
 const strokeThicknesses = document.querySelectorAll(".strokeThickness span");
@@ -10,379 +8,707 @@ let points = [];
 let isDrawingStroke = false;
 let currentStroke = null;
 
-
+// Add dragging and resizing variables
+let isDraggingStroke = false;
+let isResizingStroke = false;
+let isRotatingStroke = false;
+let dragOldPosStroke = null;
+let resizingAnchorIndex = null;
+let startRotationMouseAngle = null;
+let startShapeRotation = null;
+let copiedShapeData = null;
+let startX, startY;
 
 function getSvgCoordinates(event) {
-  const rect = svg.getBoundingClientRect();
-  const scaleX = currentViewBox.width / rect.width;
-  const scaleY = currentViewBox.height / rect.height;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = currentViewBox.width / rect.width;
+    const scaleY = currentViewBox.height / rect.height;
 
-  const svgX = currentViewBox.x + (event.clientX - rect.left) * scaleX;
-  const svgY = currentViewBox.y + (event.clientY - rect.top) * scaleY;
+    const svgX = currentViewBox.x + (event.clientX - rect.left) * scaleX;
+    const svgY = currentViewBox.y + (event.clientY - rect.top) * scaleY;
 
-  return { x: svgX, y: svgY };
+    return { x: svgX, y: svgY };
 }
 
 function getSvgPathFromStroke(stroke) {
-  if (!stroke.length) return '';
-  const d = stroke.reduce(
-      (acc, [x0, y0], i, arr) => {
-          const [x1, y1] = arr[i + 1] || arr[i];
-          acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-          return acc;
-      },
-      ['M', ...stroke[0], 'Q']
-  );
-  d.push('Z');
-  return d.join(' ');
+    if (!stroke.length) return '';
+    const d = stroke.reduce(
+        (acc, [x0, y0], i, arr) => {
+            const [x1, y1] = arr[i + 1] || arr[i];
+            acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+            return acc;
+        },
+        ['M', ...stroke[0], 'Q']
+    );
+    d.push('Z');
+    return d.join(' ');
 }
-
 
 class FreehandStroke {
-  constructor(points = [], options = {}) {
-    this.points = points;
-    this.options = {
-        stroke: strokeColor,
-        strokeWidth: strokeThickness,
-        fill: "none",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        ...options
-    };
-    this.element = null;
-    this.isSelected = false;
-    this.rotation = 0;
-    this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    this.anchors = [];
-    this.rotationAnchor = null;
-    this.selectionPadding = 8;
-    this.selectionOutline = null;
-    this.boundingBox = { x: 0, y: 0, width: 0, height: 0 };
-    this.draw();
-  }
-
-  // Convert points to SVG path data
-  getPathData() {
-    if (this.points.length < 2) return '';
-    const stroke = getStroke(this.points, {
-        size: this.options.strokeWidth,
-        thinning: 0.5,
-        smoothing: 0.8,
-        streamline: 0.2,
-        easing: (t) => t,
-        start: { taper: 0, easing: (t) => t, cap: true },
-        end: { taper: 0, easing: (t) => t, cap: true },
-        simulatePressure: true
-    });
-    return getSvgPathFromStroke(stroke);
-}
-
-  // Calculate the bounding box of the stroke
-  calculateBoundingBox() {
-    if (this.points.length === 0) {
-        return { x: 0, y: 0, width: 0, height: 0 };
-    }
-    
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
-    
-    this.points.forEach(point => {
-        minX = Math.min(minX, point[0]);
-        minY = Math.min(minY, point[1]);
-        maxX = Math.max(maxX, point[0]);
-        maxY = Math.max(maxY, point[1]);
-    });
-    
-    // Ensure we have valid dimensions
-    if (minX === Infinity || minY === Infinity) {
-        return { x: 0, y: 0, width: 0, height: 0 };
-    }
-    
-    // Add padding for stroke width
-    const padding = this.options.strokeWidth / 2;
-    return {
-        x: minX - padding,
-        y: minY - padding,
-        width: Math.max(0, (maxX - minX) + padding * 2),
-        height: Math.max(0, (maxY - minY) + padding * 2)
-    };
-}
-
-  draw() {
-    while (this.group.firstChild) {
-        this.group.removeChild(this.group.firstChild);
-    }
-
-    if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
-        this.group.removeChild(this.selectionOutline);
+    constructor(points = [], options = {}) {
+        this.points = points;
+        this.options = {
+            stroke: strokeColor,
+            strokeWidth: strokeThickness,
+            fill: "none",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+            ...options
+        };
+        this.element = null;
+        this.isSelected = false;
+        this.rotation = 0;
+        this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.anchors = [];
+        this.rotationAnchor = null;
+        this.selectionPadding = 8;
         this.selectionOutline = null;
+        this.boundingBox = { x: 0, y: 0, width: 0, height: 0 };
+        this.shapeName = "freehandStroke";
+        svg.appendChild(this.group);
+        this.draw();
     }
 
-    // Create the path element
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', this.getPathData());
-    path.setAttribute('stroke', this.options.stroke);
-    path.setAttribute('stroke-width', this.options.strokeWidth);
-    path.setAttribute('fill', this.options.fill);
-    path.setAttribute('stroke-linecap', this.options.strokeLinecap);
-    path.setAttribute('stroke-linejoin', this.options.strokeLinejoin);
-    this.element = path;
-    this.group.appendChild(path);
-
-    // Calculate and store bounding box
-    this.boundingBox = this.calculateBoundingBox();
-
-    // Apply rotation
-    const centerX = this.boundingBox.x + this.boundingBox.width / 2;
-    const centerY = this.boundingBox.y + this.boundingBox.height / 2;
-
-    // Ensure centerX and centerY are valid numbers
-    if (!isNaN(centerX) && !isNaN(centerY)) {
-        this.group.setAttribute('transform', `rotate(${this.rotation} ${centerX} ${centerY})`);
-    } else {
-        console.error("Invalid bounding box values for rotation:", this.boundingBox);
+    // Convert points to SVG path data
+    getPathData() {
+        if (this.points.length < 2) return '';
+        const stroke = getStroke(this.points, {
+            size: this.options.strokeWidth,
+            thinning: 0.5,
+            smoothing: 0.8,
+            streamline: 0.2,
+            easing: (t) => t,
+            start: { taper: 0, easing: (t) => t, cap: true },
+            end: { taper: 0, easing: (t) => t, cap: true },
+            simulatePressure: true
+        });
+        return getSvgPathFromStroke(stroke);
     }
 
-    if (this.isSelected) {
-        this.addAnchors();
+    // Calculate the bounding box of the stroke
+    calculateBoundingBox() {
+        if (this.points.length === 0) {
+            return { x: 0, y: 0, width: 0, height: 0 };
+        }
+        
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        
+        this.points.forEach(point => {
+            minX = Math.min(minX, point[0]);
+            minY = Math.min(minY, point[1]);
+            maxX = Math.max(maxX, point[0]);
+            maxY = Math.max(maxY, point[1]);
+        });
+        
+        // Ensure we have valid dimensions
+        if (minX === Infinity || minY === Infinity) {
+            return { x: 0, y: 0, width: 0, height: 0 };
+        }
+        
+        // Add padding for stroke width
+        const padding = this.options.strokeWidth / 2;
+        return {
+            x: minX - padding,
+            y: minY - padding,
+            width: Math.max(0, (maxX - minX) + padding * 2),
+            height: Math.max(0, (maxY - minY) + padding * 2)
+        };
     }
 
-    svg.appendChild(this.group);
+    draw() {
+        while (this.group.firstChild) {
+            this.group.removeChild(this.group.firstChild);
+        }
+
+        if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+            this.group.removeChild(this.selectionOutline);
+            this.selectionOutline = null;
+        }
+
+        // Create the path element
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', this.getPathData());
+        path.setAttribute('stroke', this.options.stroke);
+        path.setAttribute('stroke-width', this.options.strokeWidth);
+        path.setAttribute('fill', this.options.fill);
+        path.setAttribute('stroke-linecap', this.options.strokeLinecap);
+        path.setAttribute('stroke-linejoin', this.options.strokeLinejoin);
+        this.element = path;
+        this.group.appendChild(path);
+
+        // Calculate and store bounding box
+        this.boundingBox = this.calculateBoundingBox();
+
+        // Apply rotation
+        const centerX = this.boundingBox.x + this.boundingBox.width / 2;
+        const centerY = this.boundingBox.y + this.boundingBox.height / 2;
+
+        // Ensure centerX and centerY are valid numbers
+        if (!isNaN(centerX) && !isNaN(centerY)) {
+            this.group.setAttribute('transform', `rotate(${this.rotation} ${centerX} ${centerY})`);
+        }
+
+        if (this.isSelected) {
+            this.addAnchors();
+        }
+    }
+
+    selectStroke() {
+        this.isSelected = true;
+        this.draw();
+        // Show sidebar and update it with current stroke properties
+        disableAllSideBars();
+        paintBrushSideBar.classList.remove("hidden");
+        this.updateSidebar();
+    }
+
+    deselectStroke() {
+        this.isSelected = false;
+        this.anchors = [];
+        this.rotationAnchor = null;
+        this.draw();
+    }
+
+    removeSelection() {
+        this.anchors.forEach(anchor => {
+            if (anchor.parentNode === this.group) {
+                this.group.removeChild(anchor);
+            }
+        });
+        if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
+            this.group.removeChild(this.rotationAnchor);
+        }
+        if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+            this.group.removeChild(this.selectionOutline);
+        }
+        this.anchors = [];
+        this.rotationAnchor = null;
+        this.selectionOutline = null;
+        this.isSelected = false;
+    }
+
+    // Add updateSidebar method similar to Circle class
+    updateSidebar() {
+        // Update color selection
+        strokeColors.forEach(span => {
+            const color = span.getAttribute('data-id');
+            if (color === this.options.stroke) {
+                span.classList.add('selected');
+            } else {
+                span.classList.remove('selected');
+            }
+        });
+
+        // Update thickness selection
+        strokeThicknesses.forEach(span => {
+            const thickness = parseInt(span.getAttribute('data-id'), 10);
+            if (thickness === this.options.strokeWidth) {
+                span.classList.add('selected');
+            } else {
+                span.classList.remove('selected');
+            }
+        });
+    }
+
+    contains(x, y) {
+        // Simple bounding box check
+        const centerX = this.boundingBox.x + this.boundingBox.width / 2;
+        const centerY = this.boundingBox.y + this.boundingBox.height / 2;
+        
+        // Adjust for rotation
+        const dx = x - centerX;
+        const dy = y - centerY;
+        
+        const angleRad = -this.rotation * Math.PI / 180;
+        const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
+        const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
+        
+        return rotatedX >= this.boundingBox.x && 
+               rotatedX <= this.boundingBox.x + this.boundingBox.width &&
+               rotatedY >= this.boundingBox.y && 
+               rotatedY <= this.boundingBox.y + this.boundingBox.height;
+    }
+
+    isNearAnchor(x, y) {
+        const anchorSize = 10 / currentZoom;
+        
+        // Check resize anchors
+        for (let i = 0; i < this.anchors.length; i++) {
+            const anchor = this.anchors[i];
+            if (anchor) {
+                const anchorX = parseFloat(anchor.getAttribute('x')) + anchorSize / 2;
+                const anchorY = parseFloat(anchor.getAttribute('y')) + anchorSize / 2;
+                const distance = Math.sqrt(Math.pow(x - anchorX, 2) + Math.pow(y - anchorY, 2));
+                if (distance <= anchorSize / 2) {
+                    return { type: 'resize', index: i };
+                }
+            }
+        }
+        
+        // Check rotation anchor
+        if (this.rotationAnchor) {
+            const rotationX = parseFloat(this.rotationAnchor.getAttribute('cx'));
+            const rotationY = parseFloat(this.rotationAnchor.getAttribute('cy'));
+            const distance = Math.sqrt(Math.pow(x - rotationX, 2) + Math.pow(y - rotationY, 2));
+            if (distance <= anchorSize / 2) {
+                return { type: 'rotate' };
+            }
+        }
+        
+        return null;
+    }
+
+    move(dx, dy) {
+        this.points = this.points.map(point => [point[0] + dx, point[1] + dy]);
+    }
+
+    rotate(angle) {
+        this.rotation = angle;
+    }
+
+    addAnchors() {
+        const anchorSize = 10 / currentZoom;
+        const anchorStrokeWidth = 2 / currentZoom;
+        
+        const expandedX = this.boundingBox.x - this.selectionPadding;
+        const expandedY = this.boundingBox.y - this.selectionPadding;
+        const expandedWidth = this.boundingBox.width + 2 * this.selectionPadding;
+        const expandedHeight = this.boundingBox.height + 2 * this.selectionPadding;
+        
+        const positions = [
+            { x: expandedX, y: expandedY }, // top-left
+            { x: expandedX + expandedWidth, y: expandedY }, // top-right
+            { x: expandedX, y: expandedY + expandedHeight }, // bottom-left
+            { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, // bottom-right
+            { x: expandedX + expandedWidth / 2, y: expandedY }, // top-center
+            { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, // bottom-center
+            { x: expandedX, y: expandedY + expandedHeight / 2 }, // left-center
+            { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 } // right-center
+        ];
+        
+        // Create resize anchors
+        positions.forEach((pos, i) => {
+            const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            anchor.setAttribute('x', pos.x - anchorSize / 2);
+            anchor.setAttribute('y', pos.y - anchorSize / 2);
+            anchor.setAttribute('width', anchorSize);
+            anchor.setAttribute('height', anchorSize);
+            anchor.setAttribute('class', 'anchor');
+            anchor.setAttribute('data-index', i);
+            anchor.setAttribute('fill', '#121212');
+            anchor.setAttribute('stroke', '#5B57D1');
+            anchor.setAttribute('stroke-width', anchorStrokeWidth);
+            anchor.style.cursor = 'grab';
+            anchor.style.pointerEvents = 'all';
+            
+            this.group.appendChild(anchor);
+            this.anchors[i] = anchor;
+        });
+
+        // Create rotation anchor
+        const rotationAnchorDistance = 30 / currentZoom;
+        const rotationX = expandedX + expandedWidth / 2;
+        const rotationY = expandedY - rotationAnchorDistance;
+        
+        const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        rotationAnchor.setAttribute('cx', rotationX);
+        rotationAnchor.setAttribute('cy', rotationY);
+        rotationAnchor.setAttribute('r', anchorSize / 2);
+        rotationAnchor.setAttribute('fill', '#121212');
+        rotationAnchor.setAttribute('stroke', '#5B57D1');
+        rotationAnchor.setAttribute('stroke-width', anchorStrokeWidth);
+        rotationAnchor.setAttribute('class', 'rotation-anchor');
+        rotationAnchor.style.cursor = 'grab';
+        rotationAnchor.style.pointerEvents = 'all';
+        
+        this.group.appendChild(rotationAnchor);
+        this.rotationAnchor = rotationAnchor;
+
+        // Create selection outline
+        const outlinePoints = [
+            [expandedX, expandedY],
+            [expandedX + expandedWidth, expandedY],
+            [expandedX + expandedWidth, expandedY + expandedHeight],
+            [expandedX, expandedY + expandedHeight],
+            [expandedX, expandedY]
+        ];
+        
+        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        outline.setAttribute('points', outlinePoints.map(p => p.join(',')).join(' '));
+        outline.setAttribute('fill', 'none');
+        outline.setAttribute('stroke', '#5B57D1');
+        outline.setAttribute('stroke-width', 1.5);
+        outline.setAttribute('stroke-dasharray', '4 2');
+        outline.setAttribute('style', 'pointer-events: none;');
+        this.group.appendChild(outline);
+        this.selectionOutline = outline;
+
+        // Add line from rotation anchor to shape
+        const rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        rotationLine.setAttribute('x1', rotationX);
+        rotationLine.setAttribute('y1', rotationY);
+        rotationLine.setAttribute('x2', expandedX + expandedWidth / 2);
+        rotationLine.setAttribute('y2', expandedY);
+        rotationLine.setAttribute('stroke', '#5B57D1');
+        rotationLine.setAttribute('stroke-width', 1);
+        rotationLine.setAttribute('stroke-dasharray', '2 2');
+        rotationLine.setAttribute('style', 'pointer-events: none;');
+        this.group.appendChild(rotationLine);
+
+        // Show sidebar when anchors are added (when shape is selected)
+        disableAllSideBars();
+        paintBrushSideBar.classList.remove("hidden");
+        this.updateSidebar();
+    }
+
+    updatePosition(anchorIndex, newX, newY) {
+        const centerX = this.boundingBox.x + this.boundingBox.width / 2;
+        const centerY = this.boundingBox.y + this.boundingBox.height / 2;
+        const angleRad = -this.rotation * Math.PI / 180;
+        
+        // Convert new coordinates to unrotated space
+        const dx = newX - centerX;
+        const dy = newY - centerY;
+        const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
+        const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
+        
+        // Calculate scale factors based on anchor movement
+        let scaleX = 1, scaleY = 1;
+        switch(anchorIndex) {
+            case 0: // top-left
+                scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
+                scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
+                break;
+            case 1: // top-right
+                scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
+                scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
+                break;
+            case 2: // bottom-left
+                scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
+                scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
+                break;
+            case 3: // bottom-right
+                scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
+                scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
+                break;
+            case 4: // top-center
+                scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
+                break;
+            case 5: // bottom-center
+                scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
+                break;
+            case 6: // left-center
+                scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
+                break;
+            case 7: // right-center
+                scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
+                break;
+        }
+        
+        // Apply scaling to all points
+        this.points = this.points.map(point => {
+            const relX = point[0] - centerX;
+            const relY = point[1] - centerY;
+            return [
+                centerX + relX * scaleX,
+                centerY + relY * scaleY
+            ];
+        });
+        
+        this.draw();
+    }
 }
 
-
-
-
-  contains(x, y) {
-      // Simple bounding box check (could implement more accurate hit testing)
-      const centerX = this.boundingBox.x + this.boundingBox.width / 2;
-      const centerY = this.boundingBox.y + this.boundingBox.height / 2;
-      
-      // Adjust for rotation
-      const dx = x - centerX;
-      const dy = y - centerY;
-      
-      const angleRad = -this.rotation * Math.PI / 180;
-      const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
-      const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
-      
-      return rotatedX >= this.boundingBox.x && 
-             rotatedX <= this.boundingBox.x + this.boundingBox.width &&
-             rotatedY >= this.boundingBox.y && 
-             rotatedY <= this.boundingBox.y + this.boundingBox.height;
-  }
-
-  move(dx, dy) {
-      this.points = this.points.map(point => [point[0] + dx, point[1] + dy]);
-      this.draw();
-  }
-
-  addAnchors() {
-      const anchorSize = 10;
-      const anchorStrokeWidth = 2;
-      const self = this;
-      
-      const expandedX = this.boundingBox.x - this.selectionPadding;
-      const expandedY = this.boundingBox.y - this.selectionPadding;
-      const expandedWidth = this.boundingBox.width + 2 * this.selectionPadding;
-      const expandedHeight = this.boundingBox.height + 2 * this.selectionPadding;
-      
-      const positions = [
-          { x: expandedX, y: expandedY }, // top-left
-          { x: expandedX + expandedWidth, y: expandedY }, // top-right
-          { x: expandedX, y: expandedY + expandedHeight }, // bottom-left
-          { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, // bottom-right
-          { x: expandedX + expandedWidth / 2, y: expandedY }, // top-center
-          { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, // bottom-center
-          { x: expandedX, y: expandedY + expandedHeight / 2 }, // left-center
-          { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 } // right-center
-      ];
-      
-      // Remove existing anchors
-      this.anchors.forEach(anchor => {
-          if (anchor.parentNode === this.group) {
-              this.group.removeChild(anchor);
-          }
-      });
-      if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
-          this.group.removeChild(this.rotationAnchor);
-      }
-      this.anchors = [];
-      
-      // Create resize anchors
-      positions.forEach((pos, i) => {
-          const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          anchor.setAttribute('x', pos.x - anchorSize / 2);
-          anchor.setAttribute('y', pos.y - anchorSize / 2);
-          anchor.setAttribute('width', anchorSize);
-          anchor.setAttribute('height', anchorSize);
-          anchor.setAttribute('class', 'anchor');
-          anchor.setAttribute('data-index', i);
-          anchor.setAttribute('fill', '#121212');
-          anchor.setAttribute('stroke', '#5B57D1');
-          anchor.setAttribute('stroke-width', anchorStrokeWidth);
-          anchor.setAttribute('style', 'pointer-events: all;');
-          
-          anchor.addEventListener('mouseover', function() {
-              const directions = ['nwse', 'nesw', 'ew', 'nwse', 'ns', 'ns', 'ew', 'ew'];
-              svg.style.cursor = directions[i] + '-resize';
-          });
-          
-          anchor.addEventListener('mouseout', function() {
-              svg.style.cursor = 'default';
-          });
-          
-          this.group.appendChild(anchor);
-          this.anchors[i] = anchor;
-      });
-      
-
-      
-      // Create selection outline
-      const outlinePoints = [
-          [expandedX, expandedY],
-          [expandedX + expandedWidth, expandedY],
-          [expandedX + expandedWidth, expandedY + expandedHeight],
-          [expandedX, expandedY + expandedHeight],
-          [expandedX, expandedY]
-      ];
-      
-      const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      outline.setAttribute('points', outlinePoints.map(p => p.join(',')).join(' '));
-      outline.setAttribute('fill', 'none');
-      outline.setAttribute('stroke', '#5B57D1');
-      outline.setAttribute('stroke-width', 1.5);
-      outline.setAttribute('stroke-dasharray', '4 2');
-      outline.setAttribute('style', 'pointer-events: none;');
-      this.group.appendChild(outline);
-      this.selectionOutline = outline;
-  }
-
-  updatePosition(anchorIndex, newX, newY) {
-      const centerX = this.boundingBox.x + this.boundingBox.width / 2;
-      const centerY = this.boundingBox.y + this.boundingBox.height / 2;
-      const angleRad = -this.rotation * Math.PI / 180;
-      
-      // Convert new coordinates to unrotated space
-      const dx = newX - centerX;
-      const dy = newY - centerY;
-      const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
-      const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
-      
-      // Calculate scale factors based on anchor movement
-      let scaleX = 1, scaleY = 1;
-      switch(anchorIndex) {
-          case 0: // top-left
-              scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
-              scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
-              break;
-          case 1: // top-right
-              scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
-              scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
-              break;
-          case 2: // bottom-left
-              scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
-              scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
-              break;
-          case 3: // bottom-right
-              scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
-              scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
-              break;
-          case 4: // top-center
-              scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
-              break;
-          case 5: // bottom-center
-              scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
-              break;
-          case 6: // left-center
-              scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
-              break;
-          case 7: // right-center
-              scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
-              break;
-      }
-      
-      // Apply scaling to all points
-      this.points = this.points.map(point => {
-          const relX = point[0] - centerX;
-          const relY = point[1] - centerY;
-          return [
-              centerX + relX * scaleX,
-              centerY + relY * scaleY
-          ];
-      });
-      
-      this.draw();
-  }
-
-  
+// Delete functionality
+function deleteCurrentShape() {
+    if (currentShape && currentShape.shapeName === 'freehandStroke') {
+        const idx = shapes.indexOf(currentShape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (currentShape.group.parentNode) {
+            currentShape.group.parentNode.removeChild(currentShape.group);
+        }
+        pushDeleteAction(currentShape);
+        currentShape = null;
+        disableAllSideBars();
+    }
 }
 
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && currentShape && currentShape.shapeName === 'freehandStroke') {
+        deleteCurrentShape();
+    }
+});
 
 // Event handlers
 function handleMouseDown(e) {
-  if (isPaintToolActive) {
-      isDrawingStroke = true;
-      const { x, y } = getSvgCoordinates(e);
-      points = [[x, y, e.pressure]];
+    const { x, y } = getSvgCoordinates(e);
+    
+    if (isPaintToolActive) {
+        isDrawingStroke = true;
+        points = [[x, y, e.pressure]];
 
-      currentStroke = new FreehandStroke(points, {
-          stroke: strokeColor,
-          strokeWidth: strokeThickness
-      });
+        currentStroke = new FreehandStroke(points, {
+            stroke: strokeColor,
+            strokeWidth: strokeThickness
+        });
 
-      shapes.push(currentStroke);
-      selectionManager.setShapes(shapes);
-  } else if (isSelectionToolActive) {
-      selectionManager.handleMouseDown(e);
-  }
+        shapes.push(currentStroke);
+        currentShape = currentStroke;
+    } else if (isSelectionToolActive) {
+        let clickedOnShape = false;
+        
+        // Check if clicking on current selected stroke
+        if (currentShape && currentShape.shapeName === 'freehandStroke' && currentShape.isSelected) {
+            const anchorInfo = currentShape.isNearAnchor(x, y);
+            if (anchorInfo) {
+                if (anchorInfo.type === 'resize') {
+                    isResizingStroke = true;
+                    resizingAnchorIndex = anchorInfo.index;
+                    dragOldPosStroke = cloneStrokeData(currentShape);
+                } else if (anchorInfo.type === 'rotate') {
+                    isRotatingStroke = true;
+                    const centerX = currentShape.boundingBox.x + currentShape.boundingBox.width / 2;
+                    const centerY = currentShape.boundingBox.y + currentShape.boundingBox.height / 2;
+                    startRotationMouseAngle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
+                    startShapeRotation = currentShape.rotation;
+                    dragOldPosStroke = cloneStrokeData(currentShape);
+                }
+                clickedOnShape = true;
+            } else if (currentShape.contains(x, y)) {
+                isDraggingStroke = true;
+                dragOldPosStroke = cloneStrokeData(currentShape);
+                startX = x;
+                startY = y;
+                clickedOnShape = true;
+            }
+        }
+
+        // If not clicking on selected shape, check for other shapes
+        if (!clickedOnShape) {
+            let shapeToSelect = null;
+            for (let i = shapes.length - 1; i >= 0; i--) {
+                const shape = shapes[i];
+                if (shape instanceof FreehandStroke && shape.contains(x, y)) {
+                    shapeToSelect = shape;
+                    break;
+                }
+            }
+
+            if (currentShape && currentShape !== shapeToSelect) {
+                currentShape.deselectStroke();
+                currentShape = null;
+            }
+
+            if (shapeToSelect) {
+                currentShape = shapeToSelect;
+                currentShape.selectStroke(); // This will show the sidebar
+                
+                const anchorInfo = currentShape.isNearAnchor(x, y);
+                if (anchorInfo) {
+                    if (anchorInfo.type === 'resize') {
+                        isResizingStroke = true;
+                        resizingAnchorIndex = anchorInfo.index;
+                        dragOldPosStroke = cloneStrokeData(currentShape);
+                    } else if (anchorInfo.type === 'rotate') {
+                        isRotatingStroke = true;
+                        const centerX = currentShape.boundingBox.x + currentShape.boundingBox.width / 2;
+                        const centerY = currentShape.boundingBox.y + currentShape.boundingBox.height / 2;
+                        startRotationMouseAngle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
+                        startShapeRotation = currentShape.rotation;
+                        dragOldPosStroke = cloneStrokeData(currentShape);
+                    }
+                } else {
+                    isDraggingStroke = true;
+                    dragOldPosStroke = cloneStrokeData(currentShape);
+                    startX = x;
+                    startY = y;
+                }
+                clickedOnShape = true;
+            }
+        }
+
+        if (!clickedOnShape && currentShape) {
+            currentShape.deselectStroke();
+            currentShape = null;
+            disableAllSideBars(); // Hide sidebar when deselecting
+        }
+    }
 }
 
 function handleMouseMove(e) {
-  if (isDrawingStroke && isPaintToolActive) {
-      const { x, y } = getSvgCoordinates(e);
-      points.push([x, y, e.pressure]);
-      currentStroke.points = points;
-      currentStroke.draw();
-  } else if (isSelectionToolActive) {
-      selectionManager.handleMouseMove(e);
-  }
+    const { x, y } = getSvgCoordinates(e);
+    
+    if (isDrawingStroke && isPaintToolActive) {
+        points.push([x, y, e.pressure]);
+        currentStroke.points = points;
+        currentStroke.draw();
+    } else if (isDraggingStroke && currentShape && currentShape.isSelected) {
+        const dx = x - startX;
+        const dy = y - startY;
+        currentShape.move(dx, dy);
+        startX = x;
+        startY = y;
+        currentShape.draw();
+    } else if (isResizingStroke && currentShape && currentShape.isSelected) {
+        currentShape.updatePosition(resizingAnchorIndex, x, y);
+    } else if (isRotatingStroke && currentShape && currentShape.isSelected) {
+        const centerX = currentShape.boundingBox.x + currentShape.boundingBox.width / 2;
+        const centerY = currentShape.boundingBox.y + currentShape.boundingBox.height / 2;
+        const currentMouseAngle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
+        const angleDiff = currentMouseAngle - startRotationMouseAngle;
+        currentShape.rotate(startShapeRotation + angleDiff);
+        currentShape.draw();
+    }
 }
 
 function handleMouseUp(e) {
-  isDrawingStroke = false;
-  selectionManager.handleMouseUp(e);
+    if (isDrawingStroke) {
+        isDrawingStroke = false;
+        
+        // Check if stroke is too small
+        if (currentStroke.points.length < 2) {
+            shapes.pop();
+            if (currentStroke.group.parentNode) {
+                currentStroke.group.parentNode.removeChild(currentStroke.group);
+            }
+            currentStroke = null;
+            currentShape = null;
+        } else {
+            pushCreateAction(currentStroke);
+        }
+        
+        currentStroke = null;
+    }
+    
+    if ((isDraggingStroke || isResizingStroke || isRotatingStroke) && dragOldPosStroke && currentShape) {
+        const newPos = cloneStrokeData(currentShape);
+        const stateChanged = 
+            JSON.stringify(dragOldPosStroke.points) !== JSON.stringify(newPos.points) ||
+            dragOldPosStroke.rotation !== newPos.rotation;
+        
+        if (stateChanged) {
+            pushTransformAction(currentShape, dragOldPosStroke, newPos);
+        }
+        dragOldPosStroke = null;
+    }
+    
+    isDraggingStroke = false;
+    isResizingStroke = false;
+    isRotatingStroke = false;
+    resizingAnchorIndex = null;
+    startRotationMouseAngle = null;
+    startShapeRotation = null;
+    svg.style.cursor = 'default';
 }
 
 // Color and thickness selection
 strokeColors.forEach(span => {
-  span.addEventListener("click", (event) => {
-      strokeColors.forEach(el => el.classList.remove("selected"));
-      span.classList.add("selected");
-      strokeColor = span.getAttribute("data-id");
-      
-      if (selectionManager.selectedShapes.length > 0) {
-          selectionManager.selectedShapes.forEach(shape => {
-              shape.options.stroke = strokeColor;
-              shape.draw();
-          });
-      }
-  });
+    span.addEventListener("click", (event) => {
+        strokeColors.forEach(el => el.classList.remove("selected"));
+        span.classList.add("selected");
+        
+        if (currentShape instanceof FreehandStroke && currentShape.isSelected) {
+            const oldOptions = {...currentShape.options};
+            currentShape.options.stroke = span.getAttribute("data-id");
+            currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            strokeColor = span.getAttribute("data-id");
+        }
+    });
 });
 
 strokeThicknesses.forEach(span => {
-  span.addEventListener("click", (event) => {
-      strokeThicknesses.forEach(el => el.classList.remove("selected"));
-      span.classList.add("selected");
-      strokeThickness = parseInt(span.getAttribute("data-id"));
-      
-      if (selectionManager.selectedShapes.length > 0) {
-          selectionManager.selectedShapes.forEach(shape => {
-              shape.options.strokeWidth = strokeThickness;
-              shape.draw();
-          });
-      }
-  });
+    span.addEventListener("click", (event) => {
+        strokeThicknesses.forEach(el => el.classList.remove("selected"));
+        span.classList.add("selected");
+        
+        if (currentShape instanceof FreehandStroke && currentShape.isSelected) {
+            const oldOptions = {...currentShape.options};
+            currentShape.options.strokeWidth = parseInt(span.getAttribute("data-id"));
+            currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            strokeThickness = parseInt(span.getAttribute("data-id"));
+        }
+    });
+});
+
+// Clone functions for undo/redo
+function cloneOptions(options) {
+    return JSON.parse(JSON.stringify(options));
+}
+
+function cloneStrokeData(stroke) {
+    return {
+        points: JSON.parse(JSON.stringify(stroke.points)),
+        rotation: stroke.rotation,
+        options: cloneOptions(stroke.options)
+    };
+}
+
+// Copy/paste functionality
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (currentShape && currentShape.shapeName === 'freehandStroke' && currentShape.isSelected) {
+            copiedShapeData = cloneStrokeData(currentShape);
+        }
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (copiedShapeData) {
+            e.preventDefault();
+            let pasteX, pasteY;
+            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') {
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = lastMousePos.x;
+                svgPoint.y = lastMousePos.y;
+                const CTM = svg.getScreenCTM().inverse();
+                const userPoint = svgPoint.matrixTransform(CTM);
+                pasteX = userPoint.x;
+                pasteY = userPoint.y;
+            } else {
+                const svgRect = svg.getBoundingClientRect();
+                pasteX = svgRect.width / 2;
+                pasteY = svgRect.height / 2;
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = pasteX;
+                svgPoint.y = pasteY;
+                const CTM = svg.getScreenCTM().inverse();
+                const userPoint = svgPoint.matrixTransform(CTM);
+                pasteX = userPoint.x;
+                pasteY = userPoint.y;
+            }
+
+            shapes.forEach(shape => {
+                if (shape.isSelected) {
+                    shape.removeSelection();
+                }
+            });
+
+            currentShape = null;
+            disableAllSideBars();
+            
+            const offset = 20;
+            const offsetPoints = copiedShapeData.points.map(point => [
+                point[0] + offset, 
+                point[1] + offset, 
+                point[2] || 0.5
+            ]);
+            
+            const newStroke = new FreehandStroke(offsetPoints, cloneOptions(copiedShapeData.options));
+            newStroke.rotation = copiedShapeData.rotation;
+            
+            shapes.push(newStroke);
+            newStroke.isSelected = true;
+            currentShape = newStroke;
+            newStroke.draw();
+            pushCreateAction(newStroke);
+        }
+    }
 });
 
 // Event listeners

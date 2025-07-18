@@ -70,6 +70,19 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y }
             }
         });
+    } else if (shape.shapeName === 'freehandStroke') {
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: {
+                points: JSON.parse(JSON.stringify(oldPos.points)),
+                rotation: oldPos.rotation
+            },
+            newPos: {
+                points: JSON.parse(JSON.stringify(newPos.points)),
+                rotation: newPos.rotation
+            }
+        });
     } else if(shape.shapeName === "rectangle") {
         undoStack.push({
             type: 'transform',
@@ -150,6 +163,13 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+        } else if (action.shape.shapeName === 'freehandStroke') {
+            // Handle freehand stroke transform undo
+            action.shape.points = JSON.parse(JSON.stringify(action.oldPos.points));
+            action.shape.rotation = action.oldPos.rotation;
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
         } else if(action.shape.shapeName === "rectangle") {
             // Handle other shape transform undo
             action.shape.x = action.oldPos.x;
@@ -216,6 +236,13 @@ export function redo() {
             // Handle line transform redo
             action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
             action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        } else if (action.shape.shapeName === 'freehandStroke') {
+            // Handle freehand stroke transform redo
+            action.shape.points = JSON.parse(JSON.stringify(action.newPos.points));
+            action.shape.rotation = action.newPos.rotation;
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();

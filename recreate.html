@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/CSS/squareSidebar.css">
     <link rel="stylesheet" href="/CSS/circleSidebar.css">
     <link rel="stylesheet" href="/CSS/lineSidebar.css">
+    <link rel="stylesheet" href="/CSS/paintbrushSidebar.css">
     <link rel="icon" type="image/x-icon" href="/Images/lixSketchLogo.png">
 </head>
 <body>
@@ -169,13 +170,32 @@
   
           </div>
 
+          <div class="paintBrushSideBar hidden" id="paintBrushSideBar">
+            <p class="strokeColorLabel">Stroke Color</p>
+            <div class="strokeColors">
+                <span class="white selected" data-id="#fff"></span>
+                <span class="red" data-id="#FF8383"></span>
+                <span class="green" data-id="#3A994C"></span>
+                <span class="skyBlue" data-id="#56A2E8"></span>
+                <span class="darkYellow" data-id="#FFD700"></span>
+            </div>
+            <p class="strokeThicknessLabel"> Stroke Thickness </p>
+                <div class="strokeThickness">
+                    <span class="thin" data-id="2"> - </span>
+                    <span class="medium selected" data-id="5"> - </span>
+                    <span class="thick" data-id="7"> - </span>
+                </div>
+            
+        </div>
+
         <div class="toolbar">
             <i class='bx bxs-hand ' ></i>
             <div class="spacer"></div>
             <i class='bx bxs-pointer'></i>
             <i class='bx bx-square ' ></i>
             <i class='bx bx-circle'></i>
-            <i class='bx bxs-minus selected'></i> 
+            <i class='bx bxs-minus'></i> 
+            <i class='bx bx-stroke-pen selected'></i> 
             <i class='bx bx-image-alt' id="importImage"></i>
             <i class='bx bxs-eraser ' ></i>
         </div>
@@ -212,7 +232,8 @@
     <!-- <script src="JS/drawCircle.js" type="module" defer></script> -->
     <!-- <script src="JS/drawSquare.js" type="module" defer></script> -->
     <!-- <script src="JS/imageTool.js" type="module" defer></script> -->
-    <script src="JS/lineTool.js" type="module" defer></script>
+    <!-- <script src="JS/lineTool.js" type="module" defer></script> -->
+    <script src="JS/canvasStroke.js" type="module" defer></script>
     <script src="JS/copyAndPaste.js"  type="module" defer></script>
     <script src="JS/zoomFunction.js" defer></script>
     <script src="JS/eraserTrail.js" defer></script>

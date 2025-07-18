@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bxs-minus");
+let selectedTool = document.querySelector(".bx-stroke-pen");
 let history = [];
 let redoStack = [];
 let shapes = [];
@@ -86,11 +86,11 @@ const ACTION_PASTE = "paste";
 
 
 function toolExtraPopup() {
-    if (selectedTool.classList.contains("bxs-paint")) {
+    if (selectedTool.classList.contains("bx-stroke-pen")) {
 
         disableAllTools();
         disSelectAllTools();
-        document.querySelector(".bxs-paint").classList.add("selected");
+        document.querySelector(".bx-stroke-pen").classList.add("selected");
         isPaintToolActive = true;
         svg.style.cursor = "crosshair"
         disableAllSideBars();
@@ -209,8 +209,8 @@ function disSelectAllTools()
 
 function disableAllSideBars()
 {
-  // paintBrushSideBar.classList.add("hidden");
-  // lineSideBar.classList.add("hidden");
+  paintBrushSideBar.classList.add("hidden");
+  lineSideBar.classList.add("hidden");
   squareSideBar.classList.add("hidden");
   circleSideBar.classList.add("hidden");
   // arrowSideBar.classList.add("hidden");
