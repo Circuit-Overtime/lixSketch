@@ -2,6 +2,28 @@
 const undoStack = [];
 const redoStack = [];
 
+// Import references to text-related variables and functions
+let selectedElement = null;
+let updateSelectionFeedback = null;
+let svg = null;
+
+// Function to set references from other modules
+export function setTextReferences(element, updateFn, svgElement) {
+    selectedElement = element;
+    updateSelectionFeedback = updateFn;
+    svg = svgElement;
+}
+
+// Function to get current selectedElement (called from other modules)
+export function getCurrentSelectedElement() {
+    return selectedElement;
+}
+
+// Function to update selectedElement reference (called from other modules)
+export function updateSelectedElement(element) {
+    selectedElement = element;
+}
+
 // Call this after creating a new shape (e.g., Rectangle)
 export function pushCreateAction(shape) {
     undoStack.push({
@@ -18,7 +40,25 @@ export function pushDeleteAction(shape) {
 }
 
 export function pushTransformAction(shape, oldPos, newPos) {
-    if (shape.type === 'image') {
+    if (shape.type === 'text') {
+        // Handle text transforms
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: {
+                x: oldPos.x,
+                y: oldPos.y,
+                rotation: oldPos.rotation,
+                fontSize: oldPos.fontSize
+            },
+            newPos: {
+                x: newPos.x,
+                y: newPos.y,
+                rotation: newPos.rotation,
+                fontSize: newPos.fontSize
+            }
+        });
+    } else if (shape.type === 'image') {
         // Handle image transforms
         undoStack.push({
             type: 'transform',
@@ -83,7 +123,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 rotation: newPos.rotation
             }
         });
-    } else if(shape.shapeName === "rectangle") {
+    } else if (shape.shapeName === "rectangle") {
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -119,7 +159,13 @@ export function undo() {
     const action = undoStack.pop();
     
     if (action.type === 'create') {
-        if (action.shape.type === 'image') {
+        if (action.shape.type === 'text') {
+            // Handle text creation undo
+            if (action.shape.element.parentNode) {
+                action.shape.element.parentNode.removeChild(action.shape.element);
+            }
+        }
+        else if (action.shape.type === 'image') {
             // Handle image creation undo
             action.shape.remove();
         } else {
@@ -132,18 +178,47 @@ export function undo() {
         }
         redoStack.push(action);
     } else if (action.type === 'delete') {
-        if (action.shape.type === 'image') {
+        if (action.shape.type === 'text') {
+            // Handle text deletion undo
+            if (svg) {
+                svg.appendChild(action.shape.element);
+            }
+        } else if (action.shape.type === 'image') {
             // Handle image deletion undo
             action.shape.restore();
         } else {
             // Handle other shape deletion undo
             shapes.push(action.shape);
-            svg.appendChild(action.shape.group);
+            if (svg) {
+                svg.appendChild(action.shape.group);
+            }
         }
         redoStack.push(action);
     }
     else if (action.type === 'transform') {
-        if (action.shape.type === 'image') {
+        if (action.shape.type === 'text') {
+            // Handle text transform undo
+            const textElement = action.shape.element.querySelector('text');
+            if (textElement && action.oldPos.fontSize !== undefined) {
+                textElement.setAttribute('font-size', action.oldPos.fontSize + 'px');
+            }
+            
+            // Restore position and rotation
+            const centerX = textElement ? textElement.getBBox().x + textElement.getBBox().width / 2 : 0;
+            const centerY = textElement ? textElement.getBBox().y + textElement.getBBox().height / 2 : 0;
+            
+            action.shape.element.setAttribute('transform', 
+                `translate(${action.oldPos.x}, ${action.oldPos.y}) rotate(${action.oldPos.rotation}, ${centerX}, ${centerY})`
+            );
+            
+            action.shape.element.setAttribute('data-x', action.oldPos.x);
+            action.shape.element.setAttribute('data-y', action.oldPos.y);
+            
+            // Update feedback if selected
+            if (selectedElement === action.shape.element && updateSelectionFeedback) {
+                setTimeout(updateSelectionFeedback, 0);
+            }
+        } else if (action.shape.type === 'image') {
             // Handle image transform undo
             action.shape.restore(action.oldPos);
         } else if (action.shape.shapeName === 'circle') {
@@ -170,7 +245,7 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else if(action.shape.shapeName === "rectangle") {
+        } else if (action.shape.shapeName === "rectangle") {
             // Handle other shape transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
@@ -184,8 +259,25 @@ export function undo() {
         redoStack.push(action);
     }
     else if (action.type === 'optionsChange') {
-        action.shape.options = action.oldOptions;
-        action.shape.draw();
+        if (action.shape.type === 'text') {
+            // Handle text options change undo
+            const textElement = action.shape.element.querySelector('text');
+            if (textElement) {
+                if (action.oldOptions.color) textElement.setAttribute('fill', action.oldOptions.color);
+                if (action.oldOptions.font) textElement.setAttribute('font-family', action.oldOptions.font);
+                if (action.oldOptions.size) textElement.setAttribute('font-size', action.oldOptions.size);
+                if (action.oldOptions.align) textElement.setAttribute('text-anchor', action.oldOptions.align);
+                
+                // Update feedback if selected
+                if (selectedElement === action.shape.element && updateSelectionFeedback) {
+                    setTimeout(updateSelectionFeedback, 0);
+                }
+            }
+        } else {
+            // Handle other shape options change undo
+            action.shape.options = action.oldOptions;
+            action.shape.draw();
+        }
         redoStack.push(action);
     }
 }
@@ -195,17 +287,31 @@ export function redo() {
     const action = redoStack.pop();
     
     if (action.type === 'create') {
-        if (action.shape.type === 'image') {
+        if (action.shape.type === 'text') {
+            // Handle text creation redo
+            if (svg) {
+                svg.appendChild(action.shape.element);
+            }
+        }
+        else if (action.shape.type === 'image') {
             // Handle image creation redo
             action.shape.restore();
         } else {
             // Handle other shape creation redo
             shapes.push(action.shape);
-            svg.appendChild(action.shape.group);
+            if (svg) {
+                svg.appendChild(action.shape.group);
+            }
         }
         undoStack.push(action);
     } else if (action.type === 'delete') {
-        if (action.shape.type === 'image') {
+        if (action.shape.type === 'text') {
+            // Handle text deletion redo
+            if (action.shape.element.parentNode) {
+                action.shape.element.parentNode.removeChild(action.shape.element);
+            }
+        }
+        else if (action.shape.type === 'image') {
             // Handle image deletion redo
             action.shape.remove();
         } else {
@@ -219,7 +325,29 @@ export function redo() {
         undoStack.push(action);
     }
     else if (action.type === 'transform') {
-        if (action.shape.type === 'image') {
+        if (action.shape.type === 'text') {
+            // Handle text transform redo
+            const textElement = action.shape.element.querySelector('text');
+            if (textElement && action.newPos.fontSize !== undefined) {
+                textElement.setAttribute('font-size', action.newPos.fontSize + 'px');
+            }
+            
+            // Restore position and rotation
+            const centerX = textElement ? textElement.getBBox().x + textElement.getBBox().width / 2 : 0;
+            const centerY = textElement ? textElement.getBBox().y + textElement.getBBox().height / 2 : 0;
+            
+            action.shape.element.setAttribute('transform', 
+                `translate(${action.newPos.x}, ${action.newPos.y}) rotate(${action.newPos.rotation}, ${centerX}, ${centerY})`
+            );
+            
+            action.shape.element.setAttribute('data-x', action.newPos.x);
+            action.shape.element.setAttribute('data-y', action.newPos.y);
+            
+            // Update feedback if selected
+            if (selectedElement === action.shape.element && updateSelectionFeedback) {
+                setTimeout(updateSelectionFeedback, 0);
+            }
+        } else if (action.shape.type === 'image') {
             // Handle image transform redo
             action.shape.restore(action.newPos);
         } else if (action.shape.shapeName === 'circle') {
@@ -246,7 +374,7 @@ export function redo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else if(action.shape.shapeName === "rectangle") {
+        } else if (action.shape.shapeName === "rectangle") {
             // Handle other shape transform redo
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;

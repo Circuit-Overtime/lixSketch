@@ -1,3 +1,21 @@
+@font-face {
+    font-family: "lixFont";
+    src: url("../FONT/lixFont.woff2") format("woff2");
+}
+@font-face {
+    font-family: "lixCode";
+    src: url("../FONT/lixCode.ttf") format("truetype");
+}
+@font-face {
+    font-family: "lixDefault";
+    src: url("../FONT/lixDefault.ttf") format("truetype");
+}
+@font-face {
+    font-family: "lixFancy";
+    src: url("../FONT/lixFancy.ttf") format("truetype");
+}
+
+
 .textSideBar {
     position: fixed;
     top: 50%;
