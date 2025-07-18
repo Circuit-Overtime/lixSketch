@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-image-alt");
+let selectedTool = document.querySelector(".bxs-minus");
 let history = [];
 let redoStack = [];
 let shapes = [];
@@ -164,11 +164,11 @@ function toolExtraPopup() {
         isLaserToolActive = true;
         disableAllSideBars();
     }
-    else if(selectedTool.classList.contains("bx-dots-horizontal-rounded"))
+    else if(selectedTool.classList.contains("bxs-minus"))
     {
         disableAllTools();
         disSelectAllTools();
-        document.querySelector(".bx-dots-horizontal-rounded").classList.add("selected");
+        document.querySelector(".bxs-minus").classList.add("selected");
         svg.style.cursor = "crosshair";
         isLineToolActive = true;
         disableAllSideBars();

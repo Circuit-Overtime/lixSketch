@@ -57,7 +57,20 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 rotation: newPos.rotation
             }
         });
-    } else {
+    } else if (shape.shapeName === 'line') {
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: {
+                startPoint: { x: oldPos.startPoint.x, y: oldPos.startPoint.y },
+                endPoint: { x: oldPos.endPoint.x, y: oldPos.endPoint.y }
+            },
+            newPos: {
+                startPoint: { x: newPos.startPoint.x, y: newPos.startPoint.y },
+                endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y }
+            }
+        });
+    } else if(shape.shapeName === "rectangle") {
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -130,7 +143,14 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else {
+        } else if (action.shape.shapeName === 'line') {
+            // Handle line transform undo
+            action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
+            action.shape.endPoint = { x: action.oldPos.endPoint.x, y: action.oldPos.endPoint.y };
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        } else if(action.shape.shapeName === "rectangle") {
             // Handle other shape transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
@@ -192,7 +212,14 @@ export function redo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else {
+        } else if (action.shape.shapeName === 'line') {
+            // Handle line transform redo
+            action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
+            action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };
+            action.shape.isSelected = false;
+            if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        } else if(action.shape.shapeName === "rectangle") {
             // Handle other shape transform redo
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;

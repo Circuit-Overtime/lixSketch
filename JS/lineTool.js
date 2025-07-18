@@ -1,3 +1,5 @@
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+
 // Update event handlers to use the Line class
 let isDrawingLine = false;
 let currentLine = null;
@@ -10,32 +12,40 @@ let lineStrokeStyle = "solid";
 let lineEdgeType = 1;
 let lineSktetchRate = 3;
 
+// Add variables for dragging functionality
+let isDraggingLine = false;
+let dragOldPosLine = null;
+let copiedShapeData = null;
+
+let startX, startY;
+
 let lineColorOptions = document.querySelectorAll(".lineColor > span");
 let lineThicknessOptions = document.querySelectorAll(".lineThicknessSpan");
 let lineOutlineOptions = document.querySelectorAll(".lineStyleSpan");
 let lineSlopeOptions = document.querySelectorAll(".lineSlopeSpan");
 let lineEdgeOptions = document.querySelectorAll(".lineEdgeSpan");
+
+// Add coordinate conversion function like in drawCircle.js
+function getSVGCoordsFromMouse(e) {
+    const viewBox = svg.viewBox.baseVal;
+    const rect = svg.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const svgX = viewBox.x + (mouseX / rect.width) * viewBox.width;
+    const svgY = viewBox.y + (mouseY / rect.height) * viewBox.height;
+    return { x: svgX, y: svgY };
+}
+
 class Line {
     constructor(startPoint, endPoint, options = {}) {
         this.startPoint = startPoint;
         this.endPoint = endPoint;
-        this.options = {
-            stroke: options.stroke || lineColor,
-            strokeWidth: options.strokeWidth || lineStrokeWidth,
-            strokeDasharray: options.lineStrokeStyle === "dashed" ? "5,5" : 
-                           (options.lineStrokeStyle === "dotted" ? "2,12" : ""),
-            roughness: options.lineSktetchRate || lineSktetchRate,
-            bowing: options.lineEdgeType || lineEdgeType,
-            ...options
-        };
-        
-        this.element = null;
+        this.options = { ...options };
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         this.isSelected = false;
         this.anchors = [];
-        this.selectionPadding = 8;
         this.selectionOutline = null;
-        
+        this.shapeName = "line"; // Add shapeName property
         svg.appendChild(this.group);
         this.draw();
     }
@@ -51,7 +61,6 @@ class Line {
             this.endPoint.x, this.endPoint.y,
             this.options
         );
-        
         this.element = line;
         this.group.appendChild(line);
 
@@ -60,11 +69,31 @@ class Line {
         }
     }
 
+    selectLine() {
+        this.isSelected = true;
+        this.draw();
+    }
+
+    deselectLine() {
+        this.isSelected = false;
+        this.anchors = [];
+        this.draw();
+    }
+
+    // Add removeSelection method like in Circle class
+    removeSelection() {
+        this.anchors.forEach(anchor => {
+            if (anchor.parentNode === this.group) {
+                this.group.removeChild(anchor);
+            }
+        });
+        this.anchors = [];
+        this.isSelected = false;
+    }
+
     addAnchors() {
         const anchorSize = 10 / currentZoom;
         const anchorStrokeWidth = 2 / currentZoom;
-
-        // Create start and end anchors
         [this.startPoint, this.endPoint].forEach((point, index) => {
             const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             anchor.setAttribute('cx', point.x);
@@ -74,76 +103,46 @@ class Line {
             anchor.setAttribute('stroke', '#5B57D1');
             anchor.setAttribute('stroke-width', anchorStrokeWidth);
             anchor.setAttribute('class', 'anchor line-anchor');
-            anchor.setAttribute('data-index', index);
             anchor.style.cursor = 'grab';
             anchor.style.pointerEvents = 'all';
-
+            anchor.dataset.index = index;
+            anchor.addEventListener('pointerdown', (e) => this.startAnchorDrag(e, index));
             this.group.appendChild(anchor);
             this.anchors[index] = anchor;
         });
-
-        // Add selection outline
-        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        outline.setAttribute('x1', this.startPoint.x);
-        outline.setAttribute('y1', this.startPoint.y);
-        outline.setAttribute('x2', this.endPoint.x);
-        outline.setAttribute('y2', this.endPoint.y);
-        outline.setAttribute('stroke', '#5B57D1');
-        outline.setAttribute('stroke-width', 1.5 / currentZoom);
-        outline.setAttribute('stroke-dasharray', '4,2');
-        outline.setAttribute('class', 'selection-outline');
-        this.group.appendChild(outline);
-        this.selectionOutline = outline;
     }
 
-    contains(x, y) {
-        const x1 = this.startPoint.x;
-        const y1 = this.startPoint.y;
-        const x2 = this.endPoint.x;
-        const y2 = this.endPoint.y;
+    startAnchorDrag(e, index) {
+        e.stopPropagation();
         
-        const strokeWidth = this.options.strokeWidth;
-        const tolerance = 5 / currentZoom;
+        // Store old position for undo
+        dragOldPosLine = {
+            startPoint: { x: this.startPoint.x, y: this.startPoint.y },
+            endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+        };
+
+        const onPointerMove = (event) => {
+            const { x, y } = getSVGCoordsFromMouse(event);
+            this.updatePosition(index, x, y);
+        };
+        const onPointerUp = () => {
+            console.log(dragOldPosLine);
+            if (dragOldPosLine) {
+                const newPos = {
+                    startPoint: { x: this.startPoint.x, y: this.startPoint.y },
+                    endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+                };
+                console.log(newPos);
+                pushTransformAction(this, dragOldPosLine, newPos);
+                dragOldPosLine = null;
+            }
+            
+            svg.removeEventListener('pointermove', onPointerMove);
+            svg.removeEventListener('pointerup', onPointerUp);
+        };
         
-        // Check if point is near the line segment
-        return this.pointToLineDistance(x, y, x1, y1, x2, y2) <= tolerance;
-    }
-
-    pointToLineDistance(x, y, x1, y1, x2, y2) {
-        const A = x - x1;
-        const B = y - y1;
-        const C = x2 - x1;
-        const D = y2 - y1;
-
-        const dot = A * C + B * D;
-        const lenSq = C * C + D * D;
-        let param = -1;
-        if (lenSq !== 0) param = dot / lenSq;
-
-        let xx, yy;
-
-        if (param < 0) {
-            xx = x1;
-            yy = y1;
-        } else if (param > 1) {
-            xx = x2;
-            yy = y2;
-        } else {
-            xx = x1 + param * C;
-            yy = y1 + param * D;
-        }
-
-        const dx = x - xx;
-        const dy = y - yy;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    move(dx, dy) {
-        this.startPoint.x += dx;
-        this.startPoint.y += dy;
-        this.endPoint.x += dx;
-        this.endPoint.y += dy;
-        this.draw();
+        svg.addEventListener('pointermove', onPointerMove);
+        svg.addEventListener('pointerup', onPointerUp);
     }
 
     updatePosition(anchorIndex, newX, newY) {
@@ -155,16 +154,71 @@ class Line {
             this.endPoint.y = newY;
         }
         this.draw();
-        this.isSelected = true;
+    }
+
+    // Add move method for dragging the entire line
+    move(dx, dy) {
+        this.startPoint.x += dx;
+        this.startPoint.y += dy;
+        this.endPoint.x += dx;
+        this.endPoint.y += dy;
+    }
+
+    contains(x, y) {
+        const tolerance = 5 / currentZoom;
+        return this.pointToLineDistance(x, y, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y) <= tolerance;
+    }
+
+    pointToLineDistance(x, y, x1, y1, x2, y2) {
+        const A = x - x1;
+        const B = y - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+        if (lenSq !== 0) param = dot / lenSq;
+        let xx, yy;
+        if (param < 0) {
+            xx = x1;
+            yy = y1;
+        } else if (param > 1) {
+            xx = x2;
+            yy = y2;
+        } else {
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+        }
+        const dx = x - xx;
+        const dy = y - yy;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 }
 
+// Add delete functionality
+function deleteCurrentShape() {
+    if (currentShape && currentShape.shapeName === 'line') {
+        const idx = shapes.indexOf(currentShape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (currentShape.group.parentNode) {
+            currentShape.group.parentNode.removeChild(currentShape.group);
+        }
+        pushDeleteAction(currentShape);
+        currentShape = null;
+        disableAllSideBars();
+    }
+}
 
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && currentShape && currentShape.shapeName === 'line') {
+        deleteCurrentShape();
+    }
+});
 
 const handleMouseDown = (e) => {
     if (!isLineToolActive && !isSelectionToolActive) return;
 
-    const { x, y } = selectionManager.getSVGCoords(e);
+    const { x, y } = getSVGCoordsFromMouse(e);
 
     if (isLineToolActive) {
         isDrawingLine = true;
@@ -174,24 +228,80 @@ const handleMouseDown = (e) => {
             {
                 stroke: lineColor,
                 strokeWidth: lineStrokeWidth,
-                lineStrokeStyle: lineStrokeStyle,
-                lineEdgeType: lineEdgeType,
-                lineSktetchRate: lineSktetchRate
+                roughness: lineSktetchRate,
+                bowing: lineEdgeType,
+                strokeDasharray: lineStrokeStyle === "dashed" ? "5,5" : (lineStrokeStyle === "dotted" ? "2,12" : "")
             }
         );
         shapes.push(currentLine);
+        currentShape = currentLine;
     } else if (isSelectionToolActive) {
-        selectionManager.handleMouseDown(e);
+        let clickedOnShape = false;
+        
+        // Check if clicking on current selected line
+        if (currentShape && currentShape.shapeName === 'line' && currentShape.isSelected) {
+            if (currentShape.contains(x, y)) {
+                isDraggingLine = true;
+                dragOldPosLine = {
+                    startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                };
+                startX = x;
+                startY = y;
+                clickedOnShape = true;
+            }
+        }
+
+        // If not clicking on selected shape, check for other shapes
+        if (!clickedOnShape) {
+            let shapeToSelect = null;
+            for (let i = shapes.length - 1; i >= 0; i--) {
+                const shape = shapes[i];
+                if (shape instanceof Line && shape.contains(x, y)) {
+                    shapeToSelect = shape;
+                    break;
+                }
+            }
+
+            if (currentShape && currentShape !== shapeToSelect) {
+                currentShape.deselectLine();
+                currentShape = null;
+            }
+
+            if (shapeToSelect) {
+                currentShape = shapeToSelect;
+                currentShape.selectLine();
+                isDraggingLine = true;
+                dragOldPosLine = {
+                    startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                };
+                startX = x;
+                startY = y;
+                clickedOnShape = true;
+            }
+        }
+
+        if (!clickedOnShape && currentShape) {
+            currentShape.deselectLine();
+            currentShape = null;
+        }
     }
 };
 
 const handleMouseMove = (e) => {
+    const { x, y } = getSVGCoordsFromMouse(e);
+    
     if (isDrawingLine && currentLine) {
-        const { x, y } = selectionManager.getSVGCoords(e);
         currentLine.endPoint = { x, y };
         currentLine.draw();
-    } else if (isSelectionToolActive) {
-        selectionManager.handleMouseMove(e);
+    } else if (isDraggingLine && currentShape && currentShape.isSelected) {
+        const dx = x - startX;
+        const dy = y - startY;
+        currentShape.move(dx, dy);
+        startX = x;
+        startY = y;
+        currentShape.draw();
     }
 };
 
@@ -205,61 +315,44 @@ const handleMouseUp = (e) => {
         const lengthSq = dx * dx + dy * dy;
         
         if (lengthSq < (5 / currentZoom) ** 2) {
-            currentLine.destroy();
-            const index = shapes.indexOf(currentLine);
-            if (index > -1) shapes.splice(index, 1);
+            shapes.pop();
+            if (currentLine.group.parentNode) {
+                currentLine.group.parentNode.removeChild(currentLine.group);
+            }
+            currentLine = null;
+            currentShape = null;
+        } else {
+            // Push create action for undo/redo
+            pushCreateAction(currentLine);
         }
         
         currentLine = null;
     }
     
-    selectionManager.handleMouseUp(e);
+    if (isDraggingLine && dragOldPosLine && currentShape) {
+        const newPos = {
+            startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+        };
+        const stateChanged = dragOldPosLine.startPoint.x !== newPos.startPoint.x || 
+                           dragOldPosLine.startPoint.y !== newPos.startPoint.y ||
+                           dragOldPosLine.endPoint.x !== newPos.endPoint.x || 
+                           dragOldPosLine.endPoint.y !== newPos.endPoint.y;
+        
+        if (stateChanged) {
+            pushTransformAction(currentShape, dragOldPosLine, newPos);
+        }
+        dragOldPosLine = null;
+    }
+    
+    isDraggingLine = false;
 };
-
 
 // --- Event Handlers ---
 
-
-svg.addEventListener("pointerdown", (e) => {
-    if (!isLineToolActive) return;
-
-    const CTM = svg.getScreenCTM();
-    const startX = (e.clientX - CTM.e) / CTM.a;
-    const startY = (e.clientY - CTM.f) / CTM.d;
-
-    currentLine = new Line({ x: startX, y: startY }, { x: startX, y: startY }, {
-        stroke: lineColor,
-        strokeWidth: lineStrokeWidth,
-        strokeStyle: lineStrokeStyle,
-        roughness: lineSktetchRate,
-        bowing: lineEdgeType
-    });
-    shapes.push(currentLine);
-});
-
-svg.addEventListener("pointermove", (e) => {
-    if (!currentLine) return;
-
-    const CTM = svg.getScreenCTM();
-    const endX = (e.clientX - CTM.e) / CTM.a;
-    const endY = (e.clientY - CTM.f) / CTM.d;
-
-    currentLine.endPoint = { x: endX, y: endY };
-    currentLine.draw();
-});
-
-svg.addEventListener("pointerup", () => {
-    if (currentLine) {
-        // Finalize the line
-        if (Math.abs(currentLine.startPoint.x - currentLine.endPoint.x) < 1 &&
-            Math.abs(currentLine.startPoint.y - currentLine.endPoint.y) < 1) {
-            // Remove the line if it's too small
-            currentLine.destroy();
-            shapes.pop();
-        }
-        currentLine = null;
-    }
-});
+svg.addEventListener("mousedown", handleMouseDown);
+svg.addEventListener("mousemove", handleMouseMove);
+svg.addEventListener("mouseup", handleMouseUp);
 
 // --- Style Option Event Listeners ---
 lineColorOptions.forEach((span) => {
@@ -267,24 +360,31 @@ lineColorOptions.forEach((span) => {
         event.stopPropagation();
         lineColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
-        lineColor = span.getAttribute("data-id");
         
         if (currentShape instanceof Line && currentShape.isSelected) {
-            currentShape.options.stroke = lineColor;
+            const oldOptions = {...currentShape.options};
+            currentShape.options.stroke = span.getAttribute("data-id");
             currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            lineColor = span.getAttribute("data-id");
         }
     });
 });
+
 lineThicknessOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
         event.stopPropagation();
         lineThicknessOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
-        lineStrokeWidth = parseInt(span.getAttribute("data-id"));
-
+        
         if (currentShape instanceof Line && currentShape.isSelected) {
-            currentShape.options.strokeWidth = lineStrokeWidth;
+            const oldOptions = {...currentShape.options};
+            currentShape.options.strokeWidth = parseInt(span.getAttribute("data-id"));
             currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            lineStrokeWidth = parseInt(span.getAttribute("data-id"));
         }
     });
 });
@@ -294,13 +394,17 @@ lineOutlineOptions.forEach((span) => {
         event.stopPropagation();
         lineOutlineOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
-        lineStrokeStyle = span.getAttribute("data-id");
-
+        
         if (currentShape instanceof Line && currentShape.isSelected) {
+            const oldOptions = {...currentShape.options};
+            const style = span.getAttribute("data-id");
             currentShape.options.strokeDasharray = 
-                lineStrokeStyle === "dashed" ? "5,5" : 
-                (lineStrokeStyle === "dotted" ? "2,12" : "");
+                style === "dashed" ? "5,5" : 
+                (style === "dotted" ? "2,12" : "");
             currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            lineStrokeStyle = span.getAttribute("data-id");
         }
     });
 });
@@ -310,11 +414,14 @@ lineSlopeOptions.forEach((span) => {
         event.stopPropagation();
         lineSlopeOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
-        lineSktetchRate = parseFloat(span.getAttribute("data-id"));
-
+        
         if (currentShape instanceof Line && currentShape.isSelected) {
-            currentShape.options.roughness = lineSktetchRate;
+            const oldOptions = {...currentShape.options};
+            currentShape.options.roughness = parseFloat(span.getAttribute("data-id"));
             currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            lineSktetchRate = parseFloat(span.getAttribute("data-id"));
         }
     });
 });
@@ -324,11 +431,86 @@ lineEdgeOptions.forEach((span) => {
         event.stopPropagation();
         lineEdgeOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
-        lineEdgeType = parseFloat(span.getAttribute("data-id"));
-
+        
         if (currentShape instanceof Line && currentShape.isSelected) {
-            currentShape.options.bowing = lineEdgeType;
+            const oldOptions = {...currentShape.options};
+            currentShape.options.bowing = parseFloat(span.getAttribute("data-id"));
             currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            lineEdgeType = parseFloat(span.getAttribute("data-id"));
         }
     });
+});
+
+// Add copy/paste functionality
+function cloneOptions(options) {
+    return JSON.parse(JSON.stringify(options));
+}
+
+function cloneLineData(line) {
+    return {
+        startPoint: { x: line.startPoint.x, y: line.startPoint.y },
+        endPoint: { x: line.endPoint.x, y: line.endPoint.y },
+        options: cloneOptions(line.options)
+    };
+}
+
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (currentShape && currentShape.shapeName === 'line' && currentShape.isSelected) {
+            copiedShapeData = cloneLineData(currentShape);
+        }
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (copiedShapeData) {
+            e.preventDefault();
+            let pasteX, pasteY;
+            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') {
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = lastMousePos.x;
+                svgPoint.y = lastMousePos.y;
+                const CTM = svg.getScreenCTM().inverse();
+                const userPoint = svgPoint.matrixTransform(CTM);
+                pasteX = userPoint.x;
+                pasteY = userPoint.y;
+            } else {
+                const svgRect = svg.getBoundingClientRect();
+                pasteX = svgRect.width / 2;
+                pasteY = svgRect.height / 2;
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = pasteX;
+                svgPoint.y = pasteY;
+                const CTM = svg.getScreenCTM().inverse();
+                const userPoint = svgPoint.matrixTransform(CTM);
+                pasteX = userPoint.x;
+                pasteY = userPoint.y;
+            }
+
+            shapes.forEach(shape => {
+                if (shape.isSelected) {
+                    shape.removeSelection();
+                }
+            });
+
+            currentShape = null;
+            disableAllSideBars();
+            
+            const offset = 20;
+            const newLine = new Line(
+                { x: copiedShapeData.startPoint.x + offset, y: copiedShapeData.startPoint.y + offset },
+                { x: copiedShapeData.endPoint.x + offset, y: copiedShapeData.endPoint.y + offset },
+                cloneOptions(copiedShapeData.options)
+            );
+            
+            shapes.push(newLine);
+            newLine.isSelected = true;
+            currentShape = newLine;
+            newLine.draw();
+            pushCreateAction(newLine);
+        }
+    }
 });
