@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-stroke-pen");
+let selectedTool = document.querySelector(".bxs-magic-wand");
 let history = [];
 let redoStack = [];
 let shapes = [];

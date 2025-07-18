@@ -1,23 +1,19 @@
-// --- Keep existing code before this ---
-
 let isDrawing = false;
-let lasers = []; // Array to store multiple laser trails
-const maxTrailLength = 30; // Maximum trail length for active drawing
-const fadeOutDuration = 600; // Duration of fade-out in milliseconds
-const baseLaserOpacity = 0.8; // Starting opacity
-const baseLaserWidth = 5;   // Starting width
-const minDistanceThreshold = 1.5; // Minimum distance (in SVG units) to add a new point
+let lasers = [];
+const maxTrailLength = 20;
+const fadeOutDuration = 1200;
+const baseLaserOpacity = 0.8;
+const baseLaserWidth = 3;
+const minDistanceThreshold = 0.5;
 
-// --- NEW: State for animation loop ---
 let animationFrameId = null;
-let lastMovePoint = null; // Stores the latest pointer position {x, y} in screen coords
-let hasMoved = false;     // Flag to indicate if the pointer moved since last frame
+let lastMovePoint = null;
+let hasMoved = false;
 
-// Convert screen coordinates to SVG viewBox
 function screenToViewBoxPoint(x, y) {
     const CTM = svg.getScreenCTM();
     if (!CTM) return null;
-    try { // Add try-catch for robustness if CTM is invalid
+    try {
         const inverseCTM = CTM.inverse();
         return {
             x: (x - CTM.e) * inverseCTM.a + (y - CTM.f) * inverseCTM.c,
@@ -25,7 +21,6 @@ function screenToViewBoxPoint(x, y) {
         };
     } catch (e) {
         console.error("Error inverting CTM:", e);
-        // Fallback calculation (less accurate if rotated/skewed)
         return {
             x: (x - CTM.e) / CTM.a,
             y: (y - CTM.f) / CTM.d
@@ -33,7 +28,6 @@ function screenToViewBoxPoint(x, y) {
     }
 }
 
-// --- Helper function drawSegmentedPath (Keep as is from previous version) ---
 function drawSegmentedPath(pathElement, id, points, opacity, strokeWidth) {
     if (!points || points.length < 2) {
         if (pathElement) pathElement.remove();
@@ -79,18 +73,15 @@ function drawSegmentedPath(pathElement, id, points, opacity, strokeWidth) {
     return pathElement;
 }
 
-
-// --- Helper: Distance calculation ---
 function distance(p1, p2) {
     const dx = p1.x - p2.x;
     const dy = p1.y - p2.y;
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-// --- NEW: Drawing loop using requestAnimationFrame ---
 function drawingLoop() {
     if (!isDrawing) {
-        animationFrameId = null; // Ensure loop stops if isDrawing becomes false
+        animationFrameId = null;
         return;
     }
 
@@ -101,30 +92,24 @@ function drawingLoop() {
 
             if (svgPoint) {
                 const lastLaserPoint = currentLaser.points[currentLaser.points.length - 1];
-                // Check distance threshold
                 if (!lastLaserPoint || distance(svgPoint, lastLaserPoint) >= minDistanceThreshold) {
                     currentLaser.points.push(svgPoint);
 
-                    // Trim points if trail gets too long
                     while (currentLaser.points.length > maxTrailLength) {
                         currentLaser.points.shift();
                     }
 
-                    // Get/update the path element
                     let laserPath = document.getElementById(currentLaser.id);
-                    // Draw the updated path
                     drawSegmentedPath(laserPath, currentLaser.id, currentLaser.points, baseLaserOpacity, baseLaserWidth);
                 }
             }
         }
-        hasMoved = false; // Reset move flag for this frame
+        hasMoved = false;
     }
 
-    // Request the next frame
     animationFrameId = requestAnimationFrame(drawingLoop);
 }
 
-// --- fadeLaserTrail function remains the same as the previous good version ---
 function fadeLaserTrail(laser) {
     const startTime = performance.now();
     const initialPoints = [...laser.points];
@@ -140,35 +125,27 @@ function fadeLaserTrail(laser) {
     function fade(currentTime) {
         const elapsedTime = currentTime - startTime;
         let progress = Math.min(1, elapsedTime / fadeOutDuration);
-        const easedProgress = progress * progress; // Quadratic ease-in
-        const pointsToKeep = Math.round(totalPoints * (1 - easedProgress));
-
-        if (pointsToKeep < 2) {
-            if (laserPath) laserPath.remove();
-            lasers = lasers.filter(l => l.id !== laser.id);
-            return;
-        }
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        const pointsToKeep = Math.max(2, Math.round(totalPoints * (1 - progress)));
 
         const currentPoints = initialPoints.slice(-pointsToKeep);
-        const currentOpacity = baseLaserOpacity * (1 - progress);
+        const currentOpacity = baseLaserOpacity * (1 - easedProgress);
         const currentWidth = Math.max(0.1, baseLaserWidth * (1 - easedProgress));
+
         laserPath = drawSegmentedPath(laserPath, laser.id, currentPoints, currentOpacity, currentWidth);
 
-        if (laserPath && progress < 1) {
+        if (progress < 1) {
             requestAnimationFrame(fade);
-        } else if (!laserPath && progress < 1) {
-            console.warn("Laser path removed unexpectedly during fade for ID:", laser.id);
+        } else {
+            if (laserPath) laserPath.remove();
             lasers = lasers.filter(l => l.id !== laser.id);
         }
     }
     requestAnimationFrame(fade);
 }
 
-
-// --- Event Listeners (Modified for rAF) ---
-
 svg.addEventListener("pointerdown", (e) => {
-    if (!selectedTool || !selectedTool.classList.contains("bxs-magic-wand") || isDrawing) return; // Prevent multiple starts
+    if (!selectedTool || !selectedTool.classList.contains("bxs-magic-wand") || isDrawing) return;
     if (e.target !== svg) {
         const isUIElement = e.target.closest('.selection-box, .resize-handle');
         if (isUIElement) return;
@@ -179,24 +156,21 @@ svg.addEventListener("pointerdown", (e) => {
     if (!startSvgPoint) return;
 
     isDrawing = true;
-    hasMoved = false; // Reset flag
-    lastMovePoint = screenPoint; // Store initial screen point
+    hasMoved = false;
+    lastMovePoint = screenPoint;
 
     const laserId = "laserPath_" + Date.now() + "_" + Math.random().toString(16).slice(2);
     const newLaser = {
         id: laserId,
-        points: [startSvgPoint], // Start with the first point
+        points: [startSvgPoint],
         pathElement: null
     };
     lasers.push(newLaser);
 
-    // Initial draw of the first point (or tiny segment if needed)
     let initialPath = drawSegmentedPath(null, newLaser.id, newLaser.points, baseLaserOpacity, baseLaserWidth);
-    // (drawSegmentedPath handles cases with < 2 points by doing nothing or removing)
 
     svg.style.cursor = `url(${lazerCursor}) 10 10, auto`;
 
-    // --- Start the drawing loop ---
     if (!animationFrameId) {
         animationFrameId = requestAnimationFrame(drawingLoop);
     }
@@ -204,53 +178,17 @@ svg.addEventListener("pointerdown", (e) => {
 
 svg.addEventListener("pointermove", (e) => {
     if (selectedTool && selectedTool.classList.contains("bxs-magic-wand")) {
-        // Set cursor regardless of drawing state, only if tool active
         svg.style.cursor = `url(${lazerCursor}) 10 10, auto`;
     }
 
     if (!isDrawing) return;
 
-    // Store the latest pointer position and set the flag
     lastMovePoint = { x: e.clientX, y: e.clientY };
     hasMoved = true;
-
-    // The actual drawing happens in the drawingLoop
 });
 
 svg.addEventListener("pointerup", (e) => {
-    if (!isDrawing) return; // Only act if we were drawing with this tool
-
-    isDrawing = false; // Stop the drawing loop condition
-    hasMoved = false;
-    lastMovePoint = null;
-    // animationFrameId will be cleared by the loop itself stopping
-
-    if (lasers.length > 0) {
-        const laserToFade = lasers[lasers.length - 1];
-        // Add the final point before fading (optional, can sometimes look better)
-        // let finalSvgPoint = screenToViewBoxPoint(e.clientX, e.clientY);
-        // if(finalSvgPoint) {
-        //     const lastLaserPoint = laserToFade.points[laserToFade.points.length - 1];
-        //     if (!lastLaserPoint || distance(finalSvgPoint, lastLaserPoint) > 0.1) { // Add if different
-        //          laserToFade.points.push(finalSvgPoint);
-        //          // Optional redraw before fade starts
-        //          // let laserPath = document.getElementById(laserToFade.id);
-        //          // drawSegmentedPath(laserPath, laserToFade.id, laserToFade.points, baseLaserOpacity, baseLaserWidth);
-        //     }
-        // }
-        fadeLaserTrail(laserToFade);
-    }
-
-    // Reset cursor based on tool state AFTER drawing stops
-    if (selectedTool && selectedTool.classList.contains("bxs-magic-wand")) {
-       svg.style.cursor = `url(${lazerCursor}) 10 10, auto`; // Keep if tool active
-    } else {
-       svg.style.cursor = 'default';
-    }
-});
-
-svg.addEventListener("pointerleave", (e) => {
-    if (!isDrawing) return; // Only act if we were drawing
+    if (!isDrawing) return;
 
     isDrawing = false;
     hasMoved = false;
@@ -258,9 +196,26 @@ svg.addEventListener("pointerleave", (e) => {
 
     if (lasers.length > 0) {
         const laserToFade = lasers[lasers.length - 1];
-         // Maybe add the last point before leave? Might be off-canvas.
         fadeLaserTrail(laserToFade);
     }
-    svg.style.cursor = 'default'; // Always reset cursor when leaving canvas
+
+    if (selectedTool && selectedTool.classList.contains("bxs-magic-wand")) {
+       svg.style.cursor = `url(${lazerCursor}) 10 10, auto`;
+    } else {
+       svg.style.cursor = 'default';
+    }
 });
 
+svg.addEventListener("pointerleave", (e) => {
+    if (!isDrawing) return;
+
+    isDrawing = false;
+    hasMoved = false;
+    lastMovePoint = null;
+
+    if (lasers.length > 0) {
+        const laserToFade = lasers[lasers.length - 1];
+        fadeLaserTrail(laserToFade);
+    }
+    svg.style.cursor = 'default';
+});
