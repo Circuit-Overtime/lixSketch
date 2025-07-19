@@ -111,6 +111,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
             }
         });
     } else if (shape.shapeName === 'arrow') {
+        // Enhanced arrow handling with attachment tracking
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -118,13 +119,15 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 startPoint: { x: oldPos.startPoint.x, y: oldPos.startPoint.y },
                 endPoint: { x: oldPos.endPoint.x, y: oldPos.endPoint.y },
                 controlPoint1: oldPos.controlPoint1 ? { x: oldPos.controlPoint1.x, y: oldPos.controlPoint1.y } : null,
-                controlPoint2: oldPos.controlPoint2 ? { x: oldPos.controlPoint2.x, y: oldPos.controlPoint2.y } : null
+                controlPoint2: oldPos.controlPoint2 ? { x: oldPos.controlPoint2.x, y: oldPos.controlPoint2.y } : null,
+                attachments: oldPos.attachments || shape.getAttachmentState()
             },
             newPos: {
                 startPoint: { x: newPos.startPoint.x, y: newPos.startPoint.y },
                 endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y },
                 controlPoint1: newPos.controlPoint1 ? { x: newPos.controlPoint1.x, y: newPos.controlPoint1.y } : null,
-                controlPoint2: newPos.controlPoint2 ? { x: newPos.controlPoint2.x, y: newPos.controlPoint2.y } : null
+                controlPoint2: newPos.controlPoint2 ? { x: newPos.controlPoint2.x, y: newPos.controlPoint2.y } : null,
+                attachments: newPos.attachments || shape.getAttachmentState()
             }
         });
     } else if (shape.shapeName === 'freehandStroke') {
@@ -141,6 +144,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
             }
         });
     } else if (shape.shapeName === "rectangle") {
+        // Enhanced rectangle handling - also update attached arrows
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -157,7 +161,18 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 width: newPos.width, 
                 height: newPos.height, 
                 rotation: newPos.rotation
-            }
+            },
+            // Store affected arrows with their attachment states
+            affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
+                (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+                .map(arrow => ({
+                    arrow: arrow,
+                    oldAttachments: arrow.getAttachmentState(),
+                    oldPoints: {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    }
+                }))
         });
     }
     console.log(undoStack);
@@ -256,15 +271,27 @@ export function undo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === 'arrow') {
-            // Handle arrow transform undo - direct deselection logic
+            // Enhanced arrow transform undo with attachment restoration
             action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
             action.shape.endPoint = { x: action.oldPos.endPoint.x, y: action.oldPos.endPoint.y };
             action.shape.controlPoint1 = action.oldPos.controlPoint1 ? 
                 { x: action.oldPos.controlPoint1.x, y: action.oldPos.controlPoint1.y } : null;
             action.shape.controlPoint2 = action.oldPos.controlPoint2 ? 
                 { x: action.oldPos.controlPoint2.x, y: action.oldPos.controlPoint2.y } : null;
+            
+            // Restore attachment state
+            if (action.oldPos.attachments) {
+                action.shape.restoreAttachmentState(action.oldPos.attachments);
+            } else {
+                // Clear attachments if none existed before
+                action.shape.attachedToStart = null;
+                action.shape.attachedToEnd = null;
+            }
+            
             action.shape.isSelected = false;
             action.shape.draw();
+            
+            console.log("Arrow undo: restored position and attachments");
         } else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform undo
             action.shape.points = JSON.parse(JSON.stringify(action.oldPos.points));
@@ -273,7 +300,7 @@ export function undo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === "rectangle") {
-            // Handle other shape transform undo
+            // Enhanced rectangle transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
             action.shape.height = action.oldPos.height;
@@ -282,6 +309,22 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+
+            // Update attached arrows after rectangle undo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to old state
+                    arrow.restoreAttachmentState(arrowData.oldAttachments);
+                    
+                    // Store current state for redo
+                    arrowData.newPoints = {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    };
+                    arrowData.newAttachments = arrow.getAttachmentState();
+                });
+            }
         }
         redoStack.push(action);
     }
@@ -403,15 +446,27 @@ export function redo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === 'arrow') {
-            // Handle arrow transform redo - direct deselection logic
+            // Enhanced arrow transform redo with attachment restoration
             action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
             action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };
             action.shape.controlPoint1 = action.newPos.controlPoint1 ? 
                 { x: action.newPos.controlPoint1.x, y: action.newPos.controlPoint1.y } : null;
             action.shape.controlPoint2 = action.newPos.controlPoint2 ? 
                 { x: action.newPos.controlPoint2.x, y: action.newPos.controlPoint2.y } : null;
+            
+            // Restore attachment state
+            if (action.newPos.attachments) {
+                action.shape.restoreAttachmentState(action.newPos.attachments);
+            } else {
+                // Clear attachments if none should exist
+                action.shape.attachedToStart = null;
+                action.shape.attachedToEnd = null;
+            }
+            
             action.shape.isSelected = false;
             action.shape.draw();
+            
+            console.log("Arrow redo: restored position and attachments");
         } else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform redo
             action.shape.points = JSON.parse(JSON.stringify(action.newPos.points));
@@ -420,7 +475,7 @@ export function redo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === "rectangle") {
-            // Handle other shape transform redo
+            // Enhanced rectangle transform redo
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;
             action.shape.height = action.newPos.height;
@@ -429,10 +484,23 @@ export function redo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+
+            // Update attached arrows after rectangle redo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to new state
+                    if (arrowData.newAttachments) {
+                        arrow.restoreAttachmentState(arrowData.newAttachments);
+                    } else {
+                        // If no new attachments stored, recalculate based on current rectangle position
+                        arrow.updateAttachments();
+                    }
+                });
+            }
         }
         undoStack.push(action);
-    }
-    else if (action.type === 'optionsChange') {
+    } else if (action.type === 'optionsChange') {
         if (action.shape.type === 'text') {
             // Handle text options change redo
             const textElement = action.shape.element.querySelector('text');

@@ -1,4 +1,5 @@
 import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { cleanupAttachments } from './drawArrow.js';
 let isDrawingSquare = false;
 let isDraggingShapeSquare = false;
 let isResizingShapeSquare = false;
@@ -100,6 +101,7 @@ class Rectangle {
             this.addAnchors();
         }
         if (!this.group.parentNode) {
+            this.updateAttachedArrows();
             svg.appendChild(this.group);
         }
     }
@@ -339,6 +341,7 @@ class Rectangle {
     move(dx, dy) {
         this.x += dx;
         this.y += dy;
+        this.updateAttachedArrows();
     }
 
     updatePosition(anchorIndex, newMouseX, newMouseY) {
@@ -410,9 +413,20 @@ class Rectangle {
             this.y += newLocalY; 
             this.height = newHeight;
         }
-
-        
+        this.updateAttachedArrows();
     }
+
+        updateAttachedArrows() {
+        shapes.forEach(shape => {
+            if (shape && shape.shapeName === 'arrow' && typeof shape.updateAttachments === 'function') {
+                
+                if ((shape.attachedToStart && shape.attachedToStart.shape === this) ||
+                    (shape.attachedToEnd && shape.attachedToEnd.shape === this)) {
+                    shape.updateAttachments();
+                }
+            }
+        });
+    }   
 
     rotate(angle) {
         angle = angle % 360;
@@ -488,6 +502,10 @@ function deleteCurrentShape() {
     if (currentShape && currentShape.shapeName === 'rectangle') {
         const idx = shapes.indexOf(currentShape);
         if (idx !== -1) shapes.splice(idx, 1);
+        
+        // Clean up any arrow attachments before deleting
+        cleanupAttachments(currentShape);
+        
         if (currentShape.group.parentNode) {
             currentShape.group.parentNode.removeChild(currentShape.group);
         }

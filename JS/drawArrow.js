@@ -58,6 +58,10 @@ class Arrow {
         this.controlPoint1 = options.controlPoint1 || null;
         this.controlPoint2 = options.controlPoint2 || null;
 
+        // Attachment properties
+        this.attachedToStart = null; 
+        this.attachedToEnd = null;   
+
         this.element = null; 
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         this.isSelected = false; 
@@ -65,6 +69,7 @@ class Arrow {
         this.shapeName = "arrow";
         this.shapeID = `arrow-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
         this.group.setAttribute('id', this.shapeID);
+        
         // Initialize control points if curved
         if (this.arrowCurved && !this.controlPoint1 && !this.controlPoint2) {
             this.initializeCurveControlPoints();
@@ -79,21 +84,16 @@ class Arrow {
         const dy = this.endPoint.y - this.startPoint.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Prevent division by zero and NaN
         if (distance === 0 || isNaN(distance)) {
             this.controlPoint1 = { x: this.startPoint.x + 20, y: this.startPoint.y };
             this.controlPoint2 = { x: this.endPoint.x - 20, y: this.endPoint.y };
             return;
         }
         
-        // Calculate perpendicular direction for S-curve
         const perpX = -dy / distance;
         const perpY = dx / distance;
-        
-        // Create S-curve control points
         const curveOffset = this.arrowCurveAmount;
         
-        // First control point (1/3 along the line, offset in one direction)
         const t1 = 0.33;
         const point1X = this.startPoint.x + t1 * dx;
         const point1Y = this.startPoint.y + t1 * dy;
@@ -102,7 +102,6 @@ class Arrow {
             y: point1Y + perpY * curveOffset
         };
         
-        // Second control point (2/3 along the line, offset in opposite direction)
         const t2 = 0.67;
         const point2X = this.startPoint.x + t2 * dx;
         const point2Y = this.startPoint.y + t2 * dy;
@@ -123,19 +122,9 @@ class Arrow {
                  this.group.removeChild(anchor);
              }
          });
-         if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
-            this.group.removeChild(this.rotationAnchor);
-         }
-         if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
-            this.group.removeChild(this.selectionOutline);
-         }
         this.anchors = [];
-        this.rotationAnchor = null;
-        this.selectionOutline = null;
         this.isSelected = false;
     }
-
-
 
     draw() {
         while (this.group.firstChild) {
@@ -147,42 +136,35 @@ class Arrow {
         let arrowEndPoint = this.endPoint;
 
         if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
-            // Validate control points before using them
             if (isNaN(this.controlPoint1.x) || isNaN(this.controlPoint1.y) || 
                 isNaN(this.controlPoint2.x) || isNaN(this.controlPoint2.y)) {
                 this.initializeCurveControlPoints();
             }
             
-            // Create curved path using cubic Bezier curve
             pathData = `M ${this.startPoint.x} ${this.startPoint.y} ` +
                       `C ${this.controlPoint1.x} ${this.controlPoint1.y}, ` +
                       `${this.controlPoint2.x} ${this.controlPoint2.y}, ` +
                       `${this.endPoint.x} ${this.endPoint.y}`;
             
-            // Calculate the direction at the end of the curve for arrowhead placement
-            const t = 0.95; // Slightly before the end to get proper direction
+            const t = 0.95;
             const tangent = this.getCubicBezierTangent(t);
             const angle = Math.atan2(tangent.y, tangent.x);
             
-            // Adjust arrow end point to account for arrowhead
             if (this.arrowHeadStyle === "default") {
                 arrowEndPoint = {
                     x: this.endPoint.x - (this.arrowHeadLength * 0.3) * Math.cos(angle),
                     y: this.endPoint.y - (this.arrowHeadLength * 0.3) * Math.sin(angle)
                 };
                 
-                // Update path to end at adjusted point
                 pathData = `M ${this.startPoint.x} ${this.startPoint.y} ` +
                           `C ${this.controlPoint1.x} ${this.controlPoint1.y}, ` +
                           `${this.controlPoint2.x} ${this.controlPoint2.y}, ` +
                           `${arrowEndPoint.x} ${arrowEndPoint.y}`;
             }
         } else {
-            // Straight arrow
             pathData = `M ${this.startPoint.x} ${this.startPoint.y} L ${this.endPoint.x} ${this.endPoint.y}`;
         }
 
-        // Draw arrowhead
         if (this.arrowHeadStyle === "default") {
             let angle;
             if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
@@ -223,6 +205,7 @@ class Arrow {
 
         if (this.isSelected) {
             this.addAnchors();
+            this.addAttachmentIndicators();
         }
     }
 
@@ -268,11 +251,9 @@ class Arrow {
         
         let anchorPositions = [this.startPoint, this.endPoint];
         
-        // Add control point anchors for curved arrows
         if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
             anchorPositions.push(this.controlPoint1, this.controlPoint2);
         } else if (!this.arrowCurved) {
-            // For straight arrows, position end anchor to avoid arrowhead overlap
             const arrowAngle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
             const arrowHeadClearance = this.arrowHeadLength + anchorSize - 10;
             const offsetEndAnchor = {
@@ -288,13 +269,10 @@ class Arrow {
             anchor.setAttribute("cy", point.y);
             anchor.setAttribute("r", anchorSize); 
             
-            // Different colors for different anchor types
             if (this.arrowCurved && index >= 2) {
-                // Control point anchors
                 anchor.setAttribute("fill", "#FF6B6B");
                 anchor.setAttribute("stroke", "#5B57D1");
             } else {
-                // Start/end anchors
                 anchor.setAttribute("fill", "#121212");
                 anchor.setAttribute("stroke", "#5B57D1");
             }
@@ -310,11 +288,256 @@ class Arrow {
             this.anchors[index] = anchor;   
         });
     }
-    
+
+    addAttachmentIndicators() {
+        if (this.attachedToStart) {
+            const attachPoint = this.calculateAttachedPoint(this.attachedToStart);
+            const indicator = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            indicator.setAttribute("cx", attachPoint.x);
+            indicator.setAttribute("cy", attachPoint.y);
+            indicator.setAttribute("r", 4);
+            indicator.setAttribute("fill", "#5B57D1");
+            indicator.setAttribute("stroke", "#121212");
+            indicator.setAttribute("stroke-width", 1);
+            indicator.setAttribute("class", "attachment-indicator");
+            this.group.appendChild(indicator);
+        }
+
+        if (this.attachedToEnd) {
+            const attachPoint = this.calculateAttachedPoint(this.attachedToEnd);
+            const indicator = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            indicator.setAttribute("cx", attachPoint.x);
+            indicator.setAttribute("cy", attachPoint.y);
+            indicator.setAttribute("r", 4);
+            indicator.setAttribute("fill", "#5B57D1");
+            indicator.setAttribute("stroke", "#121212");
+            indicator.setAttribute("stroke-width", 1);
+            indicator.setAttribute("class", "attachment-indicator");
+            this.group.appendChild(indicator);
+        }
+    }
+
+    getAttachmentState() {
+        return {
+            attachedToStart: this.attachedToStart ? {
+                shapeId: this.attachedToStart.shape.shapeID,
+                side: this.attachedToStart.side,
+                offset: { ...this.attachedToStart.offset }
+            } : null,
+            attachedToEnd: this.attachedToEnd ? {
+                shapeId: this.attachedToEnd.shape.shapeID,
+                side: this.attachedToEnd.side,
+                offset: { ...this.attachedToEnd.offset }
+            } : null
+        };
+    }
+
+    restoreAttachmentState(attachmentState) {
+        this.attachedToStart = null;
+        this.attachedToEnd = null;
+
+        if (attachmentState.attachedToStart) {
+            const shape = shapes.find(s => s.shapeID === attachmentState.attachedToStart.shapeId);
+            if (shape) {
+                this.attachedToStart = {
+                    shape: shape,
+                    side: attachmentState.attachedToStart.side,
+                    offset: { ...attachmentState.attachedToStart.offset }
+                };
+                this.startPoint = this.calculateAttachedPoint(this.attachedToStart);
+            }
+        }
+
+        if (attachmentState.attachedToEnd) {
+            const shape = shapes.find(s => s.shapeID === attachmentState.attachedToEnd.shapeId);
+            if (shape) {
+                this.attachedToEnd = {
+                    shape: shape,
+                    side: attachmentState.attachedToEnd.side,
+                    offset: { ...attachmentState.attachedToEnd.offset }
+                };
+                this.endPoint = this.calculateAttachedPoint(this.attachedToEnd);
+            }
+        }
+
+        if (this.arrowCurved) {
+            this.initializeCurveControlPoints();
+        }
+        
+        this.draw();
+    }
+
+    static findNearbyRectangle(point, tolerance = 20) {
+        for (let shape of shapes) {
+            if (shape.shapeName === 'rectangle') {
+                const attachment = Arrow.getAttachmentPoint(point, shape, tolerance);
+                if (attachment) {
+                    return { shape, attachment };
+                }
+            }
+        }
+        return null;
+    }
+
+    static getAttachmentPoint(point, rectangle, tolerance = 20) {
+        const rect = {
+            left: rectangle.x,
+            right: rectangle.x + rectangle.width,
+            top: rectangle.y,
+            bottom: rectangle.y + rectangle.height
+        };
+
+        const distances = {
+            top: Math.abs(point.y - rect.top),
+            bottom: Math.abs(point.y - rect.bottom),
+            left: Math.abs(point.x - rect.left),
+            right: Math.abs(point.x - rect.right)
+        };
+
+        let closestSide = null;
+        let minDistance = tolerance;
+
+        for (let side in distances) {
+            if (distances[side] < minDistance) {
+                if ((side === 'top' || side === 'bottom') && 
+                    point.x >= rect.left - tolerance && point.x <= rect.right + tolerance) {
+                    closestSide = side;
+                    minDistance = distances[side];
+                } else if ((side === 'left' || side === 'right') && 
+                           point.y >= rect.top - tolerance && point.y <= rect.bottom + tolerance) {
+                    closestSide = side;
+                    minDistance = distances[side];
+                }
+            }
+        }
+
+        if (closestSide) {
+            let attachPoint, offset;
+            
+            switch (closestSide) {
+                case 'top':
+                    attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.top };
+                    offset = { x: attachPoint.x - rectangle.x, y: 0 };
+                    break;
+                case 'bottom':
+                    attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.bottom };
+                    offset = { x: attachPoint.x - rectangle.x, y: rectangle.height };
+                    break;
+                case 'left':
+                    attachPoint = { x: rect.left, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
+                    offset = { x: 0, y: attachPoint.y - rectangle.y };
+                    break;
+                case 'right':
+                    attachPoint = { x: rect.right, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
+                    offset = { x: rectangle.width, y: attachPoint.y - rectangle.y };
+                    break;
+            }
+
+            return { side: closestSide, point: attachPoint, offset };
+        }
+
+        return null;
+    }
+
+    attachToRectangle(isStartPoint, rectangle, attachmentInfo) {
+        const attachment = {
+            shape: rectangle,
+            side: attachmentInfo.side,
+            offset: attachmentInfo.offset
+        };
+
+        if (isStartPoint) {
+            this.attachedToStart = attachment;
+            this.startPoint = { ...attachmentInfo.point };
+        } else {
+            this.attachedToEnd = attachment;
+            this.endPoint = { ...attachmentInfo.point };
+        }
+
+        if (this.arrowCurved) {
+            this.initializeCurveControlPoints();
+        }
+        
+        this.draw();
+    }
+
+    detachFromRectangle(isStartPoint) {
+        if (isStartPoint) {
+            this.attachedToStart = null;
+        } else {
+            this.attachedToEnd = null;
+        }
+    }
+
+    updateAttachments() {
+        let needsRedraw = false;
+
+        if (this.attachedToStart && this.attachedToStart.shape) {
+            const newPoint = this.calculateAttachedPoint(this.attachedToStart);
+            if (newPoint.x !== this.startPoint.x || newPoint.y !== this.startPoint.y) {
+                this.startPoint = newPoint;
+                needsRedraw = true;
+            }
+        }
+
+        if (this.attachedToEnd && this.attachedToEnd.shape) {
+            const newPoint = this.calculateAttachedPoint(this.attachedToEnd);
+            if (newPoint.x !== this.endPoint.x || newPoint.y !== this.endPoint.y) {
+                this.endPoint = newPoint;
+                needsRedraw = true;
+            }
+        }
+
+        if (needsRedraw) {
+            if (this.arrowCurved) {
+                this.initializeCurveControlPoints();
+            }
+            this.draw();
+        }
+    }
+
+    calculateAttachedPoint(attachment) {
+        const rect = attachment.shape;
+        const side = attachment.side;
+        const offset = attachment.offset;
+
+        switch (side) {
+            case 'top':
+                return { x: rect.x + offset.x, y: rect.y };
+            case 'bottom':
+                return { x: rect.x + offset.x, y: rect.y + rect.height };
+            case 'left':
+                return { x: rect.x, y: rect.y + offset.y };
+            case 'right':
+                return { x: rect.x + rect.width, y: rect.y + offset.y };
+            default:
+                return { x: rect.x + offset.x, y: rect.y + offset.y };
+        }
+    }
+
+    move(dx, dy) {
+        if (!this.attachedToStart) {
+            this.startPoint.x += dx;
+            this.startPoint.y += dy;
+        }
+        if (!this.attachedToEnd) {
+            this.endPoint.x += dx;
+            this.endPoint.y += dy;
+        }
+        
+        if (this.controlPoint1 && (!this.attachedToStart && !this.attachedToEnd)) {
+            this.controlPoint1.x += dx;
+            this.controlPoint1.y += dy;
+        }
+        if (this.controlPoint2 && (!this.attachedToStart && !this.attachedToEnd)) {
+            this.controlPoint2.x += dx;
+            this.controlPoint2.y += dy;
+        }
+    }
+
     isNearAnchor(x, y) {
         const anchorSize = 10 / currentZoom;
         
-        // Check anchors
         for (let i = 0; i < this.anchors.length; i++) {
             const anchor = this.anchors[i];
             if (anchor) {
@@ -330,32 +553,119 @@ class Arrow {
         return null;
     }
 
+
+
     startAnchorDrag(e, index) {
         e.stopPropagation();
         e.preventDefault();
         
-        // Store old position for undo
+        // Store initial state including attachments
         dragOldPosArrow = {
             startPoint: { x: this.startPoint.x, y: this.startPoint.y },
             endPoint: { x: this.endPoint.x, y: this.endPoint.y },
             controlPoint1: this.controlPoint1 ? { x: this.controlPoint1.x, y: this.controlPoint1.y } : null,
-            controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null
+            controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null,
+            attachments: this.getAttachmentState() // Store initial attachment state
         };
 
         const onPointerMove = (event) => {
             const { x, y } = getSVGCoordsFromMouse(event);
-            this.updatePosition(index, x, y);
+            
+            // Check for potential attachment when dragging start or end anchors
+            if (index === 0 || index === 1) {
+                const nearbyRect = Arrow.findNearbyRectangle({ x, y });
+                if (nearbyRect) {
+                    // Show preview while dragging
+                    const existingPreview = svg.querySelector('.attachment-preview');
+                    if (existingPreview) existingPreview.remove();
+                    
+                    const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    preview.setAttribute("cx", nearbyRect.attachment.point.x);
+                    preview.setAttribute("cy", nearbyRect.attachment.point.y);
+                    preview.setAttribute("r", 6);
+                    preview.setAttribute("fill", "none");
+                    preview.setAttribute("stroke", "#5B57D1");
+                    preview.setAttribute("stroke-width", 2);
+                    preview.setAttribute("class", "attachment-preview");
+                    preview.setAttribute("opacity", "0.7");
+                    svg.appendChild(preview);
+                    
+                    // Snap to attachment point
+                    this.updatePosition(index, nearbyRect.attachment.point.x, nearbyRect.attachment.point.y);
+                } else {
+                    // Remove preview if no nearby rectangle
+                    const existingPreview = svg.querySelector('.attachment-preview');
+                    if (existingPreview) existingPreview.remove();
+                    
+                    this.updatePosition(index, x, y);
+                }
+            } else {
+                this.updatePosition(index, x, y);
+            }
         };
         
         const onPointerUp = () => {
+            // Remove any attachment preview
+            const existingPreview = svg.querySelector('.attachment-preview');
+            if (existingPreview) existingPreview.remove();
+            
+            // Check for attachments when releasing start or end anchors
+            if (index === 0) {
+                // Check for start point attachment
+                const startAttachment = Arrow.findNearbyRectangle(this.startPoint);
+                if (startAttachment) {
+                    // Detach if previously attached to different rectangle
+                    if (this.attachedToStart && this.attachedToStart.shape !== startAttachment.shape) {
+                        this.detachFromRectangle(true);
+                    }
+                    this.attachToRectangle(true, startAttachment.shape, startAttachment.attachment);
+                    console.log("Arrow start attached to rectangle");
+                } else {
+                    // Detach if moved away from rectangle
+                    if (this.attachedToStart) {
+                        this.detachFromRectangle(true);
+                        console.log("Arrow start detached from rectangle");
+                    }
+                }
+            } else if (index === 1) {
+                // Check for end point attachment
+                const endAttachment = Arrow.findNearbyRectangle(this.endPoint);
+                if (endAttachment) {
+                    // Detach if previously attached to different rectangle
+                    if (this.attachedToEnd && this.attachedToEnd.shape !== endAttachment.shape) {
+                        this.detachFromRectangle(false);
+                    }
+                    this.attachToRectangle(false, endAttachment.shape, endAttachment.attachment);
+                    console.log("Arrow end attached to rectangle");
+                } else {
+                    // Detach if moved away from rectangle
+                    if (this.attachedToEnd) {
+                        this.detachFromRectangle(false);
+                        console.log("Arrow end detached from rectangle");
+                    }
+                }
+            }
+            
             if (dragOldPosArrow) {
                 const newPos = {
                     startPoint: { x: this.startPoint.x, y: this.startPoint.y },
                     endPoint: { x: this.endPoint.x, y: this.endPoint.y },
                     controlPoint1: this.controlPoint1 ? { x: this.controlPoint1.x, y: this.controlPoint1.y } : null,
-                    controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null
+                    controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null,
+                    attachments: this.getAttachmentState() // Store final attachment state
                 };
-                pushTransformAction(this, dragOldPosArrow, newPos);
+                
+                // Check if anything actually changed (position or attachments)
+                const stateChanged = 
+                    dragOldPosArrow.startPoint.x !== newPos.startPoint.x || 
+                    dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
+                    dragOldPosArrow.endPoint.x !== newPos.endPoint.x || 
+                    dragOldPosArrow.endPoint.y !== newPos.endPoint.y ||
+                    JSON.stringify(dragOldPosArrow.attachments) !== JSON.stringify(newPos.attachments);
+                
+                if (stateChanged) {
+                    pushTransformAction(this, dragOldPosArrow, newPos);
+                }
                 dragOldPosArrow = null;
             }
             
@@ -365,22 +675,6 @@ class Arrow {
         
         svg.addEventListener('pointermove', onPointerMove);
         svg.addEventListener('pointerup', onPointerUp);
-    }
-
-    move(dx, dy) {
-        this.startPoint.x += dx;
-        this.startPoint.y += dy;
-        this.endPoint.x += dx;
-        this.endPoint.y += dy;
-        
-        if (this.controlPoint1) {
-            this.controlPoint1.x += dx;
-            this.controlPoint1.y += dy;
-        }
-        if (this.controlPoint2) {
-            this.controlPoint2.x += dx;
-            this.controlPoint2.y += dy;
-        }
     }
 
     updatePosition(anchorIndex, newViewBoxX, newViewBoxY) {
@@ -404,10 +698,8 @@ class Arrow {
         const tolerance = Math.max(5, this.options.strokeWidth * 2) / currentZoom;
         
         if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
-            // Check distance to cubic Bezier curve
             return this.pointToCubicBezierDistance(viewBoxX, viewBoxY) <= tolerance;
         } else {
-            // Check distance to straight line
             const distance = this.pointToLineDistance(viewBoxX, viewBoxY, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
             return distance <= tolerance;
         }
@@ -433,7 +725,6 @@ class Arrow {
         const C = x2 - x1;
         const D = y2 - y1;
         
-        // Calculate the parameter t for the closest point on the line segment
         const dot = A * C + B * D;
         const lenSq = C * C + D * D;
         let param = -1;
@@ -444,22 +735,17 @@ class Arrow {
         
         let xx, yy;
         
-        // Find the closest point on the line segment
         if (param < 0) {
-            // Closest point is before the start of the segment
             xx = x1;
             yy = y1;
         } else if (param > 1) {
-            // Closest point is after the end of the segment
             xx = x2;
             yy = y2;
         } else {
-            // Closest point is on the segment
             xx = x1 + param * C;
             yy = y1 + param * D;
         }
         
-        // Return the distance from the point to the closest point on the line
         const dx = x - xx;
         const dy = y - yy;
         return Math.sqrt(dx * dx + dy * dy);
@@ -479,10 +765,8 @@ class Arrow {
             this.arrowCurved = newOptions.arrowCurved;
             
             if (this.arrowCurved && !wasCurved) {
-                // Converting from straight to curved
                 this.initializeCurveControlPoints();
             } else if (!this.arrowCurved && wasCurved) {
-                // Converting from curved to straight
                 this.controlPoint1 = null;
                 this.controlPoint2 = null;
             }
@@ -501,7 +785,6 @@ class Arrow {
         }
 
         Object.keys(newOptions).forEach(key => newOptions[key] === undefined && delete newOptions[key]);
-
         this.options = { ...this.options, ...newOptions };
 
         if (this.arrowOutlineStyle === 'solid' && this.options.strokeDasharray) {
@@ -525,7 +808,6 @@ class Arrow {
     }
 }
 
-// Add delete functionality like in lineTool.js
 function deleteCurrentShape() {
     if (currentShape && currentShape.shapeName === 'arrow') {
         const idx = shapes.indexOf(currentShape);
@@ -637,12 +919,42 @@ const handleMouseMove = (e) => {
     
     if (isDrawingArrow && currentArrow) {
         currentArrow.endPoint = { x, y };
+        
+        // Check for potential attachment and show preview
+        const nearbyRect = Arrow.findNearbyRectangle({ x, y });
+        if (nearbyRect) {
+            // Snap to attachment point
+            currentArrow.endPoint = nearbyRect.attachment.point;
+            svg.style.cursor = 'crosshair';
+            
+            
+            const existingPreview = svg.querySelector('.attachment-preview');
+            if (existingPreview) existingPreview.remove();
+            
+            const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            preview.setAttribute("cx", nearbyRect.attachment.point.x);
+            preview.setAttribute("cy", nearbyRect.attachment.point.y);
+            preview.setAttribute("r", 6);
+            preview.setAttribute("fill", "none");
+            preview.setAttribute("stroke", "#5B57D1");
+            preview.setAttribute("stroke-width", 2);
+            preview.setAttribute("class", "attachment-preview");
+            preview.setAttribute("opacity", "0.7");
+            svg.appendChild(preview);
+        } else {
+            // Remove preview if no nearby rectangle
+            const existingPreview = svg.querySelector('.attachment-preview');
+            if (existingPreview) existingPreview.remove();
+        }
+        
         // Update control points for curved arrows during drawing
         if (currentArrow.arrowCurved) {
             currentArrow.initializeCurveControlPoints();
         }
         currentArrow.draw();
-    } else if (isDragging && currentShape && currentShape.isSelected) {
+    }
+    
+    else if (isDragging && currentShape && currentShape.isSelected) {
         const dx = x - startX;
         const dy = y - startY;
         currentShape.move(dx, dy);
@@ -676,6 +988,10 @@ const handleMouseMove = (e) => {
 
 const handleMouseUp = (e) => {
     if (isDrawingArrow && currentArrow) {
+        // Remove any attachment preview that might still be visible
+        const existingPreview = svg.querySelector('.attachment-preview');
+        if (existingPreview) existingPreview.remove();
+        
         // Check if arrow is too small
         const dx = currentArrow.endPoint.x - currentArrow.startPoint.x;
         const dy = currentArrow.endPoint.y - currentArrow.startPoint.y;
@@ -689,6 +1005,20 @@ const handleMouseUp = (e) => {
             currentArrow = null;
             currentShape = null;
         } else {
+            // Check for potential attachments at start and end points
+            const startAttachment = Arrow.findNearbyRectangle(currentArrow.startPoint);
+            const endAttachment = Arrow.findNearbyRectangle(currentArrow.endPoint);
+
+            if (startAttachment) {
+                currentArrow.attachToRectangle(true, startAttachment.shape, startAttachment.attachment);
+                console.log("Arrow start attached to rectangle");
+            }
+
+            if (endAttachment) {
+                currentArrow.attachToRectangle(false, endAttachment.shape, endAttachment.attachment);
+                console.log("Arrow end attached to rectangle");
+            }
+
             // Push create action for undo/redo
             pushCreateAction(currentArrow);
         }
@@ -863,8 +1193,56 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+function detachSelectedArrow() {
+    if (currentShape instanceof Arrow && currentShape.isSelected) {
+        if (currentShape.attachedToStart || currentShape.attachedToEnd) {
+            const oldState = {
+                attachedToStart: currentShape.attachedToStart,
+                attachedToEnd: currentShape.attachedToEnd,
+                startPoint: { ...currentShape.startPoint },
+                endPoint: { ...currentShape.endPoint }
+            };
+
+            currentShape.detachFromRectangle(true);
+            currentShape.detachFromRectangle(false);
+            currentShape.draw();
+
+            // Add to undo/redo if needed
+            console.log("Arrow detached from rectangles");
+        }
+    }
+}
+
+// Function to clean up attachments when shapes are deleted
+function cleanupAttachments(deletedShape) {
+    if (deletedShape.shapeName === 'rectangle') {
+        // Remove attachments to this rectangle
+        shapes.forEach(shape => {
+            if (shape instanceof Arrow) {
+                if (shape.attachedToStart && shape.attachedToStart.shape === deletedShape) {
+                    shape.detachFromRectangle(true);
+                }
+                if (shape.attachedToEnd && shape.attachedToEnd.shape === deletedShape) {
+                    shape.detachFromRectangle(false);
+                }
+                shape.draw();
+            }
+        });
+    }
+}
+
+// Add keyboard shortcut to detach arrows
+document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'd' && e.ctrlKey) {
+        e.preventDefault();
+        detachSelectedArrow();
+    }
+});
+
+// Export the cleanup function
 export { 
     handleMouseDown as handleMouseDownArrow, 
     handleMouseMove as handleMouseMoveArrow, 
-    handleMouseUp as handleMouseUpArrow 
+    handleMouseUp as handleMouseUpArrow,
+    cleanupAttachments
 };
