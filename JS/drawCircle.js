@@ -50,6 +50,8 @@ class Circle {
         this.selectionPadding = 8;
         this.selectionOutline = null;
         this.shapeName = "circle";
+        this.shapeID = `circle-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
+        this.group.setAttribute('id', this.shapeID);
         if(!this.group.parentNode) {
             svg.appendChild(this.group);
         }

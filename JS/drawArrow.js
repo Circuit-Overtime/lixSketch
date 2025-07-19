@@ -9,7 +9,7 @@ let isDrawingArrow = false;
 let arrowStrokeColor = "#fff";
 let arrowStrokeThickness = 2;
 let arrowOutlineStyle = "solid";
-let arrowCurved = false;
+let arrowCurved = true;
 let arrowCurveAmount = 20;
 let arrowHeadLength = 10;
 let arrowHeadAngleDeg = 30;
@@ -63,7 +63,8 @@ class Arrow {
         this.isSelected = false; 
         this.anchors = [];
         this.shapeName = "arrow";
-
+        this.shapeID = `arrow-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
+        this.group.setAttribute('id', this.shapeID);
         // Initialize control points if curved
         if (this.arrowCurved && !this.controlPoint1 && !this.controlPoint2) {
             this.initializeCurveControlPoints();
@@ -683,20 +684,12 @@ const handleMouseUp = (e) => {
     if (isDragging && dragOldPosArrow && currentShape) {
         const newPos = {
             startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
-            controlPoint1: currentShape.controlPoint1 ? { x: currentShape.controlPoint1.x, y: currentShape.controlPoint1.y } : null,
-            controlPoint2: currentShape.controlPoint2 ? { x: currentShape.controlPoint2.x, y: currentShape.controlPoint2.y } : null
+            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
         };
         const stateChanged = dragOldPosArrow.startPoint.x !== newPos.startPoint.x || 
                            dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
                            dragOldPosArrow.endPoint.x !== newPos.endPoint.x || 
-                           dragOldPosArrow.endPoint.y !== newPos.endPoint.y ||
-                           (dragOldPosArrow.controlPoint1 && newPos.controlPoint1 && 
-                            (dragOldPosArrow.controlPoint1.x !== newPos.controlPoint1.x || 
-                             dragOldPosArrow.controlPoint1.y !== newPos.controlPoint1.y)) ||
-                           (dragOldPosArrow.controlPoint2 && newPos.controlPoint2 && 
-                            (dragOldPosArrow.controlPoint2.x !== newPos.controlPoint2.x || 
-                             dragOldPosArrow.controlPoint2.y !== newPos.controlPoint2.y));
+                           dragOldPosArrow.endPoint.y !== newPos.endPoint.y;
         
         if (stateChanged) {
             pushTransformAction(currentShape, dragOldPosArrow, newPos);

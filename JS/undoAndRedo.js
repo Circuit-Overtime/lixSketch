@@ -256,7 +256,7 @@ export function undo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === 'arrow') {
-            // Handle arrow transform undo
+            // Handle arrow transform undo - direct deselection logic
             action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
             action.shape.endPoint = { x: action.oldPos.endPoint.x, y: action.oldPos.endPoint.y };
             action.shape.controlPoint1 = action.oldPos.controlPoint1 ? 
@@ -264,7 +264,6 @@ export function undo() {
             action.shape.controlPoint2 = action.oldPos.controlPoint2 ? 
                 { x: action.oldPos.controlPoint2.x, y: action.oldPos.controlPoint2.y } : null;
             action.shape.isSelected = false;
-            if (typeof action.shape.deselectArrow === 'function') action.shape.deselectArrow();
             action.shape.draw();
         } else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform undo
@@ -404,7 +403,7 @@ export function redo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === 'arrow') {
-            // Handle arrow transform redo
+            // Handle arrow transform redo - direct deselection logic
             action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
             action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };
             action.shape.controlPoint1 = action.newPos.controlPoint1 ? 
@@ -412,7 +411,6 @@ export function redo() {
             action.shape.controlPoint2 = action.newPos.controlPoint2 ? 
                 { x: action.newPos.controlPoint2.x, y: action.newPos.controlPoint2.y } : null;
             action.shape.isSelected = false;
-            if (typeof action.shape.deselectArrow === 'function') action.shape.deselectArrow();
             action.shape.draw();
         } else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform redo
