@@ -1,13 +1,11 @@
-// Assuming svg, rough, currentZoom, currentViewBox, shapes, currentShape,
-// isArrowToolActive, isSelectionToolActive are defined elsewhere and initialized.
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
 
-// --- Keep existing variable declarations ---
 let arrowStartX, arrowStartY;
-let currentArrow = null; // Keep track of the arrow being drawn
-let isResizing = false;  // Is an anchor being dragged?
-let isDragging = false;  // Is the whole shape being dragged?
-let activeAnchor = null; // Which anchor is being dragged (element)
-let isDrawingArrow = false; // Is a new arrow being drawn?
+let currentArrow = null; 
+let isResizing = false;  
+let isDragging = false;  
+let activeAnchor = null; 
+let isDrawingArrow = false; 
 let arrowStrokeColor = "#fff";
 let arrowStrokeThickness = 2;
 let arrowOutlineStyle = "solid";
@@ -16,192 +14,280 @@ let arrowCurveAmount = 20;
 let arrowHeadLength = 10;
 let arrowHeadAngleDeg = 30;
 let arrowHeadStyle = "default";
-let startX, startY; // Store *SCREEN* coordinates for drag delta calculation
-let startViewBoxX, startViewBoxY, dragOffsetX, dragOffsetY; // Store initial viewBox coordinates for drag
-// --- Keep existing style option selectors ---
+let startX, startY; 
+let startViewBoxX, startViewBoxY, dragOffsetX, dragOffsetY; 
+let dragOldPosArrow = null;
+let copiedShapeData = null;
+
 let arrowStrokeColorOptions = document.querySelectorAll(".arrowStrokeSpan");
 let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
 let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
 let arrowTypeStyleValue = document.querySelectorAll(".arrowTypeStyle");
 let arrowHeadStyleValue = document.querySelectorAll(".arrowHeadStyleSpan");
 
+// Add coordinate conversion function like in lineTool.js
+function getSVGCoordsFromMouse(e) {
+    const viewBox = svg.viewBox.baseVal;
+    const rect = svg.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const svgX = viewBox.x + (mouseX / rect.width) * viewBox.width;
+    const svgY = viewBox.y + (mouseY / rect.height) * viewBox.height;
+    return { x: svgX, y: svgY };
+}
+
 class Arrow {
     constructor(startPoint, endPoint, options = {}) {
-        this.startPoint = startPoint; // Should be viewBox coordinates
-        this.endPoint = endPoint;   // Should be viewBox coordinates
+        this.startPoint = startPoint; 
+        this.endPoint = endPoint;   
         this.options = {
             stroke: options.stroke || arrowStrokeColor,
             strokeWidth: options.strokeWidth || arrowStrokeThickness,
-            // Use the passed style name to determine dasharray
             strokeDasharray: options.arrowOutlineStyle === "dashed" ? "10,10" : (options.arrowOutlineStyle === "dotted" ? "2,8" : ""),
-            fill: 'none', // Arrows typically aren't filled
-            ...options // Allow overriding other defaults
+            fill: 'none', 
+            ...options 
         };
-        // Store the style names if needed for later updates
         this.arrowOutlineStyle = options.arrowOutlineStyle || arrowOutlineStyle;
         this.arrowHeadStyle = options.arrowHeadStyle || arrowHeadStyle;
-
-        // Ensure numeric values for calculations
         this.arrowHeadLength = parseFloat(options.arrowHeadLength || arrowHeadLength);
         this.arrowHeadAngleDeg = parseFloat(options.arrowHeadAngleDeg || arrowHeadAngleDeg);
 
-        this.element = null; // The main <path> element
+        this.element = null; 
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        this.isSelected = false; // Add selection state
-        this.anchors = [];     // Array to hold anchor elements [startAnchor, endAnchor]
+        this.isSelected = false; 
+        this.anchors = [];
+        this.shapeName = "arrow"; // Add shapeName property like in lineTool.js
 
-        // Add the group to the SVG *once* during construction
         svg.appendChild(this.group);
-        this.draw(); // Initial draw
+        this.draw(); 
     }
 
     draw() {
-        // Clear previous contents (path and anchors)
         while (this.group.firstChild) {
             this.group.removeChild(this.group.firstChild);
         }
-        this.anchors = []; // Clear anchor references before redraw
+        this.anchors = []; 
 
-        // --- Draw the Arrow Line ---
         let pathData = `M ${this.startPoint.x} ${this.startPoint.y} L ${this.endPoint.x} ${this.endPoint.y}`;
 
-        // --- Draw the Arrow Head ---
         const dx = this.endPoint.x - this.startPoint.x;
         const dy = this.endPoint.y - this.startPoint.y;
         const length = Math.sqrt(dx*dx + dy*dy);
 
-        // Only draw arrowhead if length is sufficient and style is default
-        if (this.arrowHeadStyle === "default" && length > 0.1) { // Avoid drawing on zero-length lines
+        if (this.arrowHeadStyle === "default" && length > 0.1) { 
             const arrowHeadAngleRad = (this.arrowHeadAngleDeg * Math.PI) / 180;
-            const angle = Math.atan2(dy, dx); // Use calculated dx, dy
+            const angle = Math.atan2(dy, dx); 
             const x3 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle - arrowHeadAngleRad);
             const y3 = this.endPoint.y - this.arrowHeadLength * Math.sin(angle - arrowHeadAngleRad);
             const x4 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle + arrowHeadAngleRad);
             const y4 = this.endPoint.y - this.arrowHeadLength * Math.sin(angle + arrowHeadAngleRad);
-            // Append arrowhead lines to the main path data
             pathData += ` M ${x3} ${y3} L ${this.endPoint.x} ${this.endPoint.y} L ${x4} ${y4}`;
         }
-        // Add more conditions here for other arrowHeadStyle types if needed
 
-        // --- Create and Style the Path Element ---
         const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
         arrowPath.setAttribute("d", pathData);
-        // Use selection color if selected, otherwise use base stroke color
         arrowPath.setAttribute("stroke", this.isSelected ? "#5B57D1" : this.options.stroke);
         arrowPath.setAttribute("stroke-width", this.options.strokeWidth);
-        arrowPath.setAttribute("fill", this.options.fill); // Usually 'none' for arrows
+        arrowPath.setAttribute("fill", this.options.fill); 
 
-        // Apply stroke-dasharray if it exists in options
         if (this.options.strokeDasharray) {
              arrowPath.setAttribute("stroke-dasharray", this.options.strokeDasharray);
         } else {
-             arrowPath.removeAttribute("stroke-dasharray"); // Ensure removal if solid
+             arrowPath.removeAttribute("stroke-dasharray"); 
         }
 
         arrowPath.setAttribute("stroke-linecap", "round");
         arrowPath.setAttribute("stroke-linejoin", "round");
-        // Add a class for potential CSS targeting or easier selection logic
         arrowPath.classList.add("arrow-path");
 
         this.element = arrowPath;
-        this.group.appendChild(this.element); // Add path to the group
+        this.group.appendChild(this.element); 
 
-        // --- Add or Remove Anchors based on selection ---
         if (this.isSelected) {
-            this.addOrUpdateAnchors();
+            this.addAnchors();
         }
-        // No explicit removeAnchors call needed here, as redraw clears the group
     }
 
-    move(dxViewBox, dyViewBox) {
-        this.startPoint.x += dxViewBox;
-        this.startPoint.y += dyViewBox;
-        this.endPoint.x += dxViewBox;
-        this.endPoint.y += dyViewBox;
+    // Add selection methods like in lineTool.js
+    selectArrow() {
+        this.isSelected = true;
         this.draw();
     }
 
-    // Method to update one end of the arrow based on anchor drag
-    updatePosition(anchorIndex, newViewBoxX, newViewBoxY) {
-        if (anchorIndex === 0) { // Start anchor
-            this.startPoint.x = newViewBoxX;
-            this.startPoint.y = newViewBoxY;
-        } else if (anchorIndex === 1) { // End anchor
-            this.endPoint.x = newViewBoxX;
-            this.endPoint.y = newViewBoxY;
-        }
-        // Simply redraw. The draw() method will handle updating anchor positions correctly.
+    deselectArrow() {
+        this.isSelected = false;
+        this.anchors = [];
         this.draw();
     }
 
-    // Creates or updates anchor elements (called by draw() when selected)
-    addOrUpdateAnchors() {
-        const points = [this.startPoint, this.endPoint];
-        const anchorRadius = 6 / currentZoom; // Make anchor size consistent on screen
+    // Add removeSelection method like in lineTool.js
+    removeSelection() {
+        this.anchors.forEach(anchor => {
+            if (anchor.parentNode === this.group) {
+                this.group.removeChild(anchor);
+            }
+        });
+        this.anchors = [];
+        this.isSelected = false;
+    }
 
-        points.forEach((point, index) => {
-            // Anchors are cleared in draw(), so we always create new ones here
+    addAnchors() {
+        const anchorSize = 5 / currentZoom;
+        const anchorStrokeWidth = 2 / currentZoom;
+        
+        // --- FIXED: Calculate proper offset to position anchor above the arrowhead ---
+        const arrowAngle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
+        
+        // Calculate offset distance to clear the arrowhead
+        const arrowHeadClearance = this.arrowHeadLength + anchorSize - 10;
+        
+        // Position anchor opposite to arrow direction (behind the arrowhead)
+        const offsetEndAnchor = {
+            x: this.endPoint.x + arrowHeadClearance * Math.cos(arrowAngle),
+            y: this.endPoint.y + arrowHeadClearance * Math.sin(arrowAngle)
+        };
+        
+        // Use original startPoint and calculated offset position for end anchor
+        const anchorPositions = [this.startPoint, offsetEndAnchor];
+    
+        anchorPositions.forEach((point, index) => {
             const anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             anchor.setAttribute("cx", point.x);
             anchor.setAttribute("cy", point.y);
-            anchor.setAttribute("r", anchorRadius); // Use dynamic radius
-            anchor.setAttribute("fill", "#FFFFFF");
+            anchor.setAttribute("r", anchorSize); 
+            anchor.setAttribute("fill", "#121212");
             anchor.setAttribute("stroke", "#5B57D1");
-            anchor.setAttribute("stroke-width", 1.5 / currentZoom); // Adjust stroke for zoom
-            anchor.setAttribute("class", "anchor arrow-anchor"); // Add specific class
-            anchor.setAttribute("data-index", index); // Store index (0 for start, 1 for end)
-            anchor.style.cursor = "grab"; // Indicate draggable anchor
-            anchor.style.pointerEvents = "all"; // Ensure anchors capture mouse events
-
-            this.group.appendChild(anchor); // Add anchor to the group
-            this.anchors[index] = anchor;   // Store reference in the array
+            anchor.setAttribute("stroke-width", anchorStrokeWidth); 
+            anchor.setAttribute("class", "anchor arrow-anchor"); 
+            anchor.setAttribute("data-index", index); 
+            anchor.style.cursor = "grab"; 
+            anchor.style.pointerEvents = "all"; 
+            anchor.addEventListener('pointerdown', (e) => this.startAnchorDrag(e, index));
+    
+            this.group.appendChild(anchor); 
+            this.anchors[index] = anchor;   
         });
     }
-
-    // Method to check if a point (in viewBox coords) is close to the arrow line
-    contains(viewBoxX, viewBoxY) {
-        const x1 = this.startPoint.x;
-        const y1 = this.startPoint.y;
-        const x2 = this.endPoint.x;
-        const y2 = this.endPoint.y;
-        const x = viewBoxX;
-        const y = viewBoxY;
-
-        const strokeWidth = this.options.strokeWidth;
-        // Tolerance should be based on screen pixels, converted to viewBox units
-        const screenPixelTolerance = 5; // e.g., 5 pixels tolerance on screen
-        const tolerance = screenPixelTolerance / currentZoom; // Convert to viewBox units
-
-        const lenSq = (x2 - x1) ** 2 + (y2 - y1) ** 2;
-
-        // Handle zero-length lines (check distance to the single point)
-        if (lenSq < 0.0001) {
-            return Math.sqrt((x - x1) ** 2 + (y - y1) ** 2) < tolerance;
+    
+    isNearAnchor(x, y) {
+        const anchorSize = 10 / currentZoom;
+        
+        // Check anchors
+        for (let i = 0; i < this.anchors.length; i++) {
+            const anchor = this.anchors[i];
+            if (anchor) {
+                const anchorX = parseFloat(anchor.getAttribute('cx'));
+                const anchorY = parseFloat(anchor.getAttribute('cy'));
+                const distance = Math.sqrt(Math.pow(x - anchorX, 2) + Math.pow(y - anchorY, 2));
+                if (distance <= anchorSize) {
+                    return { type: 'anchor', index: i };
+                }
+            }
         }
-
-        // Calculate projection of point (x,y) onto the line segment
-        let t = ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / lenSq;
-        t = Math.max(0, Math.min(1, t)); // Clamp t to [0, 1] for line segment
-
-        // Find the closest point on the line segment
-        const closestX = x1 + t * (x2 - x1);
-        const closestY = y1 + t * (y2 - y1);
-
-        // Calculate distance from the point to the closest point on the segment
-        const distSq = (x - closestX) ** 2 + (y - closestY) ** 2;
-
-        // Check if the distance is within the tolerance squared
-        return distSq < tolerance ** 2;
+        
+        return null;
     }
 
+    startAnchorDrag(e, index) {
+        e.stopPropagation();
+        e.preventDefault(); // --- ADDED: Prevent default behavior
+        
+        // Store old position for undo
+        dragOldPosArrow = {
+            startPoint: { x: this.startPoint.x, y: this.startPoint.y },
+            endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+        };
 
-    // Update arrow style options and redraw
+        const onPointerMove = (event) => {
+            const { x, y } = getSVGCoordsFromMouse(event);
+            this.updatePosition(index, x, y);
+        };
+        
+        const onPointerUp = () => {
+            if (dragOldPosArrow) {
+                const newPos = {
+                    startPoint: { x: this.startPoint.x, y: this.startPoint.y },
+                    endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+                };
+                pushTransformAction(this, dragOldPosArrow, newPos);
+                dragOldPosArrow = null;
+            }
+            
+            svg.removeEventListener('pointermove', onPointerMove);
+            svg.removeEventListener('pointerup', onPointerUp);
+        };
+        
+        svg.addEventListener('pointermove', onPointerMove);
+        svg.addEventListener('pointerup', onPointerUp);
+    }
+
+    move(dx, dy) {
+        this.startPoint.x += dx;
+        this.startPoint.y += dy;
+        this.endPoint.x += dx;
+        this.endPoint.y += dy;
+    }
+
+    updatePosition(anchorIndex, newViewBoxX, newViewBoxY) {
+        if (anchorIndex === 0) { 
+            this.startPoint.x = newViewBoxX;
+            this.startPoint.y = newViewBoxY;
+        } else if (anchorIndex === 1) { 
+            this.endPoint.x = newViewBoxX;
+            this.endPoint.y = newViewBoxY;
+        }
+        this.draw();
+    }
+
+    contains(viewBoxX, viewBoxY) {
+        // Improved tolerance based on stroke width and zoom
+        const tolerance = Math.max(5, this.options.strokeWidth * 2) / currentZoom;
+        const distance = this.pointToLineDistance(viewBoxX, viewBoxY, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
+        return distance <= tolerance;
+    }
+
+    pointToLineDistance(x, y, x1, y1, x2, y2) {
+        const A = x - x1;
+        const B = y - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+        
+        // Calculate the parameter t for the closest point on the line segment
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+        
+        if (lenSq !== 0) {
+            param = dot / lenSq;
+        }
+        
+        let xx, yy;
+        
+        // Find the closest point on the line segment
+        if (param < 0) {
+            // Closest point is before the start of the segment
+            xx = x1;
+            yy = y1;
+        } else if (param > 1) {
+            // Closest point is after the end of the segment
+            xx = x2;
+            yy = y2;
+        } else {
+            // Closest point is on the segment
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+        }
+        
+        // Return the distance from the point to the closest point on the line
+        const dx = x - xx;
+        const dy = y - yy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
     updateStyle(newOptions) {
-        // Handle specific style name conversions
         if (newOptions.arrowOutlineStyle !== undefined) {
-            this.arrowOutlineStyle = newOptions.arrowOutlineStyle; // Store name
+            this.arrowOutlineStyle = newOptions.arrowOutlineStyle; 
             const style = this.arrowOutlineStyle;
-            // Update strokeDasharray based on the name
             this.options.strokeDasharray = style === "dashed" ? "10,10" : (style === "dotted" ? "2,8" : "");
         }
         if (newOptions.arrowHeadStyle !== undefined) {
@@ -211,25 +297,20 @@ class Arrow {
             this.options.stroke = newOptions.stroke;
         }
         if (newOptions.strokeWidth !== undefined) {
-            this.options.strokeWidth = parseFloat(newOptions.strokeWidth); // Ensure number
+            this.options.strokeWidth = parseFloat(newOptions.strokeWidth); 
         }
 
-        // Remove undefined properties from newOptions before merging
         Object.keys(newOptions).forEach(key => newOptions[key] === undefined && delete newOptions[key]);
 
-        // Merge remaining options (like direct stroke, strokeWidth)
         this.options = { ...this.options, ...newOptions };
 
-        // Ensure strokeDasharray is removed if outline style becomes solid
         if (this.arrowOutlineStyle === 'solid' && this.options.strokeDasharray) {
              delete this.options.strokeDasharray;
         }
 
-
-        this.draw(); // Redraw with new styles
+        this.draw(); 
     }
 
-    // Destroy the arrow (remove from SVG and shapes array)
     destroy() {
         if (this.group && this.group.parentNode) {
             this.group.parentNode.removeChild(this.group);
@@ -238,190 +319,207 @@ class Arrow {
         if (index > -1) {
             shapes.splice(index, 1);
         }
-        // If this was the currently selected shape, clear the global reference
         if (currentShape === this) {
             currentShape = null;
         }
     }
 }
 
-// --- screenToViewBoxPointArrow (ensure this is accurate for your setup) ---
-function screenToViewBoxPointArrow(screenX, screenY) {
-    const pt = svg.createSVGPoint();
-    pt.x = screenX;
-    pt.y = screenY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) {
-        console.error("SVG CTM not available in screenToViewBoxPointArrow!");
-        console.error("svg:", svg); // Log the svg variable itself
-        console.trace(); // Print stack trace to see where this is called from
-        return { x: screenX, y: screenY }; // Fallback
+// Add delete functionality like in lineTool.js
+function deleteCurrentShape() {
+    if (currentShape && currentShape.shapeName === 'arrow') {
+        const idx = shapes.indexOf(currentShape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (currentShape.group.parentNode) {
+            currentShape.group.parentNode.removeChild(currentShape.group);
+        }
+        pushDeleteAction(currentShape);
+        currentShape = null;
+        disableAllSideBars();
     }
-    const svgP = pt.matrixTransform(ctm.inverse());
-    return { x: svgP.x, y: svgP.y };
 }
 
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && currentShape && currentShape.shapeName === 'arrow') {
+        deleteCurrentShape();
+    }
+});
 
-// --- EVENT HANDLERS (Modified) ---
-
+// Updated mouse event handlers with better selection detection
 const handleMouseDown = (e) => {
-    const mouseX = e.clientX; // Use clientX/Y for screen coordinates
-    const mouseY = e.clientY;
-    const viewBoxPoint = screenToViewBoxPointArrow(mouseX, mouseY); // Convert click to viewBox coords
+    if (!isArrowToolActive && !isSelectionToolActive) return;
 
-    // Reset interaction states
-    isResizing = false;
-    isDragging = false;
-    activeAnchor = null;
+    const { x, y } = getSVGCoordsFromMouse(e);
 
     if (isArrowToolActive) {
         isDrawingArrow = true;
-        currentArrow = new Arrow({ ...viewBoxPoint }, { ...viewBoxPoint }, {
+        currentArrow = new Arrow({ x, y }, { x, y }, {
             stroke: arrowStrokeColor,
             strokeWidth: arrowStrokeThickness,
-            arrowOutlineStyle: arrowOutlineStyle, // Pass style name
+            arrowOutlineStyle: arrowOutlineStyle, 
             arrowHeadStyle: arrowHeadStyle,
-            // Pass other relevant defaults if needed
         });
         shapes.push(currentArrow);
-        // Don't select immediately while drawing
-        startX = mouseX; // Store screen coords for drawing delta
-        startY = mouseY;
-    } 
-    
-    else if (isSelectionToolActive) {
-        startX = mouseX;
-        startY = mouseY;
-        startViewBoxX = viewBoxPoint.x; // Store initial viewBox coordinates
-        startViewBoxY = viewBoxPoint.y;
+        currentShape = currentArrow;
+    } else if (isSelectionToolActive) {
+        let clickedOnShape = false;
+        let clickedOnAnchor = false;
+        
+        // --- IMPROVED: Better anchor and shape detection ---
+        if (currentShape && currentShape.shapeName === 'arrow' && currentShape.isSelected) {
+            // Check if clicking on an anchor first
+            const anchorInfo = currentShape.isNearAnchor(x, y);
+            if (anchorInfo && anchorInfo.type === 'anchor') {
+                clickedOnAnchor = true;
+                clickedOnShape = true; // Treat anchor click as shape click to prevent deselection
+                // The anchor drag is handled by the anchor's event listener
+            } else if (currentShape.contains(x, y)) {
+                // Clicking on the arrow body (not anchor)
+                isDragging = true;
+                dragOldPosArrow = {
+                    startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                };
+                startX = x;
+                startY = y;
+                clickedOnShape = true;
+            }
+        }
 
-        let clickedOnSomething = false;
-
-        // Check anchors first
-        if (currentShape?.isSelected && currentShape instanceof Arrow) {
-            for (let i = 0; i < currentShape.anchors.length; i++) {
-                const anchor = currentShape.anchors[i];
-                if (e.target === anchor) {
-                    isResizing = true;
-                    activeAnchor = anchor;
-                    clickedOnSomething = true;
-                    e.stopPropagation();
+        // If not clicking on selected shape or anchor, check for other shapes
+        if (!clickedOnShape) {
+            let shapeToSelect = null;
+            
+            // Check all arrows for selection (most recently drawn first)
+            for (let i = shapes.length - 1; i >= 0; i--) {
+                const shape = shapes[i];
+                if (shape instanceof Arrow && shape.contains(x, y)) {
+                    shapeToSelect = shape;
                     break;
                 }
             }
-        }
 
-        // Check shape body
-        if (!isResizing) {
-            let clickedShape = null;
-            for (let i = shapes.length - 1; i >= 0; i--) {
-                const shape = shapes[i];
-                if (typeof shape.contains === 'function' && shape.contains(viewBoxPoint.x, viewBoxPoint.y)) {
-                    if (!(shape.isSelected && shape.anchors?.some(a => e.target === a))) {
-                        clickedShape = shape;
-                        break;
-                    }
-                }
-            }
-
-            if (clickedShape) {
-                clickedOnSomething = true;
-                if (currentShape !== clickedShape) {
-                    if (currentShape) {
-                        currentShape.isSelected = false;
-                        currentShape.draw();
-                    }
-                    currentShape = clickedShape;
-                    currentShape.isSelected = true;
-                    currentShape.draw();
-                }
-                isDragging = true;
-                
-                // Calculate offset between mouse and shape center
-                const shapeCenterX = (currentShape.startPoint.x + currentShape.endPoint.x) / 2;
-                const shapeCenterY = (currentShape.startPoint.y + currentShape.endPoint.y) / 2;
-                dragOffsetX = viewBoxPoint.x - shapeCenterX;
-                dragOffsetY = viewBoxPoint.y - shapeCenterY;
-                
-                svg.style.cursor = 'grabbing';
-                e.stopPropagation();
-            } else if (!clickedOnSomething && currentShape) {
-                currentShape.isSelected = false;
-                currentShape.draw();
+            // Deselect current shape if selecting a different one
+            if (currentShape && currentShape !== shapeToSelect) {
+                currentShape.deselectArrow();
                 currentShape = null;
             }
+
+            if (shapeToSelect) {
+                currentShape = shapeToSelect;
+                currentShape.selectArrow();
+                
+                // Check if the click was on an anchor of the newly selected shape
+                const anchorInfo = currentShape.isNearAnchor(x, y);
+                if (anchorInfo && anchorInfo.type === 'anchor') {
+                    clickedOnAnchor = true;
+                } else {
+                    // Start dragging the newly selected shape
+                    isDragging = true;
+                    dragOldPosArrow = {
+                        startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+                        endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                    };
+                    startX = x;
+                    startY = y;
+                }
+                clickedOnShape = true;
+            }
+        }
+
+        // Only deselect if clicking outside any shape and not on anchor
+        if (!clickedOnShape && !clickedOnAnchor && currentShape) {
+            currentShape.deselectArrow();
+            currentShape = null;
         }
     }
 };
 
-
+// Enhanced mouse move with better cursor feedback
 const handleMouseMove = (e) => {
-    if (!isDrawingArrow && !isResizing && !isDragging) return;
-
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-    const currentViewBoxPoint = screenToViewBoxPointArrow(mouseX, mouseY);
-
+    const { x, y } = getSVGCoordsFromMouse(e);
+    
     if (isDrawingArrow && currentArrow) {
-        currentArrow.endPoint = currentViewBoxPoint;
+        currentArrow.endPoint = { x, y };
         currentArrow.draw();
-    } else if (isResizing && currentShape && activeAnchor) {
-        const anchorIndex = parseInt(activeAnchor.getAttribute("data-index"));
-        currentShape.updatePosition(anchorIndex, currentViewBoxPoint.x, currentViewBoxPoint.y);
-    } else if (isDragging && currentShape) {
-        // Calculate new position based on current mouse minus initial offset
-        const targetX = currentViewBoxPoint.x - dragOffsetX;
-        const targetY = currentViewBoxPoint.y - dragOffsetY;
-        
-        // Calculate current center
-        const currentCenterX = (currentShape.startPoint.x + currentShape.endPoint.x) / 2;
-        const currentCenterY = (currentShape.startPoint.y + currentShape.endPoint.y) / 2;
-        
-        // Calculate delta needed to move to target position
-        const dx = targetX - currentCenterX;
-        const dy = targetY - currentCenterY;
-        
+    } else if (isDragging && currentShape && currentShape.isSelected) {
+        const dx = x - startX;
+        const dy = y - startY;
         currentShape.move(dx, dy);
+        startX = x;
+        startY = y;
+        currentShape.draw();
+        svg.style.cursor = 'grabbing';
+    } else if (isSelectionToolActive && currentShape && currentShape.isSelected) {
+        // Provide visual feedback when hovering over anchors or the arrow
+        const anchorInfo = currentShape.isNearAnchor(x, y);
+        if (anchorInfo) {
+            svg.style.cursor = 'grab';
+        } else if (currentShape.contains(x, y)) {
+            svg.style.cursor = 'move';
+        } else {
+            svg.style.cursor = 'default';
+        }
+    } else if (isSelectionToolActive) {
+        // Check if hovering over any selectable arrow
+        let hoveringOverArrow = false;
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            const shape = shapes[i];
+            if (shape instanceof Arrow && shape.contains(x, y)) {
+                hoveringOverArrow = true;
+                break;
+            }
+        }
+        svg.style.cursor = hoveringOverArrow ? 'pointer' : 'default';
     }
 };
-
 
 const handleMouseUp = (e) => {
     if (isDrawingArrow && currentArrow) {
-        // Finalize drawing
-        // Optional: Remove arrow if too small (zero length)
-        const lenSq = (currentArrow.endPoint.x - currentArrow.startPoint.x) ** 2 + (currentArrow.endPoint.y - currentArrow.startPoint.y) ** 2;
-        if (lenSq < (2/currentZoom)**2) { // Check against small threshold in viewBox units
-             currentArrow.destroy();
-             console.log("Arrow too small, removed.");
+        // Check if arrow is too small
+        const dx = currentArrow.endPoint.x - currentArrow.startPoint.x;
+        const dy = currentArrow.endPoint.y - currentArrow.startPoint.y;
+        const lengthSq = dx * dx + dy * dy;
+        
+        if (lengthSq < (5 / currentZoom) ** 2) {
+            shapes.pop();
+            if (currentArrow.group.parentNode) {
+                currentArrow.group.parentNode.removeChild(currentArrow.group);
+            }
+            currentArrow = null;
+            currentShape = null;
         } else {
-             // Keep the arrow, maybe select it?
-             // currentArrow.isSelected = true;
-             // currentArrow.draw();
-             // currentShape = currentArrow;
+            // Push create action for undo/redo
+            pushCreateAction(currentArrow);
         }
-        currentArrow = null; // Reset arrow being drawn
+        
+        currentArrow = null;
+    }
+    
+    if (isDragging && dragOldPosArrow && currentShape) {
+        const newPos = {
+            startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+        };
+        const stateChanged = dragOldPosArrow.startPoint.x !== newPos.startPoint.x || 
+                           dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
+                           dragOldPosArrow.endPoint.x !== newPos.endPoint.x || 
+                           dragOldPosArrow.endPoint.y !== newPos.endPoint.y;
+        
+        if (stateChanged) {
+            pushTransformAction(currentShape, dragOldPosArrow, newPos);
+        }
+        dragOldPosArrow = null;
     }
 
-    if (isResizing && activeAnchor) {
-         activeAnchor.style.cursor = 'grab'; // Reset anchor cursor
-    }
-    if (isDragging) {
-         svg.style.cursor = currentShape?.isSelected ? 'grab' : 'default'; // Reset main cursor
-    }
-
-    // Reset states
     isDrawingArrow = false;
     isResizing = false;
     isDragging = false;
     activeAnchor = null;
-    // startX/Y don't need resetting here, they are set on mousedown
+    svg.style.cursor = 'default';
 };
 
-
-// --- Attach Listeners ---
-// Ensure listeners are attached correctly to the appropriate elements
-// Using document for mousemove/mouseup is generally recommended for dragging
+// Remove old event listeners and add new ones
 svg.removeEventListener('mousedown', handleMouseDown);
 document.removeEventListener('mousemove', handleMouseMove);
 document.removeEventListener('mouseup', handleMouseUp);
@@ -430,17 +528,13 @@ svg.addEventListener('mousedown', handleMouseDown);
 document.addEventListener('mousemove', handleMouseMove);
 document.addEventListener('mouseup', handleMouseUp);
 
-
-// --- Style Option Event Listeners (Keep the refined application logic) ---
-
+// Updated style handlers with undo/redo support
 const updateSelectedArrowStyle = (styleChanges) => {
-    // Check if currentShape exists and is an Arrow instance before updating
     if (currentShape instanceof Arrow && currentShape.isSelected) {
+        const oldOptions = {...currentShape.options, arrowOutlineStyle: currentShape.arrowOutlineStyle, arrowHeadStyle: currentShape.arrowHeadStyle};
         currentShape.updateStyle(styleChanges);
+        pushOptionsChangeAction(currentShape, oldOptions);
     } else {
-         // console.log("No selected arrow to apply style changes to.");
-         // Optionally update the default variables (arrowStrokeColor etc.)
-         // so the *next* arrow drawn uses the new style.
          if (styleChanges.stroke !== undefined) arrowStrokeColor = styleChanges.stroke;
          if (styleChanges.strokeWidth !== undefined) arrowStrokeThickness = styleChanges.strokeWidth;
          if (styleChanges.arrowOutlineStyle !== undefined) arrowOutlineStyle = styleChanges.arrowOutlineStyle;
@@ -448,14 +542,13 @@ const updateSelectedArrowStyle = (styleChanges) => {
     }
 };
 
-// Re-attach or ensure these listeners are correctly set up
 arrowStrokeColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
         event.stopPropagation();
         arrowStrokeColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         const newColor = span.getAttribute("data-id");
-        updateSelectedArrowStyle({ stroke: newColor }); // Update selected or defaults
+        updateSelectedArrowStyle({ stroke: newColor }); 
     });
 });
 
@@ -475,18 +568,16 @@ arrowOutlineStyleValue.forEach((span) => {
         arrowOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         const newStyle = span.getAttribute("data-id");
-        updateSelectedArrowStyle({ arrowOutlineStyle: newStyle }); // Pass style name
+        updateSelectedArrowStyle({ arrowOutlineStyle: newStyle }); 
     });
 });
 
-// Keep arrowTypeStyleValue and arrowHeadStyleValue listeners similar, calling updateSelectedArrowStyle
 arrowTypeStyleValue.forEach((span) => {
     span.addEventListener("click", (event) => {
         event.stopPropagation();
         arrowTypeStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         const isCurved = span.getAttribute("data-id") === 'true';
-        // updateSelectedArrowStyle({ isCurved: isCurved }); // Needs draw logic update
         console.warn("Curved arrow style selection not implemented in draw logic.");
     });
 });
@@ -499,4 +590,82 @@ arrowHeadStyleValue.forEach((span) => {
         const newHeadStyle = span.getAttribute("data-id");
         updateSelectedArrowStyle({ arrowHeadStyle: newHeadStyle });
     });
+});
+
+// Add copy/paste functionality like in lineTool.js
+function cloneOptions(options) {
+    return JSON.parse(JSON.stringify(options));
+}
+
+function cloneArrowData(arrow) {
+    return {
+        startPoint: { x: arrow.startPoint.x, y: arrow.startPoint.y },
+        endPoint: { x: arrow.endPoint.x, y: arrow.endPoint.y },
+        options: cloneOptions(arrow.options),
+        arrowOutlineStyle: arrow.arrowOutlineStyle,
+        arrowHeadStyle: arrow.arrowHeadStyle
+    };
+}
+
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (currentShape && currentShape.shapeName === 'arrow' && currentShape.isSelected) {
+            copiedShapeData = cloneArrowData(currentShape);
+        }
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (copiedShapeData) {
+            e.preventDefault();
+            let pasteX, pasteY;
+            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') {
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = lastMousePos.x;
+                svgPoint.y = lastMousePos.y;
+                const CTM = svg.getScreenCTM().inverse();
+                const userPoint = svgPoint.matrixTransform(CTM);
+                pasteX = userPoint.x;
+                pasteY = userPoint.y;
+            } else {
+                const svgRect = svg.getBoundingClientRect();
+                pasteX = svgRect.width / 2;
+                pasteY = svgRect.height / 2;
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = pasteX;
+                svgPoint.y = pasteY;
+                const CTM = svg.getScreenCTM().inverse();
+                const userPoint = svgPoint.matrixTransform(CTM);
+                pasteX = userPoint.x;
+                pasteY = userPoint.y;
+            }
+
+            shapes.forEach(shape => {
+                if (shape.isSelected) {
+                    shape.removeSelection();
+                }
+            });
+
+            currentShape = null;
+            disableAllSideBars();
+            
+            const offset = 20;
+            const newArrow = new Arrow(
+                { x: copiedShapeData.startPoint.x + offset, y: copiedShapeData.startPoint.y + offset },
+                { x: copiedShapeData.endPoint.x + offset, y: copiedShapeData.endPoint.y + offset },
+                {
+                    ...cloneOptions(copiedShapeData.options),
+                    arrowOutlineStyle: copiedShapeData.arrowOutlineStyle,
+                    arrowHeadStyle: copiedShapeData.arrowHeadStyle
+                }
+            );
+            
+            shapes.push(newArrow);
+            newArrow.isSelected = true;
+            currentShape = newArrow;
+            newArrow.draw();
+            pushCreateAction(newArrow);
+        }
+    }
 });
