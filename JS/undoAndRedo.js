@@ -110,6 +110,23 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y }
             }
         });
+    } else if (shape.shapeName === 'arrow') {
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: {
+                startPoint: { x: oldPos.startPoint.x, y: oldPos.startPoint.y },
+                endPoint: { x: oldPos.endPoint.x, y: oldPos.endPoint.y },
+                controlPoint1: oldPos.controlPoint1 ? { x: oldPos.controlPoint1.x, y: oldPos.controlPoint1.y } : null,
+                controlPoint2: oldPos.controlPoint2 ? { x: oldPos.controlPoint2.x, y: oldPos.controlPoint2.y } : null
+            },
+            newPos: {
+                startPoint: { x: newPos.startPoint.x, y: newPos.startPoint.y },
+                endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y },
+                controlPoint1: newPos.controlPoint1 ? { x: newPos.controlPoint1.x, y: newPos.controlPoint1.y } : null,
+                controlPoint2: newPos.controlPoint2 ? { x: newPos.controlPoint2.x, y: newPos.controlPoint2.y } : null
+            }
+        });
     } else if (shape.shapeName === 'freehandStroke') {
         undoStack.push({
             type: 'transform',
@@ -238,6 +255,17 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+        } else if (action.shape.shapeName === 'arrow') {
+            // Handle arrow transform undo
+            action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
+            action.shape.endPoint = { x: action.oldPos.endPoint.x, y: action.oldPos.endPoint.y };
+            action.shape.controlPoint1 = action.oldPos.controlPoint1 ? 
+                { x: action.oldPos.controlPoint1.x, y: action.oldPos.controlPoint1.y } : null;
+            action.shape.controlPoint2 = action.oldPos.controlPoint2 ? 
+                { x: action.oldPos.controlPoint2.x, y: action.oldPos.controlPoint2.y } : null;
+            action.shape.isSelected = false;
+            if (typeof action.shape.deselectArrow === 'function') action.shape.deselectArrow();
+            action.shape.draw();
         } else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform undo
             action.shape.points = JSON.parse(JSON.stringify(action.oldPos.points));
@@ -273,6 +301,14 @@ export function undo() {
                     setTimeout(updateSelectionFeedback, 0);
                 }
             }
+        } else if (action.shape.shapeName === 'arrow') {
+            // Handle arrow options change undo
+            action.shape.options = { ...action.oldOptions };
+            action.shape.arrowOutlineStyle = action.oldOptions.arrowOutlineStyle;
+            action.shape.arrowHeadStyle = action.oldOptions.arrowHeadStyle;
+            action.shape.arrowCurved = action.oldOptions.arrowCurved;
+            action.shape.arrowCurveAmount = action.oldOptions.arrowCurveAmount;
+            action.shape.draw();
         } else {
             // Handle other shape options change undo
             action.shape.options = action.oldOptions;
@@ -367,6 +403,17 @@ export function redo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+        } else if (action.shape.shapeName === 'arrow') {
+            // Handle arrow transform redo
+            action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
+            action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };
+            action.shape.controlPoint1 = action.newPos.controlPoint1 ? 
+                { x: action.newPos.controlPoint1.x, y: action.newPos.controlPoint1.y } : null;
+            action.shape.controlPoint2 = action.newPos.controlPoint2 ? 
+                { x: action.newPos.controlPoint2.x, y: action.newPos.controlPoint2.y } : null;
+            action.shape.isSelected = false;
+            if (typeof action.shape.deselectArrow === 'function') action.shape.deselectArrow();
+            action.shape.draw();
         } else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform redo
             action.shape.points = JSON.parse(JSON.stringify(action.newPos.points));
@@ -383,6 +430,42 @@ export function redo() {
             action.shape.rotation = action.newPos.rotation;
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+            action.shape.draw();
+        }
+        undoStack.push(action);
+    }
+    else if (action.type === 'optionsChange') {
+        if (action.shape.type === 'text') {
+            // Handle text options change redo
+            const textElement = action.shape.element.querySelector('text');
+            if (textElement) {
+                if (action.newOptions.color) textElement.setAttribute('fill', action.newOptions.color);
+                if (action.newOptions.font) textElement.setAttribute('font-family', action.newOptions.font);
+                if (action.newOptions.size) textElement.setAttribute('font-size', action.newOptions.size);
+                if (action.newOptions.align) textElement.setAttribute('text-anchor', action.newOptions.align);
+                
+                // Update feedback if selected
+                if (selectedElement === action.shape.element && updateSelectionFeedback) {
+                    setTimeout(updateSelectionFeedback, 0);
+                }
+            }
+        } else if (action.shape.shapeName === 'arrow') {
+            // Handle arrow options change redo - we need to get current options as newOptions
+            const currentOptions = {
+                ...action.shape.options,
+                arrowOutlineStyle: action.shape.arrowOutlineStyle,
+                arrowHeadStyle: action.shape.arrowHeadStyle,
+                arrowCurved: action.shape.arrowCurved,
+                arrowCurveAmount: action.shape.arrowCurveAmount
+            };
+            
+            // Store current state for potential future undo
+            action.newOptions = currentOptions;
+            
+            action.shape.draw();
+        } else {
+            // Handle other shape options change redo - we need to get current options as newOptions
+            action.newOptions = action.shape.options;
             action.shape.draw();
         }
         undoStack.push(action);
