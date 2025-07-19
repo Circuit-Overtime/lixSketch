@@ -213,7 +213,7 @@ function disableAllSideBars()
   lineSideBar.classList.add("hidden");
   squareSideBar.classList.add("hidden");
   circleSideBar.classList.add("hidden");
-  // arrowSideBar.classList.add("hidden");
+  arrowSideBar.classList.add("hidden");
   // textSideBar.classList.add("hidden");
 }
 function disableAllTools() 

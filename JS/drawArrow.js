@@ -724,9 +724,6 @@ svg.removeEventListener('mousedown', handleMouseDown);
 svg.removeEventListener('mousemove', handleMouseMove);
 svg.removeEventListener('mouseup', handleMouseUp);
 
-svg.addEventListener('mousedown', handleMouseDown);
-svg.addEventListener('mousemove', handleMouseMove);
-svg.addEventListener('mouseup', handleMouseUp);
 
 // Updated style handlers with undo/redo support
 const updateSelectedArrowStyle = (styleChanges) => {
@@ -865,3 +862,9 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+export { 
+    handleMouseDown as handleMouseDownArrow, 
+    handleMouseMove as handleMouseMoveArrow, 
+    handleMouseUp as handleMouseUpArrow 
+};

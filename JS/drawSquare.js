@@ -504,10 +504,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 
-const handleMouseDown = (e) => {
+const handleMouseDownRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
-
     if (isSquareToolActive) {
         const { x, y } = getSVGCoordsFromMouse(e);
         startX = x;
@@ -605,7 +604,7 @@ const handleMouseDown = (e) => {
     }
 };
 
-const handleMouseMove = (e) => {
+const handleMouseMoveRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
     const svgRect = svg.getBoundingClientRect();
@@ -686,7 +685,7 @@ const handleMouseMove = (e) => {
     }
 };
 
-const handleMouseUp = (e) => {
+const handleMouseUpRect = (e) => {
     if (isDrawingSquare && currentShape) {
         if (currentShape.width === 0 || currentShape.height === 0) {
             if (currentShape.group.parentNode) {
@@ -721,10 +720,8 @@ const handleMouseUp = (e) => {
     svg.style.cursor = 'default';
 };
 
-svg.addEventListener('mousedown', handleMouseDown);
-svg.addEventListener('mousemove', handleMouseMove);
-svg.addEventListener('mouseup', handleMouseUp);
-// document.addEventListener('mouseup', handleMouseUp);
+
+
 
 
 SquarecolorOptions.forEach((span) => {
@@ -904,3 +901,5 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+export { handleMouseDownRect, handleMouseMoveRect, handleMouseUpRect};
