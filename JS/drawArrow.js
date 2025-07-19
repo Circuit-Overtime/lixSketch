@@ -117,10 +117,25 @@ class Arrow {
         this.draw();
     }
 
-    deselectArrow() {
+    removeSelection() {
+        this.anchors.forEach(anchor => {
+             if (anchor.parentNode === this.group) {
+                 this.group.removeChild(anchor);
+             }
+         });
+         if (this.rotationAnchor && this.rotationAnchor.parentNode === this.group) {
+            this.group.removeChild(this.rotationAnchor);
+         }
+         if (this.selectionOutline && this.selectionOutline.parentNode === this.group) {
+            this.group.removeChild(this.selectionOutline);
+         }
+        this.anchors = [];
+        this.rotationAnchor = null;
+        this.selectionOutline = null;
         this.isSelected = false;
-        this.draw();
     }
+
+
 
     draw() {
         while (this.group.firstChild) {
@@ -189,7 +204,7 @@ class Arrow {
 
         const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
         arrowPath.setAttribute("d", pathData);
-        arrowPath.setAttribute("stroke", this.isSelected ? "#5B57D1" : this.options.stroke);
+        arrowPath.setAttribute("stroke", this.options.stroke);
         arrowPath.setAttribute("stroke-width", this.options.strokeWidth);
         arrowPath.setAttribute("fill", this.options.fill); 
 
@@ -583,7 +598,7 @@ const handleMouseDown = (e) => {
             }
 
             if (currentShape && currentShape !== shapeToSelect) {
-                currentShape.deselectArrow();
+                currentShape.removeSelection();
                 currentShape = null;
             }
 
@@ -610,7 +625,7 @@ const handleMouseDown = (e) => {
         }
 
         if (!clickedOnShape && !clickedOnAnchor && currentShape) {
-            currentShape.deselectArrow();
+            currentShape.removeSelection();
             currentShape = null;
         }
     }
@@ -818,8 +833,8 @@ document.addEventListener('keydown', (e) => {
             e.preventDefault();
             
             shapes.forEach(shape => {
-                if (shape.isSelected && shape.deselectArrow) {
-                    shape.deselectArrow();
+                if (shape.isSelected && shape.removeSelection) {
+                    shape.removeSelection();
                 }
             });
 

@@ -276,7 +276,6 @@ class Rectangle {
         this.rotationAnchor = null;
         this.selectionOutline = null;
         this.isSelected = false;
-        // Hide sidebar when shape is deselected (handled in mouse down/up)
     }
 
     contains(x, y) {
