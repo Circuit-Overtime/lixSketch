@@ -51,15 +51,74 @@ class Arrow {
         this.arrowHeadStyle = options.arrowHeadStyle || arrowHeadStyle;
         this.arrowHeadLength = parseFloat(options.arrowHeadLength || arrowHeadLength);
         this.arrowHeadAngleDeg = parseFloat(options.arrowHeadAngleDeg || arrowHeadAngleDeg);
+        this.arrowCurved = options.arrowCurved !== undefined ? options.arrowCurved : arrowCurved;
+        this.arrowCurveAmount = options.arrowCurveAmount || arrowCurveAmount;
+
+        // Control points for curved arrows
+        this.controlPoint1 = options.controlPoint1 || null;
+        this.controlPoint2 = options.controlPoint2 || null;
 
         this.element = null; 
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         this.isSelected = false; 
         this.anchors = [];
-        this.shapeName = "arrow"; // Add shapeName property like in lineTool.js
+        this.shapeName = "arrow";
+
+        // Initialize control points if curved
+        if (this.arrowCurved && !this.controlPoint1 && !this.controlPoint2) {
+            this.initializeCurveControlPoints();
+        }
 
         svg.appendChild(this.group);
         this.draw(); 
+    }
+
+    initializeCurveControlPoints() {
+        const dx = this.endPoint.x - this.startPoint.x;
+        const dy = this.endPoint.y - this.startPoint.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Prevent division by zero and NaN
+        if (distance === 0 || isNaN(distance)) {
+            this.controlPoint1 = { x: this.startPoint.x + 20, y: this.startPoint.y };
+            this.controlPoint2 = { x: this.endPoint.x - 20, y: this.endPoint.y };
+            return;
+        }
+        
+        // Calculate perpendicular direction for S-curve
+        const perpX = -dy / distance;
+        const perpY = dx / distance;
+        
+        // Create S-curve control points
+        const curveOffset = this.arrowCurveAmount;
+        
+        // First control point (1/3 along the line, offset in one direction)
+        const t1 = 0.33;
+        const point1X = this.startPoint.x + t1 * dx;
+        const point1Y = this.startPoint.y + t1 * dy;
+        this.controlPoint1 = {
+            x: point1X + perpX * curveOffset,
+            y: point1Y + perpY * curveOffset
+        };
+        
+        // Second control point (2/3 along the line, offset in opposite direction)
+        const t2 = 0.67;
+        const point2X = this.startPoint.x + t2 * dx;
+        const point2Y = this.startPoint.y + t2 * dy;
+        this.controlPoint2 = {
+            x: point2X - perpX * curveOffset,
+            y: point2Y - perpY * curveOffset
+        };
+    }
+
+    selectArrow() {
+        this.isSelected = true;
+        this.draw();
+    }
+
+    deselectArrow() {
+        this.isSelected = false;
+        this.draw();
     }
 
     draw() {
@@ -68,15 +127,58 @@ class Arrow {
         }
         this.anchors = []; 
 
-        let pathData = `M ${this.startPoint.x} ${this.startPoint.y} L ${this.endPoint.x} ${this.endPoint.y}`;
+        let pathData;
+        let arrowEndPoint = this.endPoint;
 
-        const dx = this.endPoint.x - this.startPoint.x;
-        const dy = this.endPoint.y - this.startPoint.y;
-        const length = Math.sqrt(dx*dx + dy*dy);
+        if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
+            // Validate control points before using them
+            if (isNaN(this.controlPoint1.x) || isNaN(this.controlPoint1.y) || 
+                isNaN(this.controlPoint2.x) || isNaN(this.controlPoint2.y)) {
+                this.initializeCurveControlPoints();
+            }
+            
+            // Create curved path using cubic Bezier curve
+            pathData = `M ${this.startPoint.x} ${this.startPoint.y} ` +
+                      `C ${this.controlPoint1.x} ${this.controlPoint1.y}, ` +
+                      `${this.controlPoint2.x} ${this.controlPoint2.y}, ` +
+                      `${this.endPoint.x} ${this.endPoint.y}`;
+            
+            // Calculate the direction at the end of the curve for arrowhead placement
+            const t = 0.95; // Slightly before the end to get proper direction
+            const tangent = this.getCubicBezierTangent(t);
+            const angle = Math.atan2(tangent.y, tangent.x);
+            
+            // Adjust arrow end point to account for arrowhead
+            if (this.arrowHeadStyle === "default") {
+                arrowEndPoint = {
+                    x: this.endPoint.x - (this.arrowHeadLength * 0.3) * Math.cos(angle),
+                    y: this.endPoint.y - (this.arrowHeadLength * 0.3) * Math.sin(angle)
+                };
+                
+                // Update path to end at adjusted point
+                pathData = `M ${this.startPoint.x} ${this.startPoint.y} ` +
+                          `C ${this.controlPoint1.x} ${this.controlPoint1.y}, ` +
+                          `${this.controlPoint2.x} ${this.controlPoint2.y}, ` +
+                          `${arrowEndPoint.x} ${arrowEndPoint.y}`;
+            }
+        } else {
+            // Straight arrow
+            pathData = `M ${this.startPoint.x} ${this.startPoint.y} L ${this.endPoint.x} ${this.endPoint.y}`;
+        }
 
-        if (this.arrowHeadStyle === "default" && length > 0.1) { 
+        // Draw arrowhead
+        if (this.arrowHeadStyle === "default") {
+            let angle;
+            if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
+                const tangent = this.getCubicBezierTangent(1.0);
+                angle = Math.atan2(tangent.y, tangent.x);
+            } else {
+                const dx = this.endPoint.x - this.startPoint.x;
+                const dy = this.endPoint.y - this.startPoint.y;
+                angle = Math.atan2(dy, dx);
+            }
+            
             const arrowHeadAngleRad = (this.arrowHeadAngleDeg * Math.PI) / 180;
-            const angle = Math.atan2(dy, dx); 
             const x3 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle - arrowHeadAngleRad);
             const y3 = this.endPoint.y - this.arrowHeadLength * Math.sin(angle - arrowHeadAngleRad);
             const x4 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle + arrowHeadAngleRad);
@@ -108,55 +210,79 @@ class Arrow {
         }
     }
 
-    // Add selection methods like in lineTool.js
-    selectArrow() {
-        this.isSelected = true;
-        this.draw();
+    getCubicBezierPoint(t) {
+        if (!this.controlPoint1 || !this.controlPoint2) return this.startPoint;
+        
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const mt3 = mt2 * mt;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        
+        return {
+            x: mt3 * this.startPoint.x + 3 * mt2 * t * this.controlPoint1.x + 
+               3 * mt * t2 * this.controlPoint2.x + t3 * this.endPoint.x,
+            y: mt3 * this.startPoint.y + 3 * mt2 * t * this.controlPoint1.y + 
+               3 * mt * t2 * this.controlPoint2.y + t3 * this.endPoint.y
+        };
     }
 
-    deselectArrow() {
-        this.isSelected = false;
-        this.anchors = [];
-        this.draw();
-    }
-
-    // Add removeSelection method like in lineTool.js
-    removeSelection() {
-        this.anchors.forEach(anchor => {
-            if (anchor.parentNode === this.group) {
-                this.group.removeChild(anchor);
-            }
-        });
-        this.anchors = [];
-        this.isSelected = false;
+    getCubicBezierTangent(t) {
+        if (!this.controlPoint1 || !this.controlPoint2) {
+            return { x: this.endPoint.x - this.startPoint.x, y: this.endPoint.y - this.startPoint.y };
+        }
+        
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const t2 = t * t;
+        
+        return {
+            x: 3 * mt2 * (this.controlPoint1.x - this.startPoint.x) + 
+               6 * mt * t * (this.controlPoint2.x - this.controlPoint1.x) + 
+               3 * t2 * (this.endPoint.x - this.controlPoint2.x),
+            y: 3 * mt2 * (this.controlPoint1.y - this.startPoint.y) + 
+               6 * mt * t * (this.controlPoint2.y - this.controlPoint1.y) + 
+               3 * t2 * (this.endPoint.y - this.controlPoint2.y)
+        };
     }
 
     addAnchors() {
         const anchorSize = 5 / currentZoom;
         const anchorStrokeWidth = 2 / currentZoom;
         
-        // --- FIXED: Calculate proper offset to position anchor above the arrowhead ---
-        const arrowAngle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
+        let anchorPositions = [this.startPoint, this.endPoint];
         
-        // Calculate offset distance to clear the arrowhead
-        const arrowHeadClearance = this.arrowHeadLength + anchorSize - 10;
-        
-        // Position anchor opposite to arrow direction (behind the arrowhead)
-        const offsetEndAnchor = {
-            x: this.endPoint.x + arrowHeadClearance * Math.cos(arrowAngle),
-            y: this.endPoint.y + arrowHeadClearance * Math.sin(arrowAngle)
-        };
-        
-        // Use original startPoint and calculated offset position for end anchor
-        const anchorPositions = [this.startPoint, offsetEndAnchor];
+        // Add control point anchors for curved arrows
+        if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
+            anchorPositions.push(this.controlPoint1, this.controlPoint2);
+        } else if (!this.arrowCurved) {
+            // For straight arrows, position end anchor to avoid arrowhead overlap
+            const arrowAngle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
+            const arrowHeadClearance = this.arrowHeadLength + anchorSize - 10;
+            const offsetEndAnchor = {
+                x: this.endPoint.x + arrowHeadClearance * Math.cos(arrowAngle),
+                y: this.endPoint.y + arrowHeadClearance * Math.sin(arrowAngle)
+            };
+            anchorPositions[1] = offsetEndAnchor;
+        }
     
         anchorPositions.forEach((point, index) => {
             const anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             anchor.setAttribute("cx", point.x);
             anchor.setAttribute("cy", point.y);
             anchor.setAttribute("r", anchorSize); 
-            anchor.setAttribute("fill", "#121212");
-            anchor.setAttribute("stroke", "#5B57D1");
+            
+            // Different colors for different anchor types
+            if (this.arrowCurved && index >= 2) {
+                // Control point anchors
+                anchor.setAttribute("fill", "#FF6B6B");
+                anchor.setAttribute("stroke", "#5B57D1");
+            } else {
+                // Start/end anchors
+                anchor.setAttribute("fill", "#121212");
+                anchor.setAttribute("stroke", "#5B57D1");
+            }
+            
             anchor.setAttribute("stroke-width", anchorStrokeWidth); 
             anchor.setAttribute("class", "anchor arrow-anchor"); 
             anchor.setAttribute("data-index", index); 
@@ -190,12 +316,14 @@ class Arrow {
 
     startAnchorDrag(e, index) {
         e.stopPropagation();
-        e.preventDefault(); // --- ADDED: Prevent default behavior
+        e.preventDefault();
         
         // Store old position for undo
         dragOldPosArrow = {
             startPoint: { x: this.startPoint.x, y: this.startPoint.y },
-            endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+            endPoint: { x: this.endPoint.x, y: this.endPoint.y },
+            controlPoint1: this.controlPoint1 ? { x: this.controlPoint1.x, y: this.controlPoint1.y } : null,
+            controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null
         };
 
         const onPointerMove = (event) => {
@@ -207,7 +335,9 @@ class Arrow {
             if (dragOldPosArrow) {
                 const newPos = {
                     startPoint: { x: this.startPoint.x, y: this.startPoint.y },
-                    endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+                    endPoint: { x: this.endPoint.x, y: this.endPoint.y },
+                    controlPoint1: this.controlPoint1 ? { x: this.controlPoint1.x, y: this.controlPoint1.y } : null,
+                    controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null
                 };
                 pushTransformAction(this, dragOldPosArrow, newPos);
                 dragOldPosArrow = null;
@@ -226,6 +356,15 @@ class Arrow {
         this.startPoint.y += dy;
         this.endPoint.x += dx;
         this.endPoint.y += dy;
+        
+        if (this.controlPoint1) {
+            this.controlPoint1.x += dx;
+            this.controlPoint1.y += dy;
+        }
+        if (this.controlPoint2) {
+            this.controlPoint2.x += dx;
+            this.controlPoint2.y += dy;
+        }
     }
 
     updatePosition(anchorIndex, newViewBoxX, newViewBoxY) {
@@ -235,15 +374,41 @@ class Arrow {
         } else if (anchorIndex === 1) { 
             this.endPoint.x = newViewBoxX;
             this.endPoint.y = newViewBoxY;
+        } else if (anchorIndex === 2 && this.controlPoint1) {
+            this.controlPoint1.x = newViewBoxX;
+            this.controlPoint1.y = newViewBoxY;
+        } else if (anchorIndex === 3 && this.controlPoint2) {
+            this.controlPoint2.x = newViewBoxX;
+            this.controlPoint2.y = newViewBoxY;
         }
         this.draw();
     }
 
     contains(viewBoxX, viewBoxY) {
-        // Improved tolerance based on stroke width and zoom
         const tolerance = Math.max(5, this.options.strokeWidth * 2) / currentZoom;
-        const distance = this.pointToLineDistance(viewBoxX, viewBoxY, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
-        return distance <= tolerance;
+        
+        if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
+            // Check distance to cubic Bezier curve
+            return this.pointToCubicBezierDistance(viewBoxX, viewBoxY) <= tolerance;
+        } else {
+            // Check distance to straight line
+            const distance = this.pointToLineDistance(viewBoxX, viewBoxY, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y);
+            return distance <= tolerance;
+        }
+    }
+
+    pointToCubicBezierDistance(x, y) {
+        let minDistance = Infinity;
+        const steps = 100;
+        
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const point = this.getCubicBezierPoint(t);
+            const distance = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2));
+            minDistance = Math.min(minDistance, distance);
+        }
+        
+        return minDistance;
     }
 
     pointToLineDistance(x, y, x1, y1, x2, y2) {
@@ -293,11 +458,30 @@ class Arrow {
         if (newOptions.arrowHeadStyle !== undefined) {
             this.arrowHeadStyle = newOptions.arrowHeadStyle;
         }
+        if (newOptions.arrowCurved !== undefined) {
+            const wasCurved = this.arrowCurved;
+            this.arrowCurved = newOptions.arrowCurved;
+            
+            if (this.arrowCurved && !wasCurved) {
+                // Converting from straight to curved
+                this.initializeCurveControlPoints();
+            } else if (!this.arrowCurved && wasCurved) {
+                // Converting from curved to straight
+                this.controlPoint1 = null;
+                this.controlPoint2 = null;
+            }
+        }
         if (newOptions.stroke !== undefined) {
             this.options.stroke = newOptions.stroke;
         }
         if (newOptions.strokeWidth !== undefined) {
             this.options.strokeWidth = parseFloat(newOptions.strokeWidth); 
+        }
+        if (newOptions.arrowCurveAmount !== undefined) {
+            this.arrowCurveAmount = newOptions.arrowCurveAmount;
+            if (this.arrowCurved) {
+                this.initializeCurveControlPoints();
+            }
         }
 
         Object.keys(newOptions).forEach(key => newOptions[key] === undefined && delete newOptions[key]);
@@ -358,6 +542,8 @@ const handleMouseDown = (e) => {
             strokeWidth: arrowStrokeThickness,
             arrowOutlineStyle: arrowOutlineStyle, 
             arrowHeadStyle: arrowHeadStyle,
+            arrowCurved: arrowCurved,
+            arrowCurveAmount: arrowCurveAmount
         });
         shapes.push(currentArrow);
         currentShape = currentArrow;
@@ -365,20 +551,18 @@ const handleMouseDown = (e) => {
         let clickedOnShape = false;
         let clickedOnAnchor = false;
         
-        // --- IMPROVED: Better anchor and shape detection ---
         if (currentShape && currentShape.shapeName === 'arrow' && currentShape.isSelected) {
-            // Check if clicking on an anchor first
             const anchorInfo = currentShape.isNearAnchor(x, y);
             if (anchorInfo && anchorInfo.type === 'anchor') {
                 clickedOnAnchor = true;
-                clickedOnShape = true; // Treat anchor click as shape click to prevent deselection
-                // The anchor drag is handled by the anchor's event listener
+                clickedOnShape = true;
             } else if (currentShape.contains(x, y)) {
-                // Clicking on the arrow body (not anchor)
                 isDragging = true;
                 dragOldPosArrow = {
                     startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                    controlPoint1: currentShape.controlPoint1 ? { x: currentShape.controlPoint1.x, y: currentShape.controlPoint1.y } : null,
+                    controlPoint2: currentShape.controlPoint2 ? { x: currentShape.controlPoint2.x, y: currentShape.controlPoint2.y } : null
                 };
                 startX = x;
                 startY = y;
@@ -386,11 +570,9 @@ const handleMouseDown = (e) => {
             }
         }
 
-        // If not clicking on selected shape or anchor, check for other shapes
         if (!clickedOnShape) {
             let shapeToSelect = null;
             
-            // Check all arrows for selection (most recently drawn first)
             for (let i = shapes.length - 1; i >= 0; i--) {
                 const shape = shapes[i];
                 if (shape instanceof Arrow && shape.contains(x, y)) {
@@ -399,7 +581,6 @@ const handleMouseDown = (e) => {
                 }
             }
 
-            // Deselect current shape if selecting a different one
             if (currentShape && currentShape !== shapeToSelect) {
                 currentShape.deselectArrow();
                 currentShape = null;
@@ -409,16 +590,16 @@ const handleMouseDown = (e) => {
                 currentShape = shapeToSelect;
                 currentShape.selectArrow();
                 
-                // Check if the click was on an anchor of the newly selected shape
                 const anchorInfo = currentShape.isNearAnchor(x, y);
                 if (anchorInfo && anchorInfo.type === 'anchor') {
                     clickedOnAnchor = true;
                 } else {
-                    // Start dragging the newly selected shape
                     isDragging = true;
                     dragOldPosArrow = {
                         startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-                        endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                        endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                        controlPoint1: currentShape.controlPoint1 ? { x: currentShape.controlPoint1.x, y: currentShape.controlPoint1.y } : null,
+                        controlPoint2: currentShape.controlPoint2 ? { x: currentShape.controlPoint2.x, y: currentShape.controlPoint2.y } : null
                     };
                     startX = x;
                     startY = y;
@@ -427,7 +608,6 @@ const handleMouseDown = (e) => {
             }
         }
 
-        // Only deselect if clicking outside any shape and not on anchor
         if (!clickedOnShape && !clickedOnAnchor && currentShape) {
             currentShape.deselectArrow();
             currentShape = null;
@@ -441,6 +621,10 @@ const handleMouseMove = (e) => {
     
     if (isDrawingArrow && currentArrow) {
         currentArrow.endPoint = { x, y };
+        // Update control points for curved arrows during drawing
+        if (currentArrow.arrowCurved) {
+            currentArrow.initializeCurveControlPoints();
+        }
         currentArrow.draw();
     } else if (isDragging && currentShape && currentShape.isSelected) {
         const dx = x - startX;
@@ -521,17 +705,23 @@ const handleMouseUp = (e) => {
 
 // Remove old event listeners and add new ones
 svg.removeEventListener('mousedown', handleMouseDown);
-document.removeEventListener('mousemove', handleMouseMove);
-document.removeEventListener('mouseup', handleMouseUp);
+svg.removeEventListener('mousemove', handleMouseMove);
+svg.removeEventListener('mouseup', handleMouseUp);
 
 svg.addEventListener('mousedown', handleMouseDown);
-document.addEventListener('mousemove', handleMouseMove);
-document.addEventListener('mouseup', handleMouseUp);
+svg.addEventListener('mousemove', handleMouseMove);
+svg.addEventListener('mouseup', handleMouseUp);
 
 // Updated style handlers with undo/redo support
 const updateSelectedArrowStyle = (styleChanges) => {
     if (currentShape instanceof Arrow && currentShape.isSelected) {
-        const oldOptions = {...currentShape.options, arrowOutlineStyle: currentShape.arrowOutlineStyle, arrowHeadStyle: currentShape.arrowHeadStyle};
+        const oldOptions = {
+            ...currentShape.options, 
+            arrowOutlineStyle: currentShape.arrowOutlineStyle, 
+            arrowHeadStyle: currentShape.arrowHeadStyle,
+            arrowCurved: currentShape.arrowCurved,
+            arrowCurveAmount: currentShape.arrowCurveAmount
+        };
         currentShape.updateStyle(styleChanges);
         pushOptionsChangeAction(currentShape, oldOptions);
     } else {
@@ -539,6 +729,8 @@ const updateSelectedArrowStyle = (styleChanges) => {
          if (styleChanges.strokeWidth !== undefined) arrowStrokeThickness = styleChanges.strokeWidth;
          if (styleChanges.arrowOutlineStyle !== undefined) arrowOutlineStyle = styleChanges.arrowOutlineStyle;
          if (styleChanges.arrowHeadStyle !== undefined) arrowHeadStyle = styleChanges.arrowHeadStyle;
+         if (styleChanges.arrowCurved !== undefined) arrowCurved = styleChanges.arrowCurved;
+         if (styleChanges.arrowCurveAmount !== undefined) arrowCurveAmount = styleChanges.arrowCurveAmount;
     }
 };
 
@@ -578,7 +770,7 @@ arrowTypeStyleValue.forEach((span) => {
         arrowTypeStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         const isCurved = span.getAttribute("data-id") === 'true';
-        console.warn("Curved arrow style selection not implemented in draw logic.");
+        updateSelectedArrowStyle({ arrowCurved: isCurved });
     });
 });
 
@@ -601,9 +793,13 @@ function cloneArrowData(arrow) {
     return {
         startPoint: { x: arrow.startPoint.x, y: arrow.startPoint.y },
         endPoint: { x: arrow.endPoint.x, y: arrow.endPoint.y },
+        controlPoint1: arrow.controlPoint1 ? { x: arrow.controlPoint1.x, y: arrow.controlPoint1.y } : null,
+        controlPoint2: arrow.controlPoint2 ? { x: arrow.controlPoint2.x, y: arrow.controlPoint2.y } : null,
         options: cloneOptions(arrow.options),
         arrowOutlineStyle: arrow.arrowOutlineStyle,
-        arrowHeadStyle: arrow.arrowHeadStyle
+        arrowHeadStyle: arrow.arrowHeadStyle,
+        arrowCurved: arrow.arrowCurved,
+        arrowCurveAmount: arrow.arrowCurveAmount
     };
 }
 
@@ -619,31 +815,10 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
         if (copiedShapeData) {
             e.preventDefault();
-            let pasteX, pasteY;
-            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') {
-                const svgPoint = svg.createSVGPoint();
-                svgPoint.x = lastMousePos.x;
-                svgPoint.y = lastMousePos.y;
-                const CTM = svg.getScreenCTM().inverse();
-                const userPoint = svgPoint.matrixTransform(CTM);
-                pasteX = userPoint.x;
-                pasteY = userPoint.y;
-            } else {
-                const svgRect = svg.getBoundingClientRect();
-                pasteX = svgRect.width / 2;
-                pasteY = svgRect.height / 2;
-                const svgPoint = svg.createSVGPoint();
-                svgPoint.x = pasteX;
-                svgPoint.y = pasteY;
-                const CTM = svg.getScreenCTM().inverse();
-                const userPoint = svgPoint.matrixTransform(CTM);
-                pasteX = userPoint.x;
-                pasteY = userPoint.y;
-            }
-
+            
             shapes.forEach(shape => {
-                if (shape.isSelected) {
-                    shape.removeSelection();
+                if (shape.isSelected && shape.deselectArrow) {
+                    shape.deselectArrow();
                 }
             });
 
@@ -657,14 +832,19 @@ document.addEventListener('keydown', (e) => {
                 {
                     ...cloneOptions(copiedShapeData.options),
                     arrowOutlineStyle: copiedShapeData.arrowOutlineStyle,
-                    arrowHeadStyle: copiedShapeData.arrowHeadStyle
+                    arrowHeadStyle: copiedShapeData.arrowHeadStyle,
+                    arrowCurved: copiedShapeData.arrowCurved,
+                    arrowCurveAmount: copiedShapeData.arrowCurveAmount,
+                    controlPoint1: copiedShapeData.controlPoint1 ? 
+                        { x: copiedShapeData.controlPoint1.x + offset, y: copiedShapeData.controlPoint1.y + offset } : null,
+                    controlPoint2: copiedShapeData.controlPoint2 ? 
+                        { x: copiedShapeData.controlPoint2.x + offset, y: copiedShapeData.controlPoint2.y + offset } : null
                 }
             );
             
             shapes.push(newArrow);
-            newArrow.isSelected = true;
+            newArrow.selectArrow();
             currentShape = newArrow;
-            newArrow.draw();
             pushCreateAction(newArrow);
         }
     }
