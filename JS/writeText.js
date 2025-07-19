@@ -97,7 +97,10 @@ function addText(event) {
     textElement.setAttribute("data-type", "text");
     gElement.appendChild(textElement);
     svg.appendChild(gElement);
-
+    // Attach ID to both group and text element
+    const shapeID = `text-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
+    gElement.setAttribute('id', shapeID);
+    textElement.setAttribute('id', `${shapeID}-text`);
     pushCreateAction({
         type: 'text',
         element: gElement,

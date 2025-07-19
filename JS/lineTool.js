@@ -45,7 +45,10 @@ class Line {
         this.isSelected = false;
         this.anchors = [];
         this.selectionOutline = null;
-        this.shapeName = "line"; // Add shapeName property
+        this.shapeName = "line"; 
+        this.shapeName = 'line';
+        this.shapeID = `line-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
+        this.group.setAttribute('id', this.shapeID);
         svg.appendChild(this.group);
         this.draw();
     }
