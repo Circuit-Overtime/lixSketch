@@ -837,6 +837,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Event listeners
-svg.addEventListener('mousedown', handleMouseDown);
-svg.addEventListener('mousemove', handleMouseMove);
-svg.addEventListener('mouseup', handleMouseUp);
+// svg.addEventListener('mousedown', handleMouseDown);
+// svg.addEventListener('mousemove', handleMouseMove);
+// svg.addEventListener('mouseup', handleMouseUp);
+
+export 
+{
+    handleMouseDown as handleFreehandMouseDown,
+    handleMouseMove as handleFreehandMouseMove,
+    handleMouseUp as handleFreehandMouseUp,
+}

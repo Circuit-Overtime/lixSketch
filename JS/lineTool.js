@@ -350,9 +350,7 @@ const handleMouseUp = (e) => {
 
 // --- Event Handlers ---
 
-svg.addEventListener("mousedown", handleMouseDown);
-svg.addEventListener("mousemove", handleMouseMove);
-svg.addEventListener("mouseup", handleMouseUp);
+
 
 // --- Style Option Event Listeners ---
 lineColorOptions.forEach((span) => {
@@ -514,3 +512,12 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// svg.addEventListener("mousedown", handleMouseDown);
+// svg.addEventListener("mousemove", handleMouseMove);
+// svg.addEventListener("mouseup", handleMouseUp);
+export {
+    handleMouseDown as handleMouseDownLine,
+    handleMouseMove as handleMouseMoveLine,
+    handleMouseUp as handleMouseUpLine,
+}

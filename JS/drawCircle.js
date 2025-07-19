@@ -461,7 +461,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 const handleMouseDown = (e) => {
-    // Convert to SVG coordinates from the start
     const {x: svgMouseX, y: svgMouseY} = getSVGCoordsFromMouse(e);
 
     if(isCircleToolActive)
@@ -590,7 +589,7 @@ const handleMouseDown = (e) => {
 };
 
 const handleMouseMove = (e) => {
-    // Convert to SVG coordinates consistently
+
     const {x: svgMouseX, y: svgMouseY} = getSVGCoordsFromMouse(e);
     
     // Keep lastMousePos in screen coordinates for other functions
@@ -740,9 +739,6 @@ const handleMouseUp = (e) => {
     svg.style.cursor = 'default';
 }
 
-svg.addEventListener('mousedown', handleMouseDown);
-svg.addEventListener('mousemove', handleMouseMove);
-svg.addEventListener('mouseup', handleMouseUp);
 
 colorOptionsCircle.forEach(span => {
     span.addEventListener('click', function(event) {
@@ -934,3 +930,10 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+
+export {
+    handleMouseDown as handleMouseDownCircle,
+    handleMouseMove as handleMouseMoveCircle,
+    handleMouseUp as handleMouseUpCircle,
+}

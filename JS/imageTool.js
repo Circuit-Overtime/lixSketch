@@ -20,26 +20,33 @@ let aspect_ratio_lock = true;
 const minImageSize = 20; // Renamed from MIN_IMAGE_SIZE
 
 document.getElementById("importImage").addEventListener('click', () => {
-    isImageToolActive = true; // Assuming isImageToolActive is defined elsewhere
+    console.log('Import image clicked');
+    isImageToolActive = true;
+    console.log('isImageToolActive set to:', isImageToolActive);
 
-    // Use a hardcoded image instead of file input
-    const hardcodedImagePath = './test.jpg'; // Adjust the path if necessary
+    // Try different image paths - adjust based on your file structure
+    const hardcodedImagePath = 'test.jpg'; // Remove the './' 
+    // Or try: '/test.jpg' or 'Images/test.jpg' depending on your folder structure
     loadHardcodedImage(hardcodedImagePath);
 });
 
 const loadHardcodedImage = (imagePath) => {
+    console.log('Loading hardcoded image:', imagePath);
     const img = new Image();
     img.onload = () => {
+        console.log('Image loaded successfully');
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        imageToPlace = canvas.toDataURL(); // Convert the image to a data URL
+        imageToPlace = canvas.toDataURL();
         isDraggingImage = true;
+        console.log('Image ready to place, isDraggingImage:', isDraggingImage);
     };
-    img.onerror = () => {
-        console.error('Failed to load the hardcoded image.');
+    img.onerror = (error) => {
+        console.error('Failed to load the hardcoded image:', error);
+        console.error('Image path:', imagePath);
     };
     img.src = imagePath;
 };
@@ -55,8 +62,8 @@ const handleImageUpload = (file) => {
     reader.readAsDataURL(file);
 };
 
-// Event listener for mousemove on the SVG
-svg.addEventListener('mousemove', (e) => {
+// Event handler for mousemove on the SVG
+const handleMouseMoveImage = (e) => {
     if (!isDraggingImage || !imageToPlace || !isImageToolActive) return; // Also check isImageToolActive
 
     // Get mouse coordinates relative to the SVG element
@@ -65,7 +72,7 @@ svg.addEventListener('mousemove', (e) => {
     imageY = e.clientY - rect.top;
 
     drawMiniatureImage();
-});
+};
 
 const drawMiniatureImage = () => {
     if (!isDraggingImage || !imageToPlace || !isImageToolActive) return; // Also check isImageToolActive
@@ -111,8 +118,18 @@ function getImageAspectRatio(dataUrl) {
     });
 }
 
-svg.addEventListener('click', async (e) => {
-    if (!isDraggingImage || !imageToPlace || !isImageToolActive) return; 
+const handleMouseDownImage = async (e) => {
+    if (!isDraggingImage || !imageToPlace || !isImageToolActive) {
+        // Handle image selection if selection tool is active
+        if (isSelectionToolActive) {
+            const clickedImage = e.target.closest('image');
+            if (clickedImage) {
+                selectImage({ target: clickedImage, stopPropagation: () => e.stopPropagation() });
+                return;
+            }
+        }
+        return;
+    }
 
     try {
         //Get aspect ratio before we clear the temporary image data.
@@ -179,7 +196,25 @@ svg.addEventListener('click', async (e) => {
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.
     }
-});
+};
+
+const handleMouseUpImage = (e) => {
+    // Handle image deselection when clicking outside
+    if (isSelectionToolActive) {
+        // Check if we clicked on an image or image-related element
+        const clickedElement = e.target;
+        const isImageElement = clickedElement.tagName === 'image';
+        const isAnchorElement = clickedElement.classList.contains('resize-anchor') || 
+                               clickedElement.classList.contains('rotation-anchor') ||
+                               clickedElement.classList.contains('selection-outline');
+        
+        // If we didn't click on an image or its controls, deselect
+        if (!isImageElement && !isAnchorElement && selectedImage) {
+            removeSelectionOutline();
+            selectedImage = null;
+        }
+    }
+};
 
 function selectImage(event) {
     if (!isSelectionToolActive) return;
@@ -766,12 +801,5 @@ function stopInteracting() {
     }
 }
 
-svg.addEventListener('click', (e) => {
-    if (isSelectionToolActive) {
-        // If selection tool is active, this click means we want to de-select the image.
-        if (selectedImage) {
-            removeSelectionOutline();
-            selectedImage = null;
-        }
-    }
-});
+
+export { handleMouseDownImage, handleMouseMoveImage, handleMouseUpImage };

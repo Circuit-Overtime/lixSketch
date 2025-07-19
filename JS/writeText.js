@@ -94,7 +94,7 @@ function addText(event) {
     textElement.setAttribute("data-initial-font", textFont);
     textElement.setAttribute("data-initial-color", textColor);
     textElement.setAttribute("data-initial-align", textAlign);
-
+    textElement.setAttribute("data-type", "text");
     gElement.appendChild(textElement);
     svg.appendChild(gElement);
 
@@ -134,7 +134,6 @@ function makeTextEditable(textElement, groupElement) {
     } else {
         textContent = textElement.textContent.replace(/ /g, '\u00A0');
     }
-
 
     input.value = textContent;
     input.style.position = "absolute";
@@ -496,6 +495,7 @@ function updateSelectionFeedback() {
         rotationAnchor.setAttribute('cy', rotationAnchorPos.y);
     }
 }
+
 function startRotation(event) {
     if (!selectedElement || event.button !== 0) return;
     event.preventDefault();
@@ -957,8 +957,8 @@ function extractRotationFromTransform(element) {
     return 0;
 }
 
-const handleTextMousedown = function (e) {
-
+// EXPORTED EVENT HANDLERS
+const handleTextMouseDown = function (e) {
     const activeEditor = document.querySelector("textarea.svg-text-editor");
     if (activeEditor && activeEditor.contains(e.target)) {
          return;
@@ -972,7 +972,7 @@ const handleTextMousedown = function (e) {
          }
     }
 
-    if (selectedTool && selectedTool.classList.contains("bxs-pointer") && e.button === 0) {
+    if (isSelectionToolActive && e.button === 0) {
         const targetGroup = e.target.closest('g[data-type="text-group"]');
 
         if (targetGroup) {
@@ -990,7 +990,7 @@ const handleTextMousedown = function (e) {
             deselectElement();
         }
 
-    } else if (selectedTool && selectedTool.classList.contains("bx-text") && e.button === 0) {
+    } else if (isTextToolActive && e.button === 0) {
          const targetGroup = e.target.closest('g[data-type="text-group"]');
 
         if (targetGroup && (e.target.tagName === "text" || e.target.tagName === "tspan")) {
@@ -1014,22 +1014,36 @@ const handleTextMousedown = function (e) {
     }
 };
 
-if (svg) {
-    svg.addEventListener("mousedown", handleTextMousedown);
-
-    svg.addEventListener('dblclick', (e) => {
-        if (selectedTool && selectedTool.classList.contains("bxs-pointer")) {
-             const targetGroup = e.target.closest('g[data-type="text-group"]');
-             if (targetGroup && (e.target.tagName === "text" || e.target.tagName === "tspan")) {
-                 let textEl = targetGroup.querySelector('text');
-                 if (textEl) {
-                     makeTextEditable(textEl, targetGroup);
-                     e.stopPropagation();
-                 }
-             }
+const handleTextMouseMove = function (e) {
+    // Handle cursor changes for text tool
+    if (isTextToolActive) {
+        svg.style.cursor = 'text';
+    } else if (isSelectionToolActive) {
+        const targetGroup = e.target.closest('g[data-type="text-group"]');
+        if (targetGroup) {
+            svg.style.cursor = 'move';
+        } else {
+            svg.style.cursor = 'default';
         }
-    });
-}
+    }
+};
+
+const handleTextMouseUp = function (e) {
+    // Handle text deselection when clicking outside
+    if (isSelectionToolActive) {
+        const targetGroup = e.target.closest('g[data-type="text-group"]');
+        const isResizeHandle = e.target.closest('.resize-handle');
+        const isRotateAnchor = e.target.closest('.rotate-anchor');
+        
+        // If we didn't click on text or its controls, deselect
+        if (!targetGroup && !isResizeHandle && !isRotateAnchor && selectedElement) {
+            deselectElement();
+        }
+    }
+};
+
+// Remove the original event listener to prevent conflicts
+// The original svg.addEventListener will be removed and handled by eventListeners.js
 
 function handleToolChange(newToolElement) {
     if (!newToolElement) return;
@@ -1242,3 +1256,6 @@ textAlignOptions.forEach((span) => {
         }
     });
 });
+
+// Export the event handlers
+export { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp };
