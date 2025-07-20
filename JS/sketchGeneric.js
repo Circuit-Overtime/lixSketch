@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-frame");
+let selectedTool = document.querySelector(".bxs-pointer");
 let history = [];
 let redoStack = [];
 let shapes = [];

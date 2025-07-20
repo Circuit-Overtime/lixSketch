@@ -60,6 +60,7 @@ class Rectangle {
             height: null,
             options: null
         };
+        this.isBeingDrawn = false;
         this.draw(); 
     }
     draw() {
@@ -71,16 +72,14 @@ class Rectangle {
             }
         }
          childrenToRemove.forEach(child => this.group.removeChild(child));
-        if (this.element && this.element.parentNode === this.group) {
-             this.group.removeChild(this.element);
-             this.element = null;
-        }
+
         const optionsString = JSON.stringify(this.options);
         const isInitialDraw = this.element === null;
         const optionsChanged = optionsString !== this._lastDrawn.options;
         const sizeChanged = this.width !== this._lastDrawn.width || this.height !== this._lastDrawn.height;
         
-        if (isInitialDraw || optionsChanged) {
+        // Only regenerate rough element if it's not being actively drawn OR if options changed OR initial draw
+        if (isInitialDraw || optionsChanged || (!this.isBeingDrawn && sizeChanged)) {
             if (this.element && this.element.parentNode === this.group) {
                 this.group.removeChild(this.element);
             }
@@ -88,16 +87,16 @@ class Rectangle {
             this.element = roughRect;
             this.group.appendChild(roughRect);
         
-            // Cache only options
+            // Cache the values
             this._lastDrawn.width = this.width;
             this._lastDrawn.height = this.height;
             this._lastDrawn.options = optionsString;
         }
-        
 
         const rotateCenterX = this.width / 2;
         const rotateCenterY = this.height / 2;
         this.group.setAttribute('transform', `translate(${this.x}, ${this.y}) rotate(${this.rotation}, ${rotateCenterX}, ${rotateCenterY})`);
+        
         if (this.isSelected) {
             this.addAnchors();
         }
@@ -106,6 +105,11 @@ class Rectangle {
             svg.appendChild(this.group);
         }
     }
+
+    setDrawingState(isDrawing) {
+        this.isBeingDrawn = isDrawing;
+    }
+
     getRotatedCursor(direction, angle) {
         const directions = ['ns', 'nesw', 'ew', 'nwse'];
         angle = angle % 360;
@@ -591,6 +595,7 @@ const handleMouseDownRect = (e) => {
         }
 
         currentShape = new Rectangle(startX, startY, 0, 0, initialOptions);
+        currentShape.setDrawingState(true);
 
     } else if (isSelectionToolActive) {
         let clickedOnShape = false;
@@ -678,7 +683,7 @@ const handleMouseDownRect = (e) => {
     }
 };
 
-// Update handleMouseMoveRect function
+
 const handleMouseMoveRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
@@ -696,9 +701,26 @@ const handleMouseMoveRect = (e) => {
         currentShape.y = height < 0 ? startY + height : startY;
         currentShape.width = Math.abs(width);
         currentShape.height = Math.abs(height);
-        currentShape.draw();
         
-        // Check for frame containment while drawing (but don't apply clipping yet)
+        // Force update the element size while drawing (but use cached rough element)
+        if (currentShape.element && currentShape.width > 0 && currentShape.height > 0) {
+            // Remove old element
+            if (currentShape.element.parentNode === currentShape.group) {
+                currentShape.group.removeChild(currentShape.element);
+            }
+            
+            // Create new rough element with current size
+            const roughRect = rc.rectangle(0, 0, currentShape.width, currentShape.height, currentShape.options);
+            currentShape.element = roughRect;
+            currentShape.group.appendChild(roughRect);
+        }
+        
+        // Update transform
+        const rotateCenterX = currentShape.width / 2;
+        const rotateCenterY = currentShape.height / 2;
+        currentShape.group.setAttribute('transform', `translate(${currentShape.x}, ${currentShape.y}) rotate(${currentShape.rotation}, ${rotateCenterX}, ${rotateCenterY})`);
+        
+        // Check for frame containment while drawing
         shapes.forEach(frame => {
             if (frame.shapeName === 'frame') {
                 if (frame.isShapeInFrame(currentShape)) {
@@ -774,15 +796,17 @@ const handleMouseMoveRect = (e) => {
     }
 };
 
-    // Update handleMouseUpRect to properly track frame attachment changes
+    
 const handleMouseUpRect = (e) => {
     if (isDrawingSquare && currentShape) {
+        currentShape.setDrawingState(false);
         if (currentShape.width === 0 || currentShape.height === 0) {
             if (currentShape.group.parentNode) {
                 currentShape.group.parentNode.removeChild(currentShape.group);
             }
             currentShape = null;
         } else {
+            currentShape.draw();
             shapes.push(currentShape);
             pushCreateAction(currentShape);
             

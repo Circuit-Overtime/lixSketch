@@ -6,6 +6,13 @@ import { handleMouseDownLine, handleMouseMoveLine, handleMouseUpLine } from './l
 import { handleFreehandMouseDown, handleFreehandMouseMove, handleFreehandMouseUp } from './canvasStroke.js';
 import { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp } from './writeText.js';
 import { handleMouseDownFrame, handleMouseMoveFrame, handleMouseUpFrame } from './frameHolder.js';
+import { 
+    handleMultiSelectionMouseDown, 
+    handleMultiSelectionMouseMove, 
+    handleMultiSelectionMouseUp,
+    isMultiSelecting,
+    isDraggingMultiSelection
+} from './selection.js';
 
 const handleMainMouseDown = (e) => {
     if (isSquareToolActive) {
@@ -30,6 +37,12 @@ const handleMainMouseDown = (e) => {
         handleMouseDownFrame(e);
     }
     else if (isSelectionToolActive) {
+        // Try multi-selection first when selection tool is active
+        if (handleMultiSelectionMouseDown(e)) {
+            return; // Multi-selection handled the event
+        }
+        
+        // If multi-selection didn't handle it, proceed with shape-specific selection
         if (currentShape?.shapeName === 'rectangle') {
             handleMouseDownRect(e);
         } else if (currentShape?.shapeName === 'arrow') {
@@ -51,7 +64,6 @@ const handleMainMouseDown = (e) => {
         else if (currentShape?.shapeName === 'frame') {
             handleMouseDownFrame(e);
         }
-
         else {
             const originalCurrentShape = currentShape;
             handleMouseDownRect(e);
@@ -102,8 +114,15 @@ const handleMainMouseMove = (e) => {
     else if (isFrameToolActive) {
         handleMouseMoveFrame(e);
     }
-
     else if (isSelectionToolActive) {
+        // Handle multi-selection first when selection tool is active
+        if (isMultiSelecting || isDraggingMultiSelection) {
+            if (handleMultiSelectionMouseMove(e)) {
+                return; // Multi-selection handled the event
+            }
+        }
+        
+        // Shape-specific mouse move handling
         if (currentShape?.shapeName === 'rectangle') {
             handleMouseMoveRect(e);
         } else if (currentShape?.shapeName === 'arrow') {
@@ -125,8 +144,12 @@ const handleMainMouseMove = (e) => {
         else if (currentShape?.shapeName === 'frame') {
             handleMouseMoveFrame(e);
         }
-
         else {
+            // Try multi-selection mouse move for cursor updates
+            if (handleMultiSelectionMouseMove(e)) {
+                return;
+            }
+            
             handleMouseMoveRect(e);
             handleMouseMoveArrow(e);
             handleMouseMoveCircle(e);
@@ -161,8 +184,15 @@ const handleMainMouseUp = (e) => {
     else if (isFrameToolActive) {
         handleMouseUpFrame(e);
     }
-
     else if (isSelectionToolActive) {
+        // Handle multi-selection first when selection tool is active
+        if (isMultiSelecting || isDraggingMultiSelection) {
+            if (handleMultiSelectionMouseUp(e)) {
+                return; // Multi-selection handled the event
+            }
+        }
+        
+        // Shape-specific mouse up handling
         if (currentShape?.shapeName === 'rectangle') {
             handleMouseUpRect(e);
         } else if (currentShape?.shapeName === 'arrow') {
@@ -184,7 +214,6 @@ const handleMainMouseUp = (e) => {
         else if (currentShape?.shapeName === 'frame') {
             handleMouseUpFrame(e);
         }
-
         else {
             handleMouseUpRect(e);
             handleMouseUpArrow(e);
