@@ -602,7 +602,7 @@ class MultiSelection {
         this.selectedShapes.forEach(shape => {
             const initialData = this.initialPositions.get(shape);
             if (!initialData) return;
-
+            shape.removeSelection();
             switch (shape.shapeName) {
                 case 'rectangle':
                 case 'circle':
@@ -700,6 +700,7 @@ class MultiSelection {
         
         this.selectedShapes.forEach(shape => {
             let shapeData;
+            shape.removeSelection();
             switch (shape.shapeName) {
                 case 'rectangle':
                     shapeData = {
@@ -908,6 +909,7 @@ class MultiSelection {
         this.initialPositions.clear();
         this.selectedShapes.forEach(shape => {
             let shapeData;
+            shape.removeSelection();
             switch (shape.shapeName) {
                 case 'rectangle':
                     shapeData = {
