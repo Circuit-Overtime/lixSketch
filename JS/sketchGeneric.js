@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-right-arrow-alt");
+let selectedTool = document.querySelector(".bx-frame");
 let history = [];
 let redoStack = [];
 let shapes = [];
@@ -59,6 +59,7 @@ let isArrowToolActive = false;
 let isLineToolActive = false;
 let isSelectionToolActive = false;
 let isPanningToolActive = false;
+let isFrameToolActive = false;
 
 
 const paintBrushSideBar = document.getElementById("paintBrushSideBar");
@@ -191,6 +192,15 @@ function toolExtraPopup() {
         disableAllSideBars();
         svg.style.cursor = "crosshair"
     }
+    else if(selectedTool.classList.contains("bx-frame"))
+    {
+        disableAllTools();
+        disSelectAllTools();
+        isFrameToolActive = true;
+        document.querySelector(".bx-frame").classList.add("selected");
+        disableAllSideBars();
+        svg.style.cursor = "crosshair"
+    }
     else {
         disableAllTools();
         disSelectAllTools();
@@ -229,6 +239,7 @@ function disableAllTools()
   isSelectionToolActive = false;
   isImageToolActive = false;
   isPanningToolActive = false;
+  isFrameToolActive = false;
 }
 
 

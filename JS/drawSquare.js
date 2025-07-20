@@ -15,6 +15,8 @@ let squareFillStyleValue = "none";
 let squareStrokeThicknes = 2;
 let squareOutlineStyle = "solid";
 let dragOldPosSquare = null;
+let draggedShapeInitialFrame = null;
+let hoveredFrame = null;
 
 let SquarecolorOptions = document.querySelectorAll(".squareStrokeSpan");
 let backgroundColorOptionsSquare = document.querySelectorAll(".squareBackgroundSpan");
@@ -338,10 +340,41 @@ class Rectangle {
 
 
     move(dx, dy) {
-        this.x += dx;
-        this.y += dy;
-        this.updateAttachedArrows();
+    this.x += dx;
+    this.y += dy;
+    this.updateAttachedArrows();
+
+    if (isDraggingShapeSquare && !this.isBeingMovedByFrame) {
+        this.updateFrameContainment();
     }
+}
+
+
+    updateFrameContainment() {
+    // Don't update if we're being moved by a frame
+    if (this.isBeingMovedByFrame) return;
+    
+    let targetFrame = null;
+    
+    // Find which frame this shape is over
+    shapes.forEach(shape => {
+        if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+            targetFrame = shape;
+        }
+    });
+    
+    // Update frame highlighting
+    if (hoveredFrame && hoveredFrame !== targetFrame) {
+        hoveredFrame.removeHighlight();
+    }
+    
+    if (targetFrame && targetFrame !== hoveredFrame) {
+        targetFrame.highlightFrame();
+    }
+    
+    hoveredFrame = targetFrame;
+}
+
 
     updatePosition(anchorIndex, newMouseX, newMouseY) {
         const CTM = this.group.getCTM();
@@ -521,7 +554,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 
-const handleMouseDownRect = (e) => {
+    const handleMouseDownRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
     if (isSquareToolActive) {
@@ -552,13 +585,12 @@ const handleMouseDownRect = (e) => {
 
         currentShape = new Rectangle(startX, startY, 0, 0, initialOptions);
 
-
     } else if (isSelectionToolActive) {
         let clickedOnShape = false;
         if (currentShape && currentShape.shapeName === 'rectangle' && currentShape.isSelected) {
             const anchorInfo = currentShape.isNearAnchor(mouseX, mouseY);
             if (anchorInfo) {
-                 dragOldPosSquare = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation }; // Save state before resize/rotate
+                 dragOldPosSquare = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation };
                 if (anchorInfo.type === 'resize') {
                     isResizingShapeSquare = true;
                     resizingAnchorIndexSquare = anchorInfo.index;
@@ -581,7 +613,11 @@ const handleMouseDownRect = (e) => {
                 clickedOnShape = true;
             } else if (currentShape.contains(mouseX, mouseY)) {
                  isDraggingShapeSquare = true;
-                 dragOldPosSquare = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation }; // Save state before drag
+                 dragOldPosSquare = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation };
+                 
+                 // Store initial frame state
+                 draggedShapeInitialFrame = currentShape.parentFrame || null;
+                 
                  startX = mouseX; 
                  startY = mouseY;
                  clickedOnShape = true;
@@ -607,7 +643,11 @@ const handleMouseDownRect = (e) => {
                 currentShape.isSelected = true;
                 currentShape.draw(); 
                 isDraggingShapeSquare = true; 
-                dragOldPosSquare = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation }; 
+                dragOldPosSquare = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation };
+                
+                // Store initial frame state
+                draggedShapeInitialFrame = currentShape.parentFrame || null;
+                
                 startX = mouseX; 
                 startY = mouseY;
                 clickedOnShape = true; 
@@ -621,7 +661,7 @@ const handleMouseDownRect = (e) => {
     }
 };
 
-const handleMouseMoveRect = (e) => {
+    const handleMouseMoveRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
     const svgRect = svg.getBoundingClientRect();
@@ -639,6 +679,10 @@ const handleMouseMoveRect = (e) => {
         currentShape.width = Math.abs(width);
         currentShape.height = Math.abs(height);
         currentShape.draw();
+        
+        // Check for frame containment while drawing
+        currentShape.updateFrameContainment();
+        
     } else if (isDraggingShapeSquare && currentShape && currentShape.isSelected) {
         const dx = mouseX - startX;
         const dy = mouseY - startY;
@@ -702,7 +746,7 @@ const handleMouseMoveRect = (e) => {
     }
 };
 
-const handleMouseUpRect = (e) => {
+    const handleMouseUpRect = (e) => {
     if (isDrawingSquare && currentShape) {
         if (currentShape.width === 0 || currentShape.height === 0) {
             if (currentShape.group.parentNode) {
@@ -711,7 +755,20 @@ const handleMouseUpRect = (e) => {
             currentShape = null;
         } else {
             shapes.push(currentShape);
-            pushCreateAction(currentShape); 
+            pushCreateAction(currentShape);
+            
+            // Check for frame containment after shape creation
+            shapes.forEach(frame => {
+                if (frame.shapeName === 'frame') {
+                    frame.updateContainedShapes();
+                }
+            });
+        }
+        
+        // Clear frame highlighting
+        if (hoveredFrame) {
+            hoveredFrame.removeHighlight();
+            hoveredFrame = null;
         }
     }
 
@@ -724,7 +781,42 @@ const handleMouseUpRect = (e) => {
         if (stateChanged) {
              pushTransformAction(currentShape, dragOldPosSquare, newPos);
         }
-        dragOldPosSquare = null; 
+        
+        // Handle frame containment changes after drag
+        if (isDraggingShapeSquare) {
+            const finalFrame = hoveredFrame;
+            
+            // If shape moved to a different frame
+            if (draggedShapeInitialFrame !== finalFrame) {
+                // Remove from initial frame
+                if (draggedShapeInitialFrame) {
+                    draggedShapeInitialFrame.removeShapeFromFrame(currentShape);
+                }
+                
+                // Add to new frame
+                if (finalFrame) {
+                    finalFrame.addShapeToFrame(currentShape);
+                }
+            }
+            
+            // Update all frames after drag is complete
+            setTimeout(() => {
+                shapes.forEach(frame => {
+                    if (frame.shapeName === 'frame') {
+                        frame.updateContainedShapes();
+                    }
+                });
+            }, 0);
+        }
+        
+        dragOldPosSquare = null;
+        draggedShapeInitialFrame = null;
+    }
+    
+    // Clear frame highlighting
+    if (hoveredFrame) {
+        hoveredFrame.removeHighlight();
+        hoveredFrame = null;
     }
 
     isDrawingSquare = false;
@@ -736,9 +828,6 @@ const handleMouseUpRect = (e) => {
     startShapeRotationSquare = 0;
     svg.style.cursor = 'default';
 };
-
-
-
 
 
 SquarecolorOptions.forEach((span) => {

@@ -5,7 +5,7 @@ import { handleMouseUpImage, handleMouseDownImage, handleMouseMoveImage } from '
 import { handleMouseDownLine, handleMouseMoveLine, handleMouseUpLine } from './lineTool.js';
 import { handleFreehandMouseDown, handleFreehandMouseMove, handleFreehandMouseUp } from './canvasStroke.js';
 import { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp } from './writeText.js';
-
+import { handleMouseDownFrame, handleMouseMoveFrame, handleMouseUpFrame } from './frameHolder.js';
 
 const handleMainMouseDown = (e) => {
     if (isSquareToolActive) {
@@ -26,6 +26,9 @@ const handleMainMouseDown = (e) => {
     else if (isTextToolActive) {
         handleTextMouseDown(e);
     }
+    else if (isFrameToolActive) {
+        handleMouseDownFrame(e);
+    }
     else if (isSelectionToolActive) {
         if (currentShape?.shapeName === 'rectangle') {
             handleMouseDownRect(e);
@@ -45,6 +48,9 @@ const handleMainMouseDown = (e) => {
         else if (currentShape?.shapeName === 'text') {
             handleTextMouseDown(e);
         }
+        else if (currentShape?.shapeName === 'frame') {
+            handleMouseDownFrame(e);
+        }
 
         else {
             const originalCurrentShape = currentShape;
@@ -61,6 +67,8 @@ const handleMainMouseDown = (e) => {
             handleFreehandMouseDown(e);
             if (currentShape && currentShape !== originalCurrentShape) return;
             handleTextMouseDown(e);
+            if (currentShape && currentShape !== originalCurrentShape) return;
+            handleMouseDownFrame(e);
             if (currentShape && currentShape !== originalCurrentShape) return;
             if (currentShape === originalCurrentShape) {
                 if (currentShape) {
@@ -91,6 +99,9 @@ const handleMainMouseMove = (e) => {
     else if (isTextToolActive) {
         handleTextMouseMove(e);
     }
+    else if (isFrameToolActive) {
+        handleMouseMoveFrame(e);
+    }
 
     else if (isSelectionToolActive) {
         if (currentShape?.shapeName === 'rectangle') {
@@ -111,6 +122,10 @@ const handleMainMouseMove = (e) => {
         else if (currentShape?.shapeName === 'text') {
             handleTextMouseMove(e);
         }
+        else if (currentShape?.shapeName === 'frame') {
+            handleMouseMoveFrame(e);
+        }
+
         else {
             handleMouseMoveRect(e);
             handleMouseMoveArrow(e);
@@ -119,6 +134,7 @@ const handleMainMouseMove = (e) => {
             handleMouseMoveLine(e);
             handleFreehandMouseMove(e);
             handleTextMouseMove(e);
+            handleMouseMoveFrame(e);
         }
     }
 };
@@ -142,6 +158,10 @@ const handleMainMouseUp = (e) => {
     else if (isTextToolActive) {
         handleTextMouseUp(e);
     }
+    else if (isFrameToolActive) {
+        handleMouseUpFrame(e);
+    }
+
     else if (isSelectionToolActive) {
         if (currentShape?.shapeName === 'rectangle') {
             handleMouseUpRect(e);
@@ -161,6 +181,10 @@ const handleMainMouseUp = (e) => {
         else if (currentShape?.shapeName === 'text') {
             handleTextMouseUp(e);
         }
+        else if (currentShape?.shapeName === 'frame') {
+            handleMouseUpFrame(e);
+        }
+
         else {
             handleMouseUpRect(e);
             handleMouseUpArrow(e);
@@ -169,6 +193,7 @@ const handleMainMouseUp = (e) => {
             handleMouseUpLine(e);
             handleFreehandMouseUp(e);
             handleTextMouseUp(e);
+            handleMouseUpFrame(e);
         }
     }
 };
