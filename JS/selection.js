@@ -2,22 +2,7 @@
 let isMultiSelecting = false;
 let multiSelectionStart = { x: 0, y: 0 };
 let multiSelectionRect = null;
-let selectedShapes = new Set();
-let multiSelectionGroup = null;
-let multiSelectionAnchors = [];
-let multiSelectionOutline = null;
-let multiSelectionRotationAnchor = null;
-
-// Dragging multi-selection
 let isDraggingMultiSelection = false;
-let isResizingMultiSelection = false;
-let isRotatingMultiSelection = false;
-let multiSelectionDragStart = { x: 0, y: 0 };
-let multiSelectionInitialPositions = new Map();
-let resizingAnchorIndexMulti = null;
-let startRotationMouseAngleMulti = 0;
-let startShapeRotationMulti = 0;
-
 function getSVGCoordsFromMouse(e) {
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
@@ -169,826 +154,881 @@ function isShapeInSelectionRect(shape, selectionBounds) {
              selectionBounds.y + selectionBounds.height < shapeBounds.y);
 }
 
-    function selectShapesInRect(selectionBounds) {
-    // Clear previous selections
-    clearAllSelections();
-    selectedShapes.clear();
-    
-    // Find shapes within selection
-    shapes.forEach(shape => {
-        if (isShapeInSelectionRect(shape, selectionBounds)) {
-            selectedShapes.add(shape);
-            shape.isSelected = true;
-            
-            // NO INDIVIDUAL ANCHORS - NEVER add anchors to individual shapes in multi-selection
-            // Just mark as selected, no visual indicators on individual shapes
-        }
-    });
-    
-    // Create overall selection controls ONLY - whether single or multiple shapes
-    if (selectedShapes.size >= 1) {
-        createMultiSelectionControls();
+class MultiSelection {
+    constructor() {
+        this.selectedShapes = new Set();
+        this.group = null;
+        this.anchors = [];
+        this.outline = null;
+        this.rotationAnchor = null;
+        this.rotationLine = null;
+        this.selectionPadding = 12;
+        this.bounds = null;
+        this.initialPositions = new Map();
         
-        // Set currentShape for single selection compatibility
-        if (selectedShapes.size === 1) {
-            currentShape = Array.from(selectedShapes)[0];
+        // Interaction states
+        this.isDragging = false;
+        this.isResizing = false;
+        this.isRotating = false;
+        this.resizingAnchorIndex = null;
+        this.dragStart = { x: 0, y: 0 };
+        this.rotationCenter = { x: 0, y: 0 };
+        this.startRotationMouseAngle = 0;
+        this.initialRotation = 0;
+    }
+
+    addShape(shape) {
+        this.selectedShapes.add(shape);
+        shape.isSelected = true;
+        this.updateControls();
+    }
+
+    removeShape(shape) {
+        this.selectedShapes.delete(shape);
+        shape.isSelected = false;
+        if (this.selectedShapes.size === 0) {
+            this.clearSelection();
         } else {
-            currentShape = null; // Multiple selection, no single currentShape
+            this.updateControls();
         }
     }
-}
 
-// Clear all shape selections
-function clearAllSelections() {
-    shapes.forEach(shape => {
-        if (shape.isSelected) {
+    clearSelection() {
+        this.selectedShapes.forEach(shape => {
             shape.isSelected = false;
-            // Remove individual shape selections
-            switch (shape.shapeName) {
-                case 'rectangle':
-                case 'circle':
-                case 'line':
-                case 'arrow':
-                case 'freehandStroke':
-                    if (typeof shape.removeSelection === 'function') {
-                        shape.removeSelection();
-                    }
-                    break;
-                case 'text':
-                    if (typeof deselectElement === 'function') {
-                        deselectElement();
-                    }
-                    break;
-                case 'image':
-                    if (typeof removeSelectionOutline === 'function') {
-                        removeSelectionOutline();
-                    }
-                    break;
-                case 'frame':
-                    if (typeof shape.removeSelection === 'function') {
-                        shape.removeSelection();
-                    }
-                    break;
+            if (typeof shape.removeSelection === 'function') {
+                shape.removeSelection();
+            }
+        });
+        this.selectedShapes.clear();
+        this.removeControls();
+        if (typeof currentShape !== 'undefined') {
+            currentShape = null;
+        }
+        if (typeof disableAllSideBars === 'function') {
+            disableAllSideBars();
+        }
+    }
+
+    selectShapesInRect(selectionBounds) {
+        this.clearSelection();
+        
+        if (typeof shapes !== 'undefined') {
+            shapes.forEach(shape => {
+                if (isShapeInSelectionRect(shape, selectionBounds)) {
+                    this.addShape(shape);
+                }
+            });
+        }
+
+        if (this.selectedShapes.size === 1) {
+            if (typeof currentShape !== 'undefined') {
+                currentShape = Array.from(this.selectedShapes)[0];
+            }
+        } else {
+            if (typeof currentShape !== 'undefined') {
+                currentShape = null;
             }
         }
-    });
-    removeMultiSelectionControls();
-    selectedShapes.clear();
-    currentShape = null;
-    disableAllSideBars();
-}
+    }
 
-// Get bounds of all selected shapes
-function getMultiSelectionBounds() {
-    if (selectedShapes.size === 0) return null;
-    
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
-    
-    selectedShapes.forEach(shape => {
-        let shapeBounds;
+    getBounds() {
+        if (this.selectedShapes.size === 0) return null;
         
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        
+        this.selectedShapes.forEach(shape => {
+            const shapeBounds = this.getShapeBounds(shape);
+            minX = Math.min(minX, shapeBounds.x);
+            minY = Math.min(minY, shapeBounds.y);
+            maxX = Math.max(maxX, shapeBounds.x + shapeBounds.width);
+            maxY = Math.max(maxY, shapeBounds.y + shapeBounds.height);
+        });
+        
+        return {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+        };
+    }
+
+    getShapeBounds(shape) {
         switch (shape.shapeName) {
             case 'rectangle':
-                shapeBounds = {
+            case 'frame':
+                return {
                     x: shape.x,
                     y: shape.y,
                     width: shape.width,
                     height: shape.height
                 };
-                break;
             case 'circle':
-                shapeBounds = {
+                return {
                     x: shape.x - shape.rx,
                     y: shape.y - shape.ry,
                     width: shape.rx * 2,
                     height: shape.ry * 2
                 };
-                break;
             case 'line':
-                shapeBounds = {
+            case 'arrow':
+                return {
                     x: Math.min(shape.startPoint.x, shape.endPoint.x),
                     y: Math.min(shape.startPoint.y, shape.endPoint.y),
                     width: Math.abs(shape.endPoint.x - shape.startPoint.x),
                     height: Math.abs(shape.endPoint.y - shape.startPoint.y)
                 };
-                break;
-            case 'arrow':
-                const minX_arrow = Math.min(shape.startPoint.x, shape.endPoint.x);
-                const minY_arrow = Math.min(shape.startPoint.y, shape.endPoint.y);
-                const maxX_arrow = Math.max(shape.startPoint.x, shape.endPoint.x);
-                const maxY_arrow = Math.max(shape.startPoint.y, shape.endPoint.y);
-                shapeBounds = {
-                    x: minX_arrow,
-                    y: minY_arrow,
-                    width: maxX_arrow - minX_arrow,
-                    height: maxY_arrow - minY_arrow
-                };
-                break;
             case 'freehandStroke':
-                shapeBounds = {
+                return {
                     x: shape.boundingBox.x,
                     y: shape.boundingBox.y,
                     width: shape.boundingBox.width,
                     height: shape.boundingBox.height
                 };
-                break;
             case 'text':
                 const textElement = shape.group ? shape.group.querySelector('text') : null;
                 if (textElement) {
                     const bbox = textElement.getBBox();
                     const transform = shape.group.transform.baseVal.consolidate();
                     const matrix = transform ? transform.matrix : { e: 0, f: 0 };
-                    shapeBounds = {
+                    return {
                         x: bbox.x + matrix.e,
                         y: bbox.y + matrix.f,
                         width: bbox.width,
                         height: bbox.height
                     };
-                } else {
-                    shapeBounds = { x: 0, y: 0, width: 0, height: 0 };
                 }
-                break;
+                return { x: 0, y: 0, width: 0, height: 0 };
             case 'image':
                 if (shape.element) {
-                    shapeBounds = {
+                    return {
                         x: parseFloat(shape.element.getAttribute('x')),
                         y: parseFloat(shape.element.getAttribute('y')),
                         width: parseFloat(shape.element.getAttribute('width')),
                         height: parseFloat(shape.element.getAttribute('height'))
                     };
-                } else {
-                    shapeBounds = { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
                 }
-                break;
-            case 'frame':
-                shapeBounds = {
-                    x: shape.x,
-                    y: shape.y,
-                    width: shape.width,
-                    height: shape.height
-                };
-                break;
+                return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
             default:
-                shapeBounds = {
+                return {
                     x: shape.x || 0,
                     y: shape.y || 0,
                     width: shape.width || 0,
                     height: shape.height || 0
                 };
         }
-        
-        minX = Math.min(minX, shapeBounds.x);
-        minY = Math.min(minY, shapeBounds.y);
-        maxX = Math.max(maxX, shapeBounds.x + shapeBounds.width);
-        maxY = Math.max(maxY, shapeBounds.y + shapeBounds.height);
-    });
-    
-    return {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-    };
-}
-
-// Create multi-selection controls (outline and anchors)
-function createMultiSelectionControls() {
-    removeMultiSelectionControls();
-    
-    const bounds = getMultiSelectionBounds();
-    if (!bounds) return;
-    
-    // Create group for multi-selection controls
-    multiSelectionGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    multiSelectionGroup.setAttribute('id', 'multi-selection-controls');
-    svg.appendChild(multiSelectionGroup);
-    
-    const selectionPadding = 12;
-    const expandedX = bounds.x - selectionPadding;
-    const expandedY = bounds.y - selectionPadding;
-    const expandedWidth = bounds.width + 2 * selectionPadding;
-    const expandedHeight = bounds.height + 2 * selectionPadding;
-    
-    // Create outline
-    const outlinePoints = [
-        [expandedX, expandedY],
-        [expandedX + expandedWidth, expandedY],
-        [expandedX + expandedWidth, expandedY + expandedHeight],
-        [expandedX, expandedY + expandedHeight],
-        [expandedX, expandedY]
-    ];
-    
-    const pointsAttr = outlinePoints.map(p => p.join(',')).join(' ');
-    multiSelectionOutline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    multiSelectionOutline.setAttribute('points', pointsAttr);
-    multiSelectionOutline.setAttribute('fill', 'none');
-    multiSelectionOutline.setAttribute('stroke', '#5B57D1');
-    multiSelectionOutline.setAttribute('stroke-width', 2);
-    multiSelectionOutline.setAttribute('stroke-dasharray', '8 4');
-    multiSelectionOutline.setAttribute('style', 'pointer-events: none;');
-    multiSelectionGroup.appendChild(multiSelectionOutline);
-    
-    // Create resize anchors for multi-selection (8 anchors)
-    const anchorSize = 12;
-    const anchorPositions = [
-        { x: expandedX, y: expandedY, index: 0 }, // top-left
-        { x: expandedX + expandedWidth, y: expandedY, index: 1 }, // top-right
-        { x: expandedX, y: expandedY + expandedHeight, index: 2 }, // bottom-left
-        { x: expandedX + expandedWidth, y: expandedY + expandedHeight, index: 3 }, // bottom-right
-        { x: expandedX + expandedWidth / 2, y: expandedY, index: 4 }, // top-center
-        { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight, index: 5 }, // bottom-center
-        { x: expandedX, y: expandedY + expandedHeight / 2, index: 6 }, // left-center
-        { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2, index: 7 } // right-center
-    ];
-    
-    multiSelectionAnchors = [];
-    anchorPositions.forEach((pos) => {
-        const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        anchor.setAttribute('x', pos.x - anchorSize / 2);
-        anchor.setAttribute('y', pos.y - anchorSize / 2);
-        anchor.setAttribute('width', anchorSize);
-        anchor.setAttribute('height', anchorSize);
-        anchor.setAttribute('class', 'multi-selection-anchor');
-        anchor.setAttribute('data-index', pos.index);
-        anchor.setAttribute('fill', '#121212');
-        anchor.setAttribute('stroke', '#5B57D1');
-        anchor.setAttribute('stroke-width', 2);
-        anchor.setAttribute('style', 'pointer-events: all; cursor: pointer;');
-        
-        // Set appropriate cursor for each anchor
-        const cursors = ['nw-resize', 'ne-resize', 'sw-resize', 'se-resize', 'n-resize', 's-resize', 'w-resize', 'e-resize'];
-        anchor.style.cursor = cursors[pos.index];
-        
-        anchor.addEventListener('mousedown', (e) => startMultiSelectionResize(e, pos.index));
-        
-        multiSelectionGroup.appendChild(anchor);
-        multiSelectionAnchors.push(anchor);
-    });
-    
-    // Create rotation anchor
-    const rotationAnchorPos = { x: expandedX + expandedWidth / 2, y: expandedY - 30 };
-    multiSelectionRotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    multiSelectionRotationAnchor.setAttribute('cx', rotationAnchorPos.x);
-    multiSelectionRotationAnchor.setAttribute('cy', rotationAnchorPos.y);
-    multiSelectionRotationAnchor.setAttribute('r', 8);
-    multiSelectionRotationAnchor.setAttribute('class', 'multi-selection-rotation-anchor');
-    multiSelectionRotationAnchor.setAttribute('fill', '#121212');
-    multiSelectionRotationAnchor.setAttribute('stroke', '#5B57D1');
-    multiSelectionRotationAnchor.setAttribute('stroke-width', 2);
-    multiSelectionRotationAnchor.setAttribute('style', 'pointer-events: all; cursor: grab;');
-    
-    multiSelectionRotationAnchor.addEventListener('mousedown', startMultiSelectionRotation);
-    
-    // Add rotation line
-    const rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    rotationLine.setAttribute('x1', rotationAnchorPos.x);
-    rotationLine.setAttribute('y1', rotationAnchorPos.y);
-    rotationLine.setAttribute('x2', expandedX + expandedWidth / 2);
-    rotationLine.setAttribute('y2', expandedY);
-    rotationLine.setAttribute('stroke', '#5B57D1');
-    rotationLine.setAttribute('stroke-width', 1);
-    rotationLine.setAttribute('stroke-dasharray', '3 3');
-    rotationLine.setAttribute('style', 'pointer-events: none;');
-    
-    multiSelectionGroup.appendChild(rotationLine);
-    multiSelectionGroup.appendChild(multiSelectionRotationAnchor);
-}
-
-// Remove multi-selection controls
-function removeMultiSelectionControls() {
-    if (multiSelectionGroup && multiSelectionGroup.parentNode) {
-        multiSelectionGroup.parentNode.removeChild(multiSelectionGroup);
     }
-    multiSelectionGroup = null;
-    multiSelectionAnchors = [];
-    multiSelectionOutline = null;
-    multiSelectionRotationAnchor = null;
-}
 
-// Check if point is inside multi-selection bounds
-function isPointInMultiSelection(x, y) {
-    const bounds = getMultiSelectionBounds();
-    if (!bounds) return false;
-    
-    const padding = 12;
-    return x >= bounds.x - padding && x <= bounds.x + bounds.width + padding &&
-           y >= bounds.y - padding && y <= bounds.y + bounds.height + padding;
-}
+    updateControls() {
+        this.removeControls();
+        if (this.selectedShapes.size === 0) return;
 
-// Move all selected shapes
-function moveSelectedShapes(dx, dy) {
-    selectedShapes.forEach(shape => {
-        switch (shape.shapeName) {
-            case 'rectangle':
-            case 'circle':
-            case 'freehandStroke':
-            case 'frame':
-                shape.move(dx, dy);
-                shape.removeSelection()
-                shape.draw();
-                break;
-            case 'line':
-            case 'arrow':
-                shape.move(dx, dy);
-                shape.removeSelection()
-                shape.draw();
-                break;
-            case 'text':
-                if (shape.move) {
-                    shape.removeSelection()
-                    shape.move(dx, dy);
-                }
-                break;
-            case 'image':
-                if (shape.move) {
-                    shape.removeSelection()
-                    shape.move(dx, dy);
-                }
-                break;
-        }
-        
-        // Update attached arrows if the shape has them
-        if (typeof shape.updateAttachedArrows === 'function') {
-            shape.updateAttachedArrows();
-        }
-    });
-    
-    // Update multi-selection controls
-    if (selectedShapes.size > 1) {
-        createMultiSelectionControls();
+        this.bounds = this.getBounds();
+        if (!this.bounds) return;
+
+        this.createControls();
     }
-}
 
-// Start multi-selection resize
-function startMultiSelectionResize(e, anchorIndex) {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    isResizingMultiSelection = true;
-    resizingAnchorIndexMulti = anchorIndex;
-    
-    // Store initial positions for all shapes
-    multiSelectionInitialPositions.clear();
-    const initialBounds = getMultiSelectionBounds();
-    
-    selectedShapes.forEach(shape => {
-        let shapeData;
-        switch (shape.shapeName) {
-            case 'rectangle':
-                shapeData = {
-                    x: shape.x,
-                    y: shape.y,
-                    width: shape.width,
-                    height: shape.height,
-                    rotation: shape.rotation
-                };
-                break;
-            case 'circle':
-                shapeData = {
-                    x: shape.x,
-                    y: shape.y,
-                    rx: shape.rx,
-                    ry: shape.ry,
-                    rotation: shape.rotation
-                };
-                break;
-            case 'line':
-            case 'arrow':
-                shapeData = {
-                    startPoint: { ...shape.startPoint },
-                    endPoint: { ...shape.endPoint }
-                };
-                break;
-            default:
-                shapeData = {
-                    x: shape.x || 0,
-                    y: shape.y || 0,
-                    width: shape.width || 0,
-                    height: shape.height || 0
-                };
+    createControls() {
+        this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.group.setAttribute('id', 'multi-selection-controls');
+        if (typeof svg !== 'undefined') {
+            svg.appendChild(this.group);
         }
-        multiSelectionInitialPositions.set(shape, shapeData);
-    });
-    
-    // Store initial bounds
-    multiSelectionInitialPositions.set('bounds', initialBounds);
-    
-    const onMouseMove = (event) => {
-        if (isResizingMultiSelection) {
-            handleMultiSelectionResize(event);
-        }
-    };
-    
-    const onMouseUp = () => {
-        isResizingMultiSelection = false;
-        resizingAnchorIndexMulti = null;
-        multiSelectionInitialPositions.clear();
-        svg.removeEventListener('mousemove', onMouseMove);
-        svg.removeEventListener('mouseup', onMouseUp);
-        svg.style.cursor = 'default';
-    };
-    
-    svg.addEventListener('mousemove', onMouseMove);
-    svg.addEventListener('mouseup', onMouseUp);
-}
 
-// Handle multi-selection resize
-function handleMultiSelectionResize(e) {
-    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
-    const initialBounds = multiSelectionInitialPositions.get('bounds');
-    if (!initialBounds) return;
-    
-    // Calculate scale factors based on anchor and mouse position
-    let scaleX = 1, scaleY = 1;
-    let newBounds = { ...initialBounds };
-    
-    switch (resizingAnchorIndexMulti) {
-        case 0: // top-left
-            scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
-            scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
-            newBounds.x = mouseX;
-            newBounds.y = mouseY;
-            newBounds.width = initialBounds.x + initialBounds.width - mouseX;
-            newBounds.height = initialBounds.y + initialBounds.height - mouseY;
-            break;
-        case 1: // top-right
-            scaleX = (mouseX - initialBounds.x) / initialBounds.width;
-            scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
-            newBounds.y = mouseY;
-            newBounds.width = mouseX - initialBounds.x;
-            newBounds.height = initialBounds.y + initialBounds.height - mouseY;
-            break;
-        case 2: // bottom-left
-            scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
-            scaleY = (mouseY - initialBounds.y) / initialBounds.height;
-            newBounds.x = mouseX;
-            newBounds.width = initialBounds.x + initialBounds.width - mouseX;
-            newBounds.height = mouseY - initialBounds.y;
-            break;
-        case 3: // bottom-right
-            scaleX = (mouseX - initialBounds.x) / initialBounds.width;
-            scaleY = (mouseY - initialBounds.y) / initialBounds.height;
-            newBounds.width = mouseX - initialBounds.x;
-            newBounds.height = mouseY - initialBounds.y;
-            break;
-        case 4: // top-center
-            scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
-            newBounds.y = mouseY;
-            newBounds.height = initialBounds.y + initialBounds.height - mouseY;
-            break;
-        case 5: // bottom-center
-            scaleY = (mouseY - initialBounds.y) / initialBounds.height;
-            newBounds.height = mouseY - initialBounds.y;
-            break;
-        case 6: // left-center
-            scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
-            newBounds.x = mouseX;
-            newBounds.width = initialBounds.x + initialBounds.width - mouseX;
-            break;
-        case 7: // right-center
-            scaleX = (mouseX - initialBounds.x) / initialBounds.width;
-            newBounds.width = mouseX - initialBounds.x;
-            break;
+        const expandedX = this.bounds.x - this.selectionPadding;
+        const expandedY = this.bounds.y - this.selectionPadding;
+        const expandedWidth = this.bounds.width + 2 * this.selectionPadding;
+        const expandedHeight = this.bounds.height + 2 * this.selectionPadding;
+
+        this.createOutline(expandedX, expandedY, expandedWidth, expandedHeight);
+        this.createResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight);
+        this.createRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight);
     }
-    
-    // Ensure minimum scale
-    scaleX = Math.max(0.1, Math.abs(scaleX));
-    scaleY = Math.max(0.1, Math.abs(scaleY));
-    
-    // Apply transformations to all selected shapes
-    selectedShapes.forEach(shape => {
-        const initialData = multiSelectionInitialPositions.get(shape);
-        if (!initialData) return;
+
+    createOutline(x, y, width, height) {
+        const outlinePoints = [
+            [x, y],
+            [x + width, y],
+            [x + width, y + height],
+            [x, y + height],
+            [x, y]
+        ];
+
+        this.outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        this.outline.setAttribute('points', outlinePoints.map(p => p.join(',')).join(' '));
+        this.outline.setAttribute('fill', 'none');
+        this.outline.setAttribute('stroke', '#5B57D1');
+        this.outline.setAttribute('stroke-width', 2);
+        this.outline.setAttribute('stroke-dasharray', '8 4');
+        this.outline.setAttribute('style', 'pointer-events: none;');
+        this.group.appendChild(this.outline);
+    }
+
+    createResizeAnchors(x, y, width, height) {
+        const anchorSize = 12;
+        const anchorPositions = [
+            { x: x, y: y, index: 0 }, // top-left
+            { x: x + width, y: y, index: 1 }, // top-right
+            { x: x, y: y + height, index: 2 }, // bottom-left
+            { x: x + width, y: y + height, index: 3 }, // bottom-right
+            { x: x + width / 2, y: y, index: 4 }, // top-center
+            { x: x + width / 2, y: y + height, index: 5 }, // bottom-center
+            { x: x, y: y + height / 2, index: 6 }, // left-center
+            { x: x + width, y: y + height / 2, index: 7 } // right-center
+        ];
+
+        this.anchors = [];
+        anchorPositions.forEach((pos) => {
+            const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            anchor.setAttribute('x', pos.x - anchorSize / 2);
+            anchor.setAttribute('y', pos.y - anchorSize / 2);
+            anchor.setAttribute('width', anchorSize);
+            anchor.setAttribute('height', anchorSize);
+            anchor.setAttribute('class', 'multi-selection-anchor');
+            anchor.setAttribute('data-index', pos.index);
+            anchor.setAttribute('fill', '#121212');
+            anchor.setAttribute('stroke', '#5B57D1');
+            anchor.setAttribute('stroke-width', 2);
+            anchor.setAttribute('style', 'pointer-events: all; cursor: pointer;');
+
+            const cursors = ['nw-resize', 'ne-resize', 'sw-resize', 'se-resize', 'n-resize', 's-resize', 'w-resize', 'e-resize'];
+            anchor.style.cursor = cursors[pos.index];
+
+            anchor.addEventListener('mousedown', (e) => this.startResize(e, pos.index));
+            
+            this.group.appendChild(anchor);
+            this.anchors.push(anchor);
+        });
+    }
+
+    createRotationAnchor(x, y, width, height) {
+        const rotationAnchorPos = { x: x + width / 2, y: y - 30 };
         
-        switch (shape.shapeName) {
-            case 'rectangle':
-                const relX = (initialData.x - initialBounds.x) / initialBounds.width;
-                const relY = (initialData.y - initialBounds.y) / initialBounds.height;
-                const relW = initialData.width / initialBounds.width;
-                const relH = initialData.height / initialBounds.height;
-                
-                shape.x = newBounds.x + relX * newBounds.width;
-                shape.y = newBounds.y + relY * newBounds.height;
-                shape.width = relW * newBounds.width;
-                shape.height = relH * newBounds.height;
-                shape.draw();
-                break;
-                
-            case 'circle':
-                const relXCircle = (initialData.x - initialBounds.x) / initialBounds.width;
-                const relYCircle = (initialData.y - initialBounds.y) / initialBounds.height;
-                
-                shape.x = newBounds.x + relXCircle * newBounds.width;
-                shape.y = newBounds.y + relYCircle * newBounds.height;
-                shape.rx = initialData.rx * scaleX;
-                shape.ry = initialData.ry * scaleY;
-                shape.draw();
-                break;
-                
-            case 'line':
-            case 'arrow':
-                const relStartX = (initialData.startPoint.x - initialBounds.x) / initialBounds.width;
-                const relStartY = (initialData.startPoint.y - initialBounds.y) / initialBounds.height;
-                const relEndX = (initialData.endPoint.x - initialBounds.x) / initialBounds.width;
-                const relEndY = (initialData.endPoint.y - initialBounds.y) / initialBounds.height;
-                
-                shape.startPoint.x = newBounds.x + relStartX * newBounds.width;
-                shape.startPoint.y = newBounds.y + relStartY * newBounds.height;
-                shape.endPoint.x = newBounds.x + relEndX * newBounds.width;
-                shape.endPoint.y = newBounds.y + relEndY * newBounds.height;
-                
-                if (shape.shapeName === 'arrow' && shape.arrowCurved) {
-                    shape.initializeCurveControlPoints();
-                }
-                shape.draw();
-                break;
-                
-            default:
-                // Handle other shape types (freehandStroke, text, image, frame)
-                const relXDefault = (initialData.x - initialBounds.x) / initialBounds.width;
-                const relYDefault = (initialData.y - initialBounds.y) / initialBounds.height;
-                const relWDefault = initialData.width / initialBounds.width;
-                const relHDefault = initialData.height / initialBounds.height;
-                
-                shape.x = newBounds.x + relXDefault * newBounds.width;
-                shape.y = newBounds.y + relYDefault * newBounds.height;
-                if (shape.width !== undefined) shape.width = relWDefault * newBounds.width;
-                if (shape.height !== undefined) shape.height = relHDefault * newBounds.height;
-                
-                if (typeof shape.draw === 'function') {
+        this.rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        this.rotationAnchor.setAttribute('cx', rotationAnchorPos.x);
+        this.rotationAnchor.setAttribute('cy', rotationAnchorPos.y);
+        this.rotationAnchor.setAttribute('r', 8);
+        this.rotationAnchor.setAttribute('class', 'multi-selection-rotation-anchor');
+        this.rotationAnchor.setAttribute('fill', '#121212');
+        this.rotationAnchor.setAttribute('stroke', '#5B57D1');
+        this.rotationAnchor.setAttribute('stroke-width', 2);
+        this.rotationAnchor.setAttribute('style', 'pointer-events: all; cursor: grab;');
+
+        this.rotationAnchor.addEventListener('mousedown', (e) => this.startRotation(e));
+
+        // Rotation line
+        this.rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        this.rotationLine.setAttribute('x1', rotationAnchorPos.x);
+        this.rotationLine.setAttribute('y1', rotationAnchorPos.y);
+        this.rotationLine.setAttribute('x2', x + width / 2);
+        this.rotationLine.setAttribute('y2', y);
+        this.rotationLine.setAttribute('stroke', '#5B57D1');
+        this.rotationLine.setAttribute('stroke-width', 1);
+        this.rotationLine.setAttribute('stroke-dasharray', '3 3');
+        this.rotationLine.setAttribute('style', 'pointer-events: none;');
+
+        this.group.appendChild(this.rotationLine);
+        this.group.appendChild(this.rotationAnchor);
+    }
+
+    removeControls() {
+        if (this.group && this.group.parentNode) {
+            this.group.parentNode.removeChild(this.group);
+        }
+        this.group = null;
+        this.anchors = [];
+        this.outline = null;
+        this.rotationAnchor = null;
+        this.rotationLine = null;
+    }
+
+    isPointInBounds(x, y) {
+        if (!this.bounds) return false;
+        
+        const padding = this.selectionPadding;
+        return x >= this.bounds.x - padding && x <= this.bounds.x + this.bounds.width + padding &&
+               y >= this.bounds.y - padding && y <= this.bounds.y + this.bounds.height + padding;
+    }
+
+    move(dx, dy) {
+        this.selectedShapes.forEach(shape => {
+            switch (shape.shapeName) {
+                case 'rectangle':
+                case 'circle':
+                case 'freehandStroke':
+                case 'frame':
+                    if (typeof shape.move === 'function') {
+                        shape.move(dx, dy);
+                        shape.draw();
+                    }
+                    break;
+                case 'line':
+                case 'arrow':
+                    if (typeof shape.move === 'function') {
+                        shape.move(dx, dy);
+                        shape.draw();
+                    }
+                    break;
+                case 'text':
+                case 'image':
+                    if (typeof shape.move === 'function') {
+                        shape.move(dx, dy);
+                    }
+                    break;
+            }
+
+            if (typeof shape.updateAttachedArrows === 'function') {
+                shape.updateAttachedArrows();
+            }
+        });
+
+        this.updateControls();
+    }
+
+    startRotation(e) {
+        e.stopPropagation();
+        e.preventDefault();
+
+        this.isRotating = true;
+        this.rotationCenter = {
+            x: this.bounds.x + this.bounds.width / 2,
+            y: this.bounds.y + this.bounds.height / 2
+        };
+
+        const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
+        this.startRotationMouseAngle = Math.atan2(mouseY - this.rotationCenter.y, mouseX - this.rotationCenter.x) * 180 / Math.PI;
+
+        // Store initial positions for all shapes
+        this.storeInitialPositions();
+
+        const onMouseMove = (event) => {
+            if (this.isRotating) {
+                this.handleRotation(event);
+            }
+        };
+
+        const onMouseUp = () => {
+            this.isRotating = false;
+            this.initialPositions.clear();
+            if (typeof svg !== 'undefined') {
+                svg.removeEventListener('mousemove', onMouseMove);
+                svg.removeEventListener('mouseup', onMouseUp);
+                svg.style.cursor = 'default';
+            }
+        };
+
+        if (typeof svg !== 'undefined') {
+            svg.addEventListener('mousemove', onMouseMove);
+            svg.addEventListener('mouseup', onMouseUp);
+            svg.style.cursor = 'grabbing';
+        }
+    }
+
+    storeInitialPositions() {
+        this.initialPositions.clear();
+        
+        this.selectedShapes.forEach(shape => {
+            let shapeData;
+            switch (shape.shapeName) {
+                case 'rectangle':
+                case 'circle':
+                case 'frame':
+                    shapeData = {
+                        x: shape.x,
+                        y: shape.y,
+                        width: shape.width || 0,
+                        height: shape.height || 0,
+                        rx: shape.rx || 0,
+                        ry: shape.ry || 0,
+                        rotation: shape.rotation || 0,
+                        relativeX: shape.x - this.rotationCenter.x,
+                        relativeY: shape.y - this.rotationCenter.y
+                    };
+                    break;
+                case 'line':
+                case 'arrow':
+                    shapeData = {
+                        startPoint: { ...shape.startPoint },
+                        endPoint: { ...shape.endPoint },
+                        relativeStartX: shape.startPoint.x - this.rotationCenter.x,
+                        relativeStartY: shape.startPoint.y - this.rotationCenter.y,
+                        relativeEndX: shape.endPoint.x - this.rotationCenter.x,
+                        relativeEndY: shape.endPoint.y - this.rotationCenter.y
+                    };
+                    break;
+                case 'freehandStroke':
+                    shapeData = {
+                        x: shape.boundingBox.x,
+                        y: shape.boundingBox.y,
+                        width: shape.boundingBox.width,
+                        height: shape.boundingBox.height,
+                        points: [...shape.points],
+                        relativePoints: shape.points.map(point => ({
+                            x: point.x - this.rotationCenter.x,
+                            y: point.y - this.rotationCenter.y
+                        }))
+                    };
+                    break;
+                default:
+                    shapeData = {
+                        x: shape.x || 0,
+                        y: shape.y || 0,
+                        width: shape.width || 0,
+                        height: shape.height || 0,
+                        rotation: shape.rotation || 0,
+                        relativeX: (shape.x || 0) - this.rotationCenter.x,
+                        relativeY: (shape.y || 0) - this.rotationCenter.y
+                    };
+            }
+            this.initialPositions.set(shape, shapeData);
+        });
+    }
+
+    handleRotation(e) {
+        const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
+        const currentMouseAngle = Math.atan2(mouseY - this.rotationCenter.y, mouseX - this.rotationCenter.x) * 180 / Math.PI;
+        const angleDiff = currentMouseAngle - this.startRotationMouseAngle;
+
+        // Convert angle difference to radians
+        const angleRad = angleDiff * Math.PI / 180;
+        const cosAngle = Math.cos(angleRad);
+        const sinAngle = Math.sin(angleRad);
+
+        console.log(`Rotating multi-selection by ${angleDiff} degrees around center (${this.rotationCenter.x}, ${this.rotationCenter.y})`);
+
+        // Apply rotation to all selected shapes
+        this.selectedShapes.forEach(shape => {
+            const initialData = this.initialPositions.get(shape);
+            if (!initialData) return;
+
+            switch (shape.shapeName) {
+                case 'rectangle':
+                case 'circle':
+                case 'frame':
+                    // Rotate position around center
+                    const newX = this.rotationCenter.x + (initialData.relativeX * cosAngle - initialData.relativeY * sinAngle);
+                    const newY = this.rotationCenter.y + (initialData.relativeX * sinAngle + initialData.relativeY * cosAngle);
+                    
+                    shape.x = newX;
+                    shape.y = newY;
+                    
+                    // Add rotation to existing rotation
+                    if (typeof shape.rotate === 'function') {
+                        shape.rotate(initialData.rotation + angleDiff);
+                    }
+                    
                     shape.draw();
-                }
-        }
-        
-        // Update attached arrows
-        if (typeof shape.updateAttachedArrows === 'function') {
-            shape.updateAttachedArrows();
-        }
-    });
-    
-    // Update multi-selection controls
-    createMultiSelectionControls();
-}
+                    break;
 
-function startMultiSelectionRotation(e) {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    isRotatingMultiSelection = true;
-    
-    const bounds = getMultiSelectionBounds();
-    const centerX = bounds.x + bounds.width / 2;
-    const centerY = bounds.y + bounds.height / 2;
-    
-    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
-    startRotationMouseAngleMulti = Math.atan2(mouseY - centerY, mouseX - centerX) * 180 / Math.PI;
-    
-    // Store initial positions AND rotations for all shapes
-    multiSelectionInitialPositions.clear();
-    selectedShapes.forEach(shape => {
-        let shapeData;
-        switch (shape.shapeName) {
-            case 'rectangle':
-            case 'circle':
-            case 'frame':
-                shapeData = {
-                    x: shape.x,
-                    y: shape.y,
-                    width: shape.width || 0,
-                    height: shape.height || 0,
-                    rx: shape.rx || 0,
-                    ry: shape.ry || 0,
-                    rotation: shape.rotation || 0, // Store current rotation
-                    // Store relative position from center
-                    relativeX: shape.x - centerX,
-                    relativeY: shape.y - centerY
-                };
-                break;
-            case 'line':
-            case 'arrow':
-                shapeData = {
-                    startPoint: { ...shape.startPoint },
-                    endPoint: { ...shape.endPoint },
-                    // Store relative positions from center
-                    relativeStartX: shape.startPoint.x - centerX,
-                    relativeStartY: shape.startPoint.y - centerY,
-                    relativeEndX: shape.endPoint.x - centerX,
-                    relativeEndY: shape.endPoint.y - centerY
-                };
-                break;
-            case 'freehandStroke':
-                shapeData = {
-                    x: shape.boundingBox.x,
-                    y: shape.boundingBox.y,
-                    width: shape.boundingBox.width,
-                    height: shape.boundingBox.height,
-                    points: [...shape.points], // Store original points
-                    // Store relative points from center
-                    relativePoints: shape.points.map(point => ({
-                        x: point.x - centerX,
-                        y: point.y - centerY
-                    }))
-                };
-                break;
-            default:
-                shapeData = {
-                    x: shape.x || 0,
-                    y: shape.y || 0,
-                    width: shape.width || 0,
-                    height: shape.height || 0,
-                    rotation: shape.rotation || 0,
-                    relativeX: (shape.x || 0) - centerX,
-                    relativeY: (shape.y || 0) - centerY
-                };
-        }
-        multiSelectionInitialPositions.set(shape, shapeData);
-    });
-    
-    multiSelectionInitialPositions.set('center', { x: centerX, y: centerY });
-    
-    const onMouseMove = (event) => {
-        if (isRotatingMultiSelection) {
-            handleMultiSelectionRotation(event);
-        }
-    };
-    
-    const onMouseUp = () => {
-        isRotatingMultiSelection = false;
-        multiSelectionInitialPositions.clear();
-        svg.removeEventListener('mousemove', onMouseMove);
-        svg.removeEventListener('mouseup', onMouseUp);
-        svg.style.cursor = 'default';
-    };
-    
-    svg.addEventListener('mousemove', onMouseMove);
-    svg.addEventListener('mouseup', onMouseUp);
-    svg.style.cursor = 'grabbing';
-}
+                case 'line':
+                case 'arrow':
+                    // Rotate start point
+                    const newStartX = this.rotationCenter.x + (initialData.relativeStartX * cosAngle - initialData.relativeStartY * sinAngle);
+                    const newStartY = this.rotationCenter.y + (initialData.relativeStartX * sinAngle + initialData.relativeStartY * cosAngle);
+                    
+                    // Rotate end point
+                    const newEndX = this.rotationCenter.x + (initialData.relativeEndX * cosAngle - initialData.relativeEndY * sinAngle);
+                    const newEndY = this.rotationCenter.y + (initialData.relativeEndX * sinAngle + initialData.relativeEndY * cosAngle);
+                    
+                    shape.startPoint.x = newStartX;
+                    shape.startPoint.y = newStartY;
+                    shape.endPoint.x = newEndX;
+                    shape.endPoint.y = newEndY;
+                    
+                    if (shape.shapeName === 'arrow' && shape.arrowCurved) {
+                        if (typeof shape.initializeCurveControlPoints === 'function') {
+                            shape.initializeCurveControlPoints();
+                        }
+                    }
+                    
+                    shape.draw();
+                    break;
 
-
-function handleMultiSelectionRotation(e) {
-    const center = multiSelectionInitialPositions.get('center');
-    if (!center) return;
-    
-    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
-    const currentMouseAngle = Math.atan2(mouseY - center.y, mouseX - center.x) * 180 / Math.PI;
-    const angleDiff = currentMouseAngle - startRotationMouseAngleMulti;
-    
-    // Convert angle difference to radians
-    const angleRad = angleDiff * Math.PI / 180;
-    const cosAngle = Math.cos(angleRad);
-    const sinAngle = Math.sin(angleRad);
-    
-    // Apply rotation to all selected shapes as ONE RIGID BODY
-    selectedShapes.forEach(shape => {
-        const initialData = multiSelectionInitialPositions.get(shape);
-        if (!initialData) return;
-        
-        // Remove any individual selection indicators
-        shape.removeSelection();
-        
-        switch (shape.shapeName) {
-            case 'rectangle':
-            case 'circle':
-            case 'frame':
-                // Only rotate position around center - keep everything else unchanged
-                const newX = center.x + (initialData.relativeX * cosAngle - initialData.relativeY * sinAngle);
-                const newY = center.y + (initialData.relativeX * sinAngle + initialData.relativeY * cosAngle);
-                
-                shape.x = newX;
-                shape.y = newY;
-                shape.width = initialData.width;
-                shape.height = initialData.height;
-                if (shape.rx !== undefined) shape.rx = initialData.rx;
-                if (shape.ry !== undefined) shape.ry = initialData.ry;
-                // Keep original rotation unchanged
-                shape.rotation = initialData.rotation;
-                break;
-                
-            case 'line':
-            case 'arrow':
-                // Rotate both endpoints around center
-                const newStartX = center.x + (initialData.relativeStartX * cosAngle - initialData.relativeStartY * sinAngle);
-                const newStartY = center.y + (initialData.relativeStartX * sinAngle + initialData.relativeStartY * cosAngle);
-                const newEndX = center.x + (initialData.relativeEndX * cosAngle - initialData.relativeEndY * sinAngle);
-                const newEndY = center.y + (initialData.relativeEndX * sinAngle + initialData.relativeEndY * cosAngle);
-                
-                shape.startPoint.x = newStartX;
-                shape.startPoint.y = newStartY;
-                shape.endPoint.x = newEndX;
-                shape.endPoint.y = newEndY;
-                
-                if (shape.shapeName === 'arrow' && shape.arrowCurved) {
-                    shape.initializeCurveControlPoints();
-                }
-                break;
-                
-            case 'freehandStroke':
-                // Rotate all points around center
-                if (initialData.relativePoints && shape.points) {
+                case 'freehandStroke':
+                    // Rotate all points
                     shape.points = initialData.relativePoints.map(relPoint => ({
-                        x: center.x + (relPoint.x * cosAngle - relPoint.y * sinAngle),
-                        y: center.y + (relPoint.x * sinAngle + relPoint.y * cosAngle)
+                        x: this.rotationCenter.x + (relPoint.x * cosAngle - relPoint.y * sinAngle),
+                        y: this.rotationCenter.y + (relPoint.x * sinAngle + relPoint.y * cosAngle)
                     }));
-                    shape.updateBoundingBox();
-                }
+                    
+                    // Update bounding box
+                    if (typeof shape.updateBoundingBox === 'function') {
+                        shape.updateBoundingBox();
+                    }
+                    shape.draw();
+                    break;
+
+                default:
+                    // Handle other shape types
+                    const newXDefault = this.rotationCenter.x + (initialData.relativeX * cosAngle - initialData.relativeY * sinAngle);
+                    const newYDefault = this.rotationCenter.y + (initialData.relativeX * sinAngle + initialData.relativeY * cosAngle);
+                    
+                    shape.x = newXDefault;
+                    shape.y = newYDefault;
+                    
+                    if (typeof shape.rotate === 'function') {
+                        shape.rotate(initialData.rotation + angleDiff);
+                    }
+                    
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
+            }
+
+            // Update attached arrows
+            if (typeof shape.updateAttachedArrows === 'function') {
+                shape.updateAttachedArrows();
+            }
+        });
+
+        this.updateControls();
+    }
+
+    startResize(e, anchorIndex) {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        this.isResizing = true;
+        this.resizingAnchorIndex = anchorIndex;
+        
+        // Store initial positions for all shapes
+        this.initialPositions.clear();
+        const initialBounds = this.getBounds();
+        
+        this.selectedShapes.forEach(shape => {
+            let shapeData;
+            switch (shape.shapeName) {
+                case 'rectangle':
+                    shapeData = {
+                        x: shape.x,
+                        y: shape.y,
+                        width: shape.width,
+                        height: shape.height,
+                        rotation: shape.rotation
+                    };
+                    break;
+                case 'circle':
+                    shapeData = {
+                        x: shape.x,
+                        y: shape.y,
+                        rx: shape.rx,
+                        ry: shape.ry,
+                        rotation: shape.rotation
+                    };
+                    break;
+                case 'line':
+                case 'arrow':
+                    shapeData = {
+                        startPoint: { ...shape.startPoint },
+                        endPoint: { ...shape.endPoint }
+                    };
+                    break;
+                default:
+                    shapeData = {
+                        x: shape.x || 0,
+                        y: shape.y || 0,
+                        width: shape.width || 0,
+                        height: shape.height || 0
+                    };
+            }
+            this.initialPositions.set(shape, shapeData);
+        });
+        
+        this.initialPositions.set('bounds', initialBounds);
+        
+        const onMouseMove = (event) => {
+            if (this.isResizing) {
+                this.handleResize(event);
+            }
+        };
+        
+        const onMouseUp = () => {
+            this.isResizing = false;
+            this.resizingAnchorIndex = null;
+            this.initialPositions.clear();
+            if (typeof svg !== 'undefined') {
+                svg.removeEventListener('mousemove', onMouseMove);
+                svg.removeEventListener('mouseup', onMouseUp);
+                svg.style.cursor = 'default';
+            }
+        };
+        
+        if (typeof svg !== 'undefined') {
+            svg.addEventListener('mousemove', onMouseMove);
+            svg.addEventListener('mouseup', onMouseUp);
+        }
+    }
+
+    handleResize(e) {
+        const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
+        const initialBounds = this.initialPositions.get('bounds');
+        if (!initialBounds) return;
+        
+        // Calculate scale factors based on anchor and mouse position
+        let scaleX = 1, scaleY = 1;
+        let newBounds = { ...initialBounds };
+        
+        switch (this.resizingAnchorIndex) {
+            case 0: // top-left
+                scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
+                scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
+                newBounds.x = mouseX;
+                newBounds.y = mouseY;
+                newBounds.width = initialBounds.x + initialBounds.width - mouseX;
+                newBounds.height = initialBounds.y + initialBounds.height - mouseY;
                 break;
-                
-            default:
-                // For text, image, etc. - only rotate position
-                const newDefaultX = center.x + (initialData.relativeX * cosAngle - initialData.relativeY * sinAngle);
-                const newDefaultY = center.y + (initialData.relativeX * sinAngle + initialData.relativeY * cosAngle);
-                
-                shape.x = newDefaultX;
-                shape.y = newDefaultY;
-                if (shape.width !== undefined) shape.width = initialData.width;
-                if (shape.height !== undefined) shape.height = initialData.height;
-                // Keep original rotation unchanged
-                if (shape.rotation !== undefined) shape.rotation = initialData.rotation;
+            case 1: // top-right
+                scaleX = (mouseX - initialBounds.x) / initialBounds.width;
+                scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
+                newBounds.y = mouseY;
+                newBounds.width = mouseX - initialBounds.x;
+                newBounds.height = initialBounds.y + initialBounds.height - mouseY;
+                break;
+            case 2: // bottom-left
+                scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
+                scaleY = (mouseY - initialBounds.y) / initialBounds.height;
+                newBounds.x = mouseX;
+                newBounds.width = initialBounds.x + initialBounds.width - mouseX;
+                newBounds.height = mouseY - initialBounds.y;
+                break;
+            case 3: // bottom-right
+                scaleX = (mouseX - initialBounds.x) / initialBounds.width;
+                scaleY = (mouseY - initialBounds.y) / initialBounds.height;
+                newBounds.width = mouseX - initialBounds.x;
+                newBounds.height = mouseY - initialBounds.y;
+                break;
+            case 4: // top-center
+                scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
+                newBounds.y = mouseY;
+                newBounds.height = initialBounds.y + initialBounds.height - mouseY;
+                break;
+            case 5: // bottom-center
+                scaleY = (mouseY - initialBounds.y) / initialBounds.height;
+                newBounds.height = mouseY - initialBounds.y;
+                break;
+            case 6: // left-center
+                scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
+                newBounds.x = mouseX;
+                newBounds.width = initialBounds.x + initialBounds.width - mouseX;
+                break;
+            case 7: // right-center
+                scaleX = (mouseX - initialBounds.x) / initialBounds.width;
+                newBounds.width = mouseX - initialBounds.x;
+                break;
         }
         
-        // Redraw the shape with new position
-        if (typeof shape.draw === 'function') {
-            shape.draw();
+        // Ensure minimum scale
+        scaleX = Math.max(0.1, Math.abs(scaleX));
+        scaleY = Math.max(0.1, Math.abs(scaleY));
+        
+        // Apply transformations to all selected shapes
+        this.selectedShapes.forEach(shape => {
+            const initialData = this.initialPositions.get(shape);
+            if (!initialData) return;
+            
+            switch (shape.shapeName) {
+                case 'rectangle':
+                    const relX = (initialData.x - initialBounds.x) / initialBounds.width;
+                    const relY = (initialData.y - initialBounds.y) / initialBounds.height;
+                    const relW = initialData.width / initialBounds.width;
+                    const relH = initialData.height / initialBounds.height;
+                    
+                    shape.x = newBounds.x + relX * newBounds.width;
+                    shape.y = newBounds.y + relY * newBounds.height;
+                    shape.width = relW * newBounds.width;
+                    shape.height = relH * newBounds.height;
+                    shape.draw();
+                    break;
+                    
+                case 'circle':
+                    const relXCircle = (initialData.x - initialBounds.x) / initialBounds.width;
+                    const relYCircle = (initialData.y - initialBounds.y) / initialBounds.height;
+                    
+                    shape.x = newBounds.x + relXCircle * newBounds.width;
+                    shape.y = newBounds.y + relYCircle * newBounds.height;
+                    shape.rx = initialData.rx * scaleX;
+                    shape.ry = initialData.ry * scaleY;
+                    shape.draw();
+                    break;
+                    
+                case 'line':
+                case 'arrow':
+                    const relStartX = (initialData.startPoint.x - initialBounds.x) / initialBounds.width;
+                    const relStartY = (initialData.startPoint.y - initialBounds.y) / initialBounds.height;
+                    const relEndX = (initialData.endPoint.x - initialBounds.x) / initialBounds.width;
+                    const relEndY = (initialData.endPoint.y - initialBounds.y) / initialBounds.height;
+                    
+                    shape.startPoint.x = newBounds.x + relStartX * newBounds.width;
+                    shape.startPoint.y = newBounds.y + relStartY * newBounds.height;
+                    shape.endPoint.x = newBounds.x + relEndX * newBounds.width;
+                    shape.endPoint.y = newBounds.y + relEndY * newBounds.height;
+                    
+                    if (shape.shapeName === 'arrow' && shape.arrowCurved) {
+                        if (typeof shape.initializeCurveControlPoints === 'function') {
+                            shape.initializeCurveControlPoints();
+                        }
+                    }
+                    shape.draw();
+                    break;
+                    
+                default:
+                    const relXDefault = (initialData.x - initialBounds.x) / initialBounds.width;
+                    const relYDefault = (initialData.y - initialBounds.y) / initialBounds.height;
+                    const relWDefault = initialData.width / initialBounds.width;
+                    const relHDefault = initialData.height / initialBounds.height;
+                    
+                    shape.x = newBounds.x + relXDefault * newBounds.width;
+                    shape.y = newBounds.y + relYDefault * newBounds.height;
+                    if (shape.width !== undefined) shape.width = relWDefault * newBounds.width;
+                    if (shape.height !== undefined) shape.height = relHDefault * newBounds.height;
+                    
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+            }
+            
+            if (typeof shape.updateAttachedArrows === 'function') {
+                shape.updateAttachedArrows();
+            }
+        });
+        
+        this.updateControls();
+    }
+
+    startDrag(e) {
+        this.isDragging = true;
+        isDraggingMultiSelection = true;
+        const { x, y } = getSVGCoordsFromMouse(e);
+        this.dragStart = { x, y };
+        
+        // Store initial positions for undo
+        this.initialPositions.clear();
+        this.selectedShapes.forEach(shape => {
+            let shapeData;
+            switch (shape.shapeName) {
+                case 'rectangle':
+                    shapeData = {
+                        x: shape.x,
+                        y: shape.y,
+                        width: shape.width,
+                        height: shape.height,
+                        rotation: shape.rotation
+                    };
+                    break;
+                case 'circle':
+                    shapeData = {
+                        x: shape.x,
+                        y: shape.y,
+                        rx: shape.rx,
+                        ry: shape.ry,
+                        rotation: shape.rotation
+                    };
+                    break;
+                case 'line':
+                case 'arrow':
+                    shapeData = {
+                        startPoint: { ...shape.startPoint },
+                        endPoint: { ...shape.endPoint }
+                    };
+                    break;
+                default:
+                    shapeData = {
+                        x: shape.x || 0,
+                        y: shape.y || 0,
+                        width: shape.width || 0,
+                        height: shape.height || 0,
+                        rotation: shape.rotation || 0
+                    };
+            }
+            this.initialPositions.set(shape, shapeData);
+        });
+        
+        if (typeof svg !== 'undefined') {
+            svg.style.cursor = 'move';
         }
-    });
-    
-    // Update multi-selection controls to show the new bounds
-    createMultiSelectionControls();
+    }
+
+    handleDrag(e) {
+        if (!this.isDragging) return;
+        isDraggingMultiSelection = true;
+        const { x, y } = getSVGCoordsFromMouse(e);
+        const dx = x - this.dragStart.x;
+        const dy = y - this.dragStart.y;
+        
+        this.move(dx, dy);
+        
+        this.dragStart = { x, y };
+    }
+
+    endDrag() {
+        if (!this.isDragging) return;
+        isDraggingMultiSelection = false;
+        this.isDragging = false;
+        this.initialPositions.clear();
+        if (typeof svg !== 'undefined') {
+            svg.style.cursor = 'default';
+        }
+    }
 }
 
+// Create global multi-selection instance
+const multiSelection = new MultiSelection();
 
-// Handle multi-selection mouse down
+// Update the existing functions to use the new class
+function selectShapesInRect(selectionBounds) {
+    multiSelection.selectShapesInRect(selectionBounds);
+}
+
+function clearAllSelections() {
+    multiSelection.clearSelection();
+}
+
+function getMultiSelectionBounds() {
+    return multiSelection.getBounds();
+}
+
+function createMultiSelectionControls() {
+    multiSelection.updateControls();
+}
+
+function removeMultiSelectionControls() {
+    multiSelection.removeControls();
+}
+
+function isPointInMultiSelection(x, y) {
+    return multiSelection.isPointInBounds(x, y);
+}
+
+function moveSelectedShapes(dx, dy) {
+    multiSelection.move(dx, dy);
+}
+
+// Update the mouse handlers to use the multi-selection class
 function handleMultiSelectionMouseDown(e) {
-    const mouseX = e.offsetX;
-    const mouseY = e.offsetY;
     const { x, y } = getSVGCoordsFromMouse(e);
     
     // Check if clicking on multi-selection area or anchors
-    if (selectedShapes.size > 1) {
+    if (multiSelection.selectedShapes.size > 1) {
         // Check if clicking on resize anchor
         const anchor = e.target.closest('.multi-selection-anchor');
         if (anchor) {
             const anchorIndex = parseInt(anchor.getAttribute('data-index'));
-            startMultiSelectionResize(e, anchorIndex);
+            multiSelection.startResize(e, anchorIndex);
             return true;
         }
         
         // Check if clicking on rotation anchor
         if (e.target.closest('.multi-selection-rotation-anchor')) {
-            startMultiSelectionRotation(e);
+            multiSelection.startRotation(e);
             return true;
         }
         
         // Check if clicking within multi-selection bounds for dragging
-        if (isPointInMultiSelection(mouseX, mouseY)) {
-            isDraggingMultiSelection = true;
-            multiSelectionDragStart = { x: mouseX, y: mouseY };
-            
-            // Store initial positions for undo
-            multiSelectionInitialPositions.clear();
-            selectedShapes.forEach(shape => {
-                let shapeData;
-                switch (shape.shapeName) {
-                    case 'rectangle':
-                        shapeData = {
-                            x: shape.x,
-                            y: shape.y,
-                            width: shape.width,
-                            height: shape.height,
-                            rotation: shape.rotation
-                        };
-                        break;
-                    case 'circle':
-                        shapeData = {
-                            x: shape.x,
-                            y: shape.y,
-                            rx: shape.rx,
-                            ry: shape.ry,
-                            rotation: shape.rotation
-                        };
-                        break;
-                    case 'line':
-                    case 'arrow':
-                        shapeData = {
-                            startPoint: { ...shape.startPoint },
-                            endPoint: { ...shape.endPoint }
-                        };
-                        break;
-                    default:
-                        shapeData = {
-                            x: shape.x || 0,
-                            y: shape.y || 0,
-                            width: shape.width || 0,
-                            height: shape.height || 0,
-                            rotation: shape.rotation || 0
-                        };
-                }
-                multiSelectionInitialPositions.set(shape, shapeData);
-            });
-            
-            svg.style.cursor = 'move';
+        if (multiSelection.isPointInBounds(x, y)) {
+            multiSelection.startDrag(e);
             return true;
         }
     }
@@ -1004,47 +1044,43 @@ function handleMultiSelectionMouseDown(e) {
     return true;
 }
 
-// Handle multi-selection mouse move
 function handleMultiSelectionMouseMove(e) {
-    const mouseX = e.offsetX;
-    const mouseY = e.offsetY;
+    const { x, y } = getSVGCoordsFromMouse(e);
     
-    if (isDraggingMultiSelection) {
-        const dx = mouseX - multiSelectionDragStart.x;
-        const dy = mouseY - multiSelectionDragStart.y;
-        
-        moveSelectedShapes(dx, dy);
-        
-        multiSelectionDragStart = { x: mouseX, y: mouseY };
+    if (multiSelection.isDragging) {
+        multiSelection.handleDrag(e);
+        return true;
+    }
+    
+    if (multiSelection.isResizing) {
+        multiSelection.handleResize(e);
+        return true;
+    }
+    
+    if (multiSelection.isRotating) {
+        multiSelection.handleRotation(e);
         return true;
     }
     
     if (isMultiSelecting) {
-        const { x, y } = getSVGCoordsFromMouse(e);
         updateMultiSelectionRect(x, y);
         return true;
     }
     
     // Update cursor for multi-selection area
-    if (selectedShapes.size > 1 && isPointInMultiSelection(mouseX, mouseY)) {
-        svg.style.cursor = 'move';
+    if (multiSelection.selectedShapes.size > 1 && multiSelection.isPointInBounds(x, y)) {
+        if (typeof svg !== 'undefined') {
+            svg.style.cursor = 'move';
+        }
         return true;
     }
     
     return false;
 }
 
-// Handle multi-selection mouse up
 function handleMultiSelectionMouseUp(e) {
-    if (isDraggingMultiSelection) {
-        // Create undo action for multi-selection move
-        if (multiSelectionInitialPositions.size > 0) {
-            // You can implement undo for multi-selection here
-            multiSelectionInitialPositions.clear();
-        }
-        
-        isDraggingMultiSelection = false;
-        svg.style.cursor = 'default';
+    if (multiSelection.isDragging) {
+        multiSelection.endDrag();
         return true;
     }
     
@@ -1061,7 +1097,7 @@ function handleMultiSelectionMouseUp(e) {
         
         // Only select if there's a meaningful selection area
         if (selectionBounds.width > 5 && selectionBounds.height > 5) {
-            selectShapesInRect(selectionBounds);
+            multiSelection.selectShapesInRect(selectionBounds);
         }
         
         removeMultiSelectionRect();
@@ -1072,12 +1108,19 @@ function handleMultiSelectionMouseUp(e) {
     return false;
 }
 
+// Export the updated functions and the multi-selection instance
 export {
     handleMultiSelectionMouseDown,
     handleMultiSelectionMouseMove,
     handleMultiSelectionMouseUp,
     clearAllSelections,
-    selectedShapes,
-    isMultiSelecting,
-    isDraggingMultiSelection
+    selectShapesInRect,
+    createMultiSelectionControls,
+    removeMultiSelectionControls,
+    isPointInMultiSelection,
+    moveSelectedShapes,
+    multiSelection,
+    isDraggingMultiSelection,
+    isMultiSelecting
+    
 };

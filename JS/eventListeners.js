@@ -10,8 +10,8 @@ import {
     handleMultiSelectionMouseDown, 
     handleMultiSelectionMouseMove, 
     handleMultiSelectionMouseUp,
-    isMultiSelecting,
-    isDraggingMultiSelection
+    multiSelection,
+    isMultiSelecting
 } from './selection.js';
 
 const handleMainMouseDown = (e) => {
@@ -116,7 +116,7 @@ const handleMainMouseMove = (e) => {
     }
     else if (isSelectionToolActive) {
         // Handle multi-selection first when selection tool is active
-        if (isMultiSelecting || isDraggingMultiSelection) {
+        if (isMultiSelecting || multiSelection.isDragging) {
             if (handleMultiSelectionMouseMove(e)) {
                 return; // Multi-selection handled the event
             }
@@ -186,7 +186,7 @@ const handleMainMouseUp = (e) => {
     }
     else if (isSelectionToolActive) {
         // Handle multi-selection first when selection tool is active
-        if (isMultiSelecting || isDraggingMultiSelection) {
+        if (isMultiSelecting || multiSelection.isDragging) {
             if (handleMultiSelectionMouseUp(e)) {
                 return; // Multi-selection handled the event
             }
