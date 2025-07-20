@@ -367,10 +367,15 @@ class Arrow {
         this.draw();
     }
 
-    static findNearbyRectangle(point, tolerance = 20) {
+    static findNearbyShape(point, tolerance = 20) {
         for (let shape of shapes) {
             if (shape.shapeName === 'rectangle') {
-                const attachment = Arrow.getAttachmentPoint(point, shape, tolerance);
+                const attachment = Arrow.getRectangleAttachmentPoint(point, shape, tolerance);
+                if (attachment) {
+                    return { shape, attachment };
+                }
+            } else if (shape.shapeName === 'circle') {
+                const attachment = Arrow.getCircleAttachmentPoint(point, shape, tolerance);
                 if (attachment) {
                     return { shape, attachment };
                 }
@@ -379,7 +384,7 @@ class Arrow {
         return null;
     }
 
-    static getAttachmentPoint(point, rectangle, tolerance = 20) {
+    static getRectangleAttachmentPoint(point, rectangle, tolerance = 20) {
         const rect = {
             left: rectangle.x,
             right: rectangle.x + rectangle.width,
@@ -439,9 +444,55 @@ class Arrow {
         return null;
     }
 
-    attachToRectangle(isStartPoint, rectangle, attachmentInfo) {
+    static getCircleAttachmentPoint(point, circle, tolerance = 20) {
+        // Calculate distance from point to circle center
+        const dx = point.x - circle.x;
+        const dy = point.y - circle.y;
+        const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
+        
+        // Check if point is near the circle perimeter
+        const averageRadius = (circle.rx + circle.ry) / 2;
+        const distanceToPerimeter = Math.abs(distanceToCenter - averageRadius);
+        
+        if (distanceToPerimeter <= tolerance) {
+            // Find the closest point on the ellipse perimeter
+            const angle = Math.atan2(dy, dx);
+            
+            // For ellipse, we need to find the actual intersection point
+            const attachPoint = this.getEllipsePerimeterPoint(circle, angle);
+            
+            // Calculate offset as angle and radius ratio for easier updating
+            const offset = {
+                angle: angle,
+                radiusRatioX: (attachPoint.x - circle.x) / circle.rx,
+                radiusRatioY: (attachPoint.y - circle.y) / circle.ry
+            };
+
+            return { 
+                side: 'perimeter', 
+                point: attachPoint, 
+                offset: offset 
+            };
+        }
+
+        return null;
+    }
+
+    static getEllipsePerimeterPoint(circle, angle) {
+        // Calculate point on ellipse perimeter at given angle
+        const cosAngle = Math.cos(angle);
+        const sinAngle = Math.sin(angle);
+        
+        // Parametric equation for ellipse point
+        const x = circle.x + circle.rx * cosAngle;
+        const y = circle.y + circle.ry * sinAngle;
+        
+        return { x, y };
+    }
+
+    attachToShape(isStartPoint, shape, attachmentInfo) {
         const attachment = {
-            shape: rectangle,
+            shape: shape,
             side: attachmentInfo.side,
             offset: attachmentInfo.offset
         };
@@ -461,7 +512,35 @@ class Arrow {
         this.draw();
     }
 
-    detachFromRectangle(isStartPoint) {
+    calculateAttachedPoint(attachment) {
+        const shape = attachment.shape;
+        const side = attachment.side;
+        const offset = attachment.offset;
+
+        if (shape.shapeName === 'rectangle') {
+            switch (side) {
+                case 'top':
+                    return { x: shape.x + offset.x, y: shape.y };
+                case 'bottom':
+                    return { x: shape.x + offset.x, y: shape.y + shape.height };
+                case 'left':
+                    return { x: shape.x, y: shape.y + offset.y };
+                case 'right':
+                    return { x: shape.x + shape.width, y: shape.y + offset.y };
+                default:
+                    return { x: shape.x + offset.x, y: shape.y + offset.y };
+            }
+        } else if (shape.shapeName === 'circle') {
+            if (side === 'perimeter') {
+                // Recalculate point on ellipse perimeter using stored angle
+                return Arrow.getEllipsePerimeterPoint(shape, offset.angle);
+            }
+        }
+
+        return { x: shape.x, y: shape.y };
+    }
+
+    detachFromShape(isStartPoint) {
         if (isStartPoint) {
             this.attachedToStart = null;
         } else {
@@ -493,25 +572,6 @@ class Arrow {
                 this.initializeCurveControlPoints();
             }
             this.draw();
-        }
-    }
-
-    calculateAttachedPoint(attachment) {
-        const rect = attachment.shape;
-        const side = attachment.side;
-        const offset = attachment.offset;
-
-        switch (side) {
-            case 'top':
-                return { x: rect.x + offset.x, y: rect.y };
-            case 'bottom':
-                return { x: rect.x + offset.x, y: rect.y + rect.height };
-            case 'left':
-                return { x: rect.x, y: rect.y + offset.y };
-            case 'right':
-                return { x: rect.x + rect.width, y: rect.y + offset.y };
-            default:
-                return { x: rect.x + offset.x, y: rect.y + offset.y };
         }
     }
 
@@ -553,8 +613,6 @@ class Arrow {
         return null;
     }
 
-
-
     startAnchorDrag(e, index) {
         e.stopPropagation();
         e.preventDefault();
@@ -565,7 +623,7 @@ class Arrow {
             endPoint: { x: this.endPoint.x, y: this.endPoint.y },
             controlPoint1: this.controlPoint1 ? { x: this.controlPoint1.x, y: this.controlPoint1.y } : null,
             controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null,
-            attachments: this.getAttachmentState() // Store initial attachment state
+            attachments: this.getAttachmentState()
         };
 
         const onPointerMove = (event) => {
@@ -573,15 +631,15 @@ class Arrow {
             
             // Check for potential attachment when dragging start or end anchors
             if (index === 0 || index === 1) {
-                const nearbyRect = Arrow.findNearbyRectangle({ x, y });
-                if (nearbyRect) {
+                const nearbyShape = Arrow.findNearbyShape({ x, y });
+                if (nearbyShape) {
                     // Show preview while dragging
                     const existingPreview = svg.querySelector('.attachment-preview');
                     if (existingPreview) existingPreview.remove();
                     
                     const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                    preview.setAttribute("cx", nearbyRect.attachment.point.x);
-                    preview.setAttribute("cy", nearbyRect.attachment.point.y);
+                    preview.setAttribute("cx", nearbyShape.attachment.point.x);
+                    preview.setAttribute("cy", nearbyShape.attachment.point.y);
                     preview.setAttribute("r", 6);
                     preview.setAttribute("fill", "none");
                     preview.setAttribute("stroke", "#5B57D1");
@@ -591,9 +649,9 @@ class Arrow {
                     svg.appendChild(preview);
                     
                     // Snap to attachment point
-                    this.updatePosition(index, nearbyRect.attachment.point.x, nearbyRect.attachment.point.y);
+                    this.updatePosition(index, nearbyShape.attachment.point.x, nearbyShape.attachment.point.y);
                 } else {
-                    // Remove preview if no nearby rectangle
+                    // Remove preview if no nearby shape
                     const existingPreview = svg.querySelector('.attachment-preview');
                     if (existingPreview) existingPreview.remove();
                     
@@ -612,36 +670,36 @@ class Arrow {
             // Check for attachments when releasing start or end anchors
             if (index === 0) {
                 // Check for start point attachment
-                const startAttachment = Arrow.findNearbyRectangle(this.startPoint);
+                const startAttachment = Arrow.findNearbyShape(this.startPoint);
                 if (startAttachment) {
-                    // Detach if previously attached to different rectangle
+                    // Detach if previously attached to different shape
                     if (this.attachedToStart && this.attachedToStart.shape !== startAttachment.shape) {
-                        this.detachFromRectangle(true);
+                        this.detachFromShape(true);
                     }
-                    this.attachToRectangle(true, startAttachment.shape, startAttachment.attachment);
-                    console.log("Arrow start attached to rectangle");
+                    this.attachToShape(true, startAttachment.shape, startAttachment.attachment);
+                    console.log(`Arrow start attached to ${startAttachment.shape.shapeName}`);
                 } else {
-                    // Detach if moved away from rectangle
+                    // Detach if moved away from shape
                     if (this.attachedToStart) {
-                        this.detachFromRectangle(true);
-                        console.log("Arrow start detached from rectangle");
+                        this.detachFromShape(true);
+                        console.log("Arrow start detached from shape");
                     }
                 }
             } else if (index === 1) {
                 // Check for end point attachment
-                const endAttachment = Arrow.findNearbyRectangle(this.endPoint);
+                const endAttachment = Arrow.findNearbyShape(this.endPoint);
                 if (endAttachment) {
-                    // Detach if previously attached to different rectangle
+                    // Detach if previously attached to different shape
                     if (this.attachedToEnd && this.attachedToEnd.shape !== endAttachment.shape) {
-                        this.detachFromRectangle(false);
+                        this.detachFromShape(false);
                     }
-                    this.attachToRectangle(false, endAttachment.shape, endAttachment.attachment);
-                    console.log("Arrow end attached to rectangle");
+                    this.attachToShape(false, endAttachment.shape, endAttachment.attachment);
+                    console.log(`Arrow end attached to ${endAttachment.shape.shapeName}`);
                 } else {
-                    // Detach if moved away from rectangle
+                    // Detach if moved away from shape
                     if (this.attachedToEnd) {
-                        this.detachFromRectangle(false);
-                        console.log("Arrow end detached from rectangle");
+                        this.detachFromShape(false);
+                        console.log("Arrow end detached from shape");
                     }
                 }
             }
@@ -652,7 +710,7 @@ class Arrow {
                     endPoint: { x: this.endPoint.x, y: this.endPoint.y },
                     controlPoint1: this.controlPoint1 ? { x: this.controlPoint1.x, y: this.controlPoint1.y } : null,
                     controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null,
-                    attachments: this.getAttachmentState() // Store final attachment state
+                    attachments: this.getAttachmentState()
                 };
                 
                 // Check if anything actually changed (position or attachments)
@@ -921,10 +979,10 @@ const handleMouseMove = (e) => {
         currentArrow.endPoint = { x, y };
         
         // Check for potential attachment and show preview
-        const nearbyRect = Arrow.findNearbyRectangle({ x, y });
-        if (nearbyRect) {
+        const nearbyShape = Arrow.findNearbyShape({ x, y });
+        if (nearbyShape) {
             // Snap to attachment point
-            currentArrow.endPoint = nearbyRect.attachment.point;
+            currentArrow.endPoint = nearbyShape.attachment.point;
             svg.style.cursor = 'crosshair';
             
             
@@ -932,8 +990,8 @@ const handleMouseMove = (e) => {
             if (existingPreview) existingPreview.remove();
             
             const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            preview.setAttribute("cx", nearbyRect.attachment.point.x);
-            preview.setAttribute("cy", nearbyRect.attachment.point.y);
+            preview.setAttribute("cx", nearbyShape.attachment.point.x);
+            preview.setAttribute("cy", nearbyShape.attachment.point.y);
             preview.setAttribute("r", 6);
             preview.setAttribute("fill", "none");
             preview.setAttribute("stroke", "#5B57D1");
@@ -942,7 +1000,7 @@ const handleMouseMove = (e) => {
             preview.setAttribute("opacity", "0.7");
             svg.appendChild(preview);
         } else {
-            // Remove preview if no nearby rectangle
+            // Remove preview if no nearby shape
             const existingPreview = svg.querySelector('.attachment-preview');
             if (existingPreview) existingPreview.remove();
         }
@@ -1006,17 +1064,17 @@ const handleMouseUp = (e) => {
             currentShape = null;
         } else {
             // Check for potential attachments at start and end points
-            const startAttachment = Arrow.findNearbyRectangle(currentArrow.startPoint);
-            const endAttachment = Arrow.findNearbyRectangle(currentArrow.endPoint);
+            const startAttachment = Arrow.findNearbyShape(currentArrow.startPoint);
+            const endAttachment = Arrow.findNearbyShape(currentArrow.endPoint);
 
             if (startAttachment) {
-                currentArrow.attachToRectangle(true, startAttachment.shape, startAttachment.attachment);
-                console.log("Arrow start attached to rectangle");
+                currentArrow.attachToShape(true, startAttachment.shape, startAttachment.attachment);
+                console.log(`Arrow start attached to ${startAttachment.shape.shapeName}`);
             }
 
             if (endAttachment) {
-                currentArrow.attachToRectangle(false, endAttachment.shape, endAttachment.attachment);
-                console.log("Arrow end attached to rectangle");
+                currentArrow.attachToShape(false, endAttachment.shape, endAttachment.attachment);
+                console.log(`Arrow end attached to ${endAttachment.shape.shapeName}`);
             }
 
             // Push create action for undo/redo
@@ -1203,27 +1261,27 @@ function detachSelectedArrow() {
                 endPoint: { ...currentShape.endPoint }
             };
 
-            currentShape.detachFromRectangle(true);
-            currentShape.detachFromRectangle(false);
+            currentShape.detachFromShape(true);
+            currentShape.detachFromShape(false);
             currentShape.draw();
 
             // Add to undo/redo if needed
-            console.log("Arrow detached from rectangles");
+            console.log("Arrow detached from shapes");
         }
     }
 }
 
 // Function to clean up attachments when shapes are deleted
 function cleanupAttachments(deletedShape) {
-    if (deletedShape.shapeName === 'rectangle') {
-        // Remove attachments to this rectangle
+    if (deletedShape.shapeName === 'rectangle' || deletedShape.shapeName === 'circle') {
+        // Remove attachments to this shape
         shapes.forEach(shape => {
             if (shape instanceof Arrow) {
                 if (shape.attachedToStart && shape.attachedToStart.shape === deletedShape) {
-                    shape.detachFromRectangle(true);
+                    shape.detachFromShape(true);
                 }
                 if (shape.attachedToEnd && shape.attachedToEnd.shape === deletedShape) {
-                    shape.detachFromRectangle(false);
+                    shape.detachFromShape(false);
                 }
                 shape.draw();
             }

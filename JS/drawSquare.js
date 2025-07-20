@@ -50,7 +50,6 @@ class Rectangle {
         this.shapeName = 'rectangle';
         this.shapeID = `rectangle-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
         this.group.setAttribute('id', this.shapeID);
-         // Add group to SVG on creation
          if (!this.group.parentNode) {
              svg.appendChild(this.group);
          }
@@ -59,7 +58,7 @@ class Rectangle {
             height: null,
             options: null
         };
-        this.draw(); // Initial draw
+        this.draw(); 
     }
     draw() {
         const childrenToRemove = [];

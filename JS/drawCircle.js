@@ -1,4 +1,5 @@
 import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { cleanupAttachments } from './drawArrow.js';
 let isDrawingCircle = false;
 let isDraggingShapeCircle = false;
 let isResizingShapeCircle = false;
@@ -335,6 +336,7 @@ class Circle {
      move(dx, dy) {
         this.x += dx;
         this.y += dy;
+        this.updateAttachedArrows();
     }
     updatePosition(anchorIndex, newMouseX, newMouseY) {
         const CTM = this.group.getCTM();
@@ -370,8 +372,18 @@ class Circle {
                 this.rx = Math.max(Math.abs(dx), MIN_RADIUS);
                 break;
         }
+        this.updateAttachedArrows();
     }
-    
+    updateAttachedArrows() {
+        shapes.forEach(shape => {
+            if (shape && shape.shapeName === 'arrow' && typeof shape.updateAttachments === 'function') {
+                if ((shape.attachedToStart && shape.attachedToStart.shape === this) ||
+                    (shape.attachedToEnd && shape.attachedToEnd.shape === this)) {
+                    shape.updateAttachments();
+                }
+            }
+        });
+    }
     rotate(angle) {
         angle = angle % 360;
         if (angle < 0) angle += 360;
@@ -446,6 +458,10 @@ function deleteCurrentShape() {
     if (currentShape && currentShape.shapeName === 'circle') {
         const idx = shapes.indexOf(currentShape);
         if (idx !== -1) shapes.splice(idx, 1);
+        
+        // Clean up any arrow attachments before deleting
+        cleanupAttachments(currentShape);
+        
         if (currentShape.group.parentNode) {
             currentShape.group.parentNode.removeChild(currentShape.group);
         }
