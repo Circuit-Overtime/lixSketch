@@ -339,18 +339,21 @@ class Rectangle {
      }
 
 
-    move(dx, dy) {
+move(dx, dy) {
     this.x += dx;
     this.y += dy;
     this.updateAttachedArrows();
-
+    
+    // Only update frame containment if we're actively dragging the shape itself
+    // and not being moved by a parent frame
     if (isDraggingShapeSquare && !this.isBeingMovedByFrame) {
         this.updateFrameContainment();
     }
+
+    this.draw();
 }
 
-
-    updateFrameContainment() {
+updateFrameContainment() {
     // Don't update if we're being moved by a frame
     if (this.isBeingMovedByFrame) return;
     
@@ -363,6 +366,11 @@ class Rectangle {
         }
     });
     
+    // If we have a parent frame and we're being dragged, temporarily remove clipping
+    if (this.parentFrame && isDraggingShapeSquare) {
+        this.parentFrame.temporarilyRemoveFromFrame(this);
+    }
+    
     // Update frame highlighting
     if (hoveredFrame && hoveredFrame !== targetFrame) {
         hoveredFrame.removeHighlight();
@@ -374,7 +382,6 @@ class Rectangle {
     
     hoveredFrame = targetFrame;
 }
-
 
     updatePosition(anchorIndex, newMouseX, newMouseY) {
         const CTM = this.group.getCTM();
@@ -554,7 +561,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 
-    const handleMouseDownRect = (e) => {
+const handleMouseDownRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
     if (isSquareToolActive) {
@@ -618,6 +625,11 @@ document.addEventListener('keydown', (e) => {
                  // Store initial frame state
                  draggedShapeInitialFrame = currentShape.parentFrame || null;
                  
+                 // Temporarily remove from frame clipping if dragging
+                 if (currentShape.parentFrame) {
+                     currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                 }
+                 
                  startX = mouseX; 
                  startY = mouseY;
                  clickedOnShape = true;
@@ -648,6 +660,11 @@ document.addEventListener('keydown', (e) => {
                 // Store initial frame state
                 draggedShapeInitialFrame = currentShape.parentFrame || null;
                 
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = mouseX; 
                 startY = mouseY;
                 clickedOnShape = true; 
@@ -661,7 +678,8 @@ document.addEventListener('keydown', (e) => {
     }
 };
 
-    const handleMouseMoveRect = (e) => {
+// Update handleMouseMoveRect function
+const handleMouseMoveRect = (e) => {
     const mouseX = e.offsetX;
     const mouseY = e.offsetY;
     const svgRect = svg.getBoundingClientRect();
@@ -680,8 +698,18 @@ document.addEventListener('keydown', (e) => {
         currentShape.height = Math.abs(height);
         currentShape.draw();
         
-        // Check for frame containment while drawing
-        currentShape.updateFrameContainment();
+        // Check for frame containment while drawing (but don't apply clipping yet)
+        shapes.forEach(frame => {
+            if (frame.shapeName === 'frame') {
+                if (frame.isShapeInFrame(currentShape)) {
+                    frame.highlightFrame();
+                    hoveredFrame = frame;
+                } else if (hoveredFrame === frame) {
+                    frame.removeHighlight();
+                    hoveredFrame = null;
+                }
+            }
+        });
         
     } else if (isDraggingShapeSquare && currentShape && currentShape.isSelected) {
         const dx = mouseX - startX;
@@ -746,7 +774,8 @@ document.addEventListener('keydown', (e) => {
     }
 };
 
-    const handleMouseUpRect = (e) => {
+// Update handleMouseUpRect function
+const handleMouseUpRect = (e) => {
     if (isDrawingSquare && currentShape) {
         if (currentShape.width === 0 || currentShape.height === 0) {
             if (currentShape.group.parentNode) {
@@ -757,10 +786,10 @@ document.addEventListener('keydown', (e) => {
             shapes.push(currentShape);
             pushCreateAction(currentShape);
             
-            // Check for frame containment after shape creation
+            // Now apply frame containment with clipping
             shapes.forEach(frame => {
                 if (frame.shapeName === 'frame') {
-                    frame.updateContainedShapes();
+                    frame.updateContainedShapes(true); // Apply clipping
                 }
             });
         }
@@ -797,16 +826,17 @@ document.addEventListener('keydown', (e) => {
                 if (finalFrame) {
                     finalFrame.addShapeToFrame(currentShape);
                 }
+            } else if (draggedShapeInitialFrame) {
+                // Shape stayed in same frame, restore clipping
+                draggedShapeInitialFrame.restoreToFrame(currentShape);
             }
             
-            // Update all frames after drag is complete
-            setTimeout(() => {
-                shapes.forEach(frame => {
-                    if (frame.shapeName === 'frame') {
-                        frame.updateContainedShapes();
-                    }
-                });
-            }, 0);
+            // Update all frames with clipping applied
+            shapes.forEach(frame => {
+                if (frame.shapeName === 'frame') {
+                    frame.updateContainedShapes(true); // Apply clipping
+                }
+            });
         }
         
         dragOldPosSquare = null;

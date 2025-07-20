@@ -147,15 +147,14 @@ class Frame {
         this.containedShapes.push(shape);
         shape.parentFrame = this;
         
-        // Move shape's group to the clipped group
-        if (shape.group && shape.group.parentNode) {
+        // Only move to clipped group if not currently being dragged
+        if (shape.group && shape.group.parentNode && !shape.isDraggedOutTemporarily) {
             shape.group.parentNode.removeChild(shape.group);
             this.clipGroup.appendChild(shape.group);
         }
     }
 }
 
-    // Remove a shape from this frame's container
     removeShapeFromFrame(shape) {
     const index = this.containedShapes.indexOf(shape);
     if (index > -1) {
@@ -164,13 +163,15 @@ class Frame {
             shape.parentFrame = null;
         }
         
-        // Move shape's group back to main SVG
+        // Move shape's group back to main SVG if it's in the clipped group
         if (shape.group && shape.group.parentNode === this.clipGroup) {
             this.clipGroup.removeChild(shape.group);
             svg.appendChild(shape.group);
         }
+        
+        delete shape.isDraggedOutTemporarily;
     }
-    }
+}
 
     // Check if a point is inside the frame bounds
     isPointInFrame(x, y) {
@@ -196,7 +197,7 @@ class Frame {
            shapeCenterY >= this.y && shapeCenterY <= this.y + this.height;
 }
 
-    updateContainedShapes() {
+updateContainedShapes(applyClipping = true) {
     // Check all shapes to see if they should be in this frame
     shapes.forEach(shape => {
         if (shape !== this && shape.shapeName !== 'frame') {
@@ -205,6 +206,12 @@ class Frame {
             
             if (isInFrame && !isAlreadyContained) {
                 this.addShapeToFrame(shape);
+                // Don't apply clipping if we're not supposed to
+                if (!applyClipping && shape.group && shape.group.parentNode === this.clipGroup) {
+                    this.clipGroup.removeChild(shape.group);
+                    svg.appendChild(shape.group);
+                    shape.isDraggedOutTemporarily = true;
+                }
             } else if (!isInFrame && isAlreadyContained) {
                 this.removeShapeFromFrame(shape);
             }
@@ -242,15 +249,18 @@ removeHighlight() {
             // Mark shape as being moved by frame to prevent frame containment updates
             shape.isBeingMovedByFrame = true;
             
-            if (typeof shape.move === 'function') {
-                shape.move(dx, dy);
-            } else {
-                // Fallback for shapes without move method
-                shape.x = (shape.x || 0) + dx;
-                shape.y = (shape.y || 0) + dy;
-                if (typeof shape.draw === 'function') {
-                    shape.draw();
-                }
+            // Move the shape
+            shape.x += dx;
+            shape.y += dy;
+            
+            // Update arrows if the shape has them
+            if (typeof shape.updateAttachedArrows === 'function') {
+                shape.updateAttachedArrows();
+            }
+            
+            // Force redraw the shape
+            if (typeof shape.draw === 'function') {
+                shape.draw();
             }
             
             // Remove the flag after movement
@@ -672,13 +682,30 @@ startLabelEdit(labelElement) {
         // Update contained shapes visibility
         this.updateContainedShapes();
     }
-
-    move(dx, dy) {
-        this.x += dx;
-        this.y += dy;
-        this.updateContainedShapes();
-        this.draw();
+    
+    temporarilyRemoveFromFrame(shape) {
+    if (shape && shape.parentFrame === this) {
+        // Move shape back to main SVG temporarily (without removing from containedShapes array)
+        if (shape.group && shape.group.parentNode === this.clipGroup) {
+            this.clipGroup.removeChild(shape.group);
+            svg.appendChild(shape.group);
+        }
+        shape.isDraggedOutTemporarily = true;
     }
+}
+
+// Add a method to restore clipping for a shape after drag
+restoreToFrame(shape) {
+    if (shape && shape.parentFrame === this && shape.isDraggedOutTemporarily) {
+        // Move shape back to clipped group
+        if (shape.group && shape.group.parentNode === svg) {
+            svg.removeChild(shape.group);
+            this.clipGroup.appendChild(shape.group);
+        }
+        delete shape.isDraggedOutTemporarily;
+    }
+}
+
 
     contains(viewBoxX, viewBoxY) {
         // Simple point-in-rectangle test (without rotation for now)
@@ -836,7 +863,7 @@ const handleMouseDown = (e) => {
     }
 };
 
-const handleMouseMove = (e) => {
+    const handleMouseMove = (e) => {
     const { x, y } = getSVGCoordsFromMouse(e);
 
     if (isDrawingFrame && currentFrame) {
@@ -850,7 +877,10 @@ const handleMouseMove = (e) => {
     } else if (isDragging && currentShape && currentShape.shapeName === 'frame') {
         const dx = x - startX;
         const dy = y - startY;
+        
+        // Use the frame's move method which properly handles contained shapes
         currentShape.move(dx, dy);
+        
         startX = x;
         startY = y;
     }
@@ -866,7 +896,7 @@ const handleMouseMove = (e) => {
         } else {
             pushCreateAction(currentFrame);
             // Check for shapes that should be contained in the new frame
-            currentFrame.updateContainedShapes();
+            currentFrame.updateContainedShapes(true); // Apply clipping immediately for new frames
         }
         isDrawingFrame = false;
     }
@@ -882,25 +912,26 @@ const handleMouseMove = (e) => {
         pushTransformAction(currentShape, dragOldPosFrame, newPos);
         dragOldPosFrame = null;
         
-        // Update frame containment after moving frame
+        // Update frame containment after moving frame (but don't re-move contained shapes)
         if (currentShape.shapeName === 'frame') {
-            // Don't update contained shapes since they moved with the frame
             currentShape.updateClipPath();
         }
     }
 
-    // Only check frame containment for shapes that aren't contained in frames
-    shapes.forEach(shape => {
-        if (shape.shapeName !== 'frame' && !shape.parentFrame) {
-            shapes.forEach(frame => {
-                if (frame.shapeName === 'frame') {
-                    if (frame.isShapeInFrame(shape)) {
-                        frame.addShapeToFrame(shape);
+    // Only check frame containment for shapes that aren't already in frames
+    if (!isDragging) {
+        shapes.forEach(shape => {
+            if (shape.shapeName !== 'frame' && !shape.parentFrame) {
+                shapes.forEach(frame => {
+                    if (frame.shapeName === 'frame') {
+                        if (frame.isShapeInFrame(shape)) {
+                            frame.addShapeToFrame(shape);
+                        }
                     }
-                }
-            });
-        }
-    });
+                });
+            }
+        });
+    }
 
     isDrawingFrame = false;
     isDragging = false;
@@ -908,7 +939,6 @@ const handleMouseMove = (e) => {
     activeAnchor = null;
     svg.style.cursor = 'default';
 };
-
 
 Frame.prototype.isNearAnchor = function(x, y) {
     const anchorSize = 10 / currentZoom;
