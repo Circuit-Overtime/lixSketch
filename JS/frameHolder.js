@@ -1,6 +1,5 @@
 import { pushCreateAction, pushDeleteAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
-
-
+import { updateAttachedArrows } from './drawArrow.js';
 let currentFrame = null;
 let isResizing = false;
 let isDragging = false;
@@ -116,6 +115,28 @@ class Frame {
 
         // Update clip path
         this.updateClipPath();
+    }
+
+    updateAttachedArrows() {
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        shapes.forEach(shape => {
+            if (shape.shapeName === 'arrow') {
+                let needsUpdate = false;
+                
+                // Check if arrow is attached to this frame
+                if (shape.attachedToStart && shape.attachedToStart.shape === this) {
+                    needsUpdate = true;
+                }
+                if (shape.attachedToEnd && shape.attachedToEnd.shape === this) {
+                    needsUpdate = true;
+                }
+                
+                if (needsUpdate) {
+                    shape.updateAttachments();
+                }
+            }
+        });
+    }
     }
 
     updateClipPath() {
@@ -269,55 +290,60 @@ removeHighlight() {
         }
     });
     
+    // Update arrows attached to this frame
+    this.updateAttachedArrows();
+    
     this.draw();
     this.updateClipPath();
 }
 
     handleResize(anchorIndex, currentPos, startPos, initialFrame) {
-        const dx = currentPos.x - startPos.x;
-        const dy = currentPos.y - startPos.y;
+    const dx = currentPos.x - startPos.x;
+    const dy = currentPos.y - startPos.y;
 
-        switch (anchorIndex) {
-            case 0: // Top-left
-                this.x = initialFrame.x + dx;
-                this.y = initialFrame.y + dy;
-                this.width = Math.max(10, initialFrame.width - dx);
-                this.height = Math.max(10, initialFrame.height - dy);
-                break;
-            case 1: // Top-middle
-                this.y = initialFrame.y + dy;
-                this.height = Math.max(10, initialFrame.height - dy);
-                break;
-            case 2: // Top-right
-                this.y = initialFrame.y + dy;
-                this.width = Math.max(10, initialFrame.width + dx);
-                this.height = Math.max(10, initialFrame.height - dy);
-                break;
-            case 3: // Right-middle
-                this.width = Math.max(10, initialFrame.width + dx);
-                break;
-            case 4: // Bottom-right
-                this.width = Math.max(10, initialFrame.width + dx);
-                this.height = Math.max(10, initialFrame.height + dy);
-                break;
-            case 5: // Bottom-middle
-                this.height = Math.max(10, initialFrame.height + dy);
-                break;
-            case 6: // Bottom-left
-                this.x = initialFrame.x + dx;
-                this.width = Math.max(10, initialFrame.width - dx);
-                this.height = Math.max(10, initialFrame.height + dy);
-                break;
-            case 7: // Left-middle
-                this.x = initialFrame.x + dx;
-                this.width = Math.max(10, initialFrame.width - dx);
-                break;
-        }
-        
-        // Update contained shapes visibility
-        this.updateContainedShapes();
+    switch (anchorIndex) {
+        case 0: // Top-left
+            this.x = initialFrame.x + dx;
+            this.y = initialFrame.y + dy;
+            this.width = Math.max(10, initialFrame.width - dx);
+            this.height = Math.max(10, initialFrame.height - dy);
+            break;
+        case 1: // Top-middle
+            this.y = initialFrame.y + dy;
+            this.height = Math.max(10, initialFrame.height - dy);
+            break;
+        case 2: // Top-right
+            this.y = initialFrame.y + dy;
+            this.width = Math.max(10, initialFrame.width + dx);
+            this.height = Math.max(10, initialFrame.height - dy);
+            break;
+        case 3: // Right-middle
+            this.width = Math.max(10, initialFrame.width + dx);
+            break;
+        case 4: // Bottom-right
+            this.width = Math.max(10, initialFrame.width + dx);
+            this.height = Math.max(10, initialFrame.height + dy);
+            break;
+        case 5: // Bottom-middle
+            this.height = Math.max(10, initialFrame.height + dy);
+            break;
+        case 6: // Bottom-left
+            this.x = initialFrame.x + dx;
+            this.width = Math.max(10, initialFrame.width - dx);
+            this.height = Math.max(10, initialFrame.height + dy);
+            break;
+        case 7: // Left-middle
+            this.x = initialFrame.x + dx;
+            this.width = Math.max(10, initialFrame.width - dx);
+            break;
     }
-
+    
+    // Update arrows attached to this frame when resizing
+    this.updateAttachedArrows();
+    
+    // Update contained shapes visibility
+    this.updateContainedShapes();
+}
     destroy() {
         // Remove all contained shapes from frame and move back to main SVG
         [...this.containedShapes].forEach(shape => {
@@ -662,6 +688,9 @@ startLabelEdit(labelElement) {
         
         const angle = Math.atan2(mousePos.y - centerY, mousePos.x - centerX);
         this.rotation = (angle * 180 / Math.PI + 90) % 360;
+        
+        // Update arrows attached to this frame when rotating
+        this.updateAttachedArrows();
     }
 
     handleResize(anchorIndex, currentPos, startPos, initialFrame) {

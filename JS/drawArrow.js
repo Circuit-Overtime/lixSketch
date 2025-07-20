@@ -1,4 +1,4 @@
-import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction, pushFrameAttachmentAction  } from './undoAndRedo.js';
 
 let arrowStartX, arrowStartY;
 let currentArrow = null;
@@ -17,7 +17,8 @@ let arrowHeadStyle = "default";
 let startX, startY;
 let dragOldPosArrow = null;
 let copiedShapeData = null;
-
+let draggedShapeInitialFrameArrow = null;
+let hoveredFrameArrow = null;
 let arrowStrokeColorOptions = document.querySelectorAll(".arrowStrokeSpan");
 let arrowStrokeThicknessValue = document.querySelectorAll(".arrowStrokeThickSpan");
 let arrowOutlineStyleValue = document.querySelectorAll(".arrowOutlineStyle");
@@ -57,10 +58,10 @@ class Arrow {
         this.controlPoint1 = options.controlPoint1 || null;
         this.controlPoint2 = options.controlPoint2 || null;
 
-        // Attachment properties
+
         this.attachedToStart = null;
         this.attachedToEnd = null;
-
+        this.parentFrame = null;
         this.element = null;
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         this.isSelected = false;
@@ -74,8 +75,58 @@ class Arrow {
             this.initializeCurveControlPoints();
         }
 
+        
+
         svg.appendChild(this.group);
         this.draw();
+    }
+
+    get x() {
+    return Math.min(this.startPoint.x, this.endPoint.x);
+    }
+
+    set x(value) {
+        const currentX = this.x;
+        const dx = value - currentX;
+        this.startPoint.x += dx;
+        this.endPoint.x += dx;
+        if (this.controlPoint1) this.controlPoint1.x += dx;
+        if (this.controlPoint2) this.controlPoint2.x += dx;
+    }
+
+    get y() {
+        return Math.min(this.startPoint.y, this.endPoint.y);
+    }
+
+    set y(value) {
+        const currentY = this.y;
+        const dy = value - currentY;
+        this.startPoint.y += dy;
+        this.endPoint.y += dy;
+        if (this.controlPoint1) this.controlPoint1.y += dy;
+        if (this.controlPoint2) this.controlPoint2.y += dy;
+    }
+
+    get width() {
+        return Math.abs(this.endPoint.x - this.startPoint.x);
+    }
+
+    set width(value) {
+        const centerX = (this.startPoint.x + this.endPoint.x) / 2;
+        const halfWidth = value / 2;
+        this.startPoint.x = centerX - halfWidth;
+        this.endPoint.x = centerX + halfWidth;
+    }
+
+    get height() {
+        return Math.abs(this.endPoint.y - this.startPoint.y);
+    }
+
+    set height(value) {
+        const centerY = (this.startPoint.y + this.endPoint.y) / 2;
+        const halfHeight = value / 2;
+        this.startPoint.y = centerY - halfHeight;
+        this.endPoint.y = centerY + halfHeight;
     }
 
     initializeCurveControlPoints() {
@@ -409,16 +460,16 @@ class Arrow {
 
 
     static findNearbyShape(point, tolerance = 20) {
-    console.log('Finding nearby shape for point:', point, 'with tolerance:', tolerance);
+    // console.log('Finding nearby shape for point:', point, 'with tolerance:', tolerance);
     for (let shape of shapes) {
-        console.log('Checking shape:', shape);
+        // console.log('Checking shape:', shape);
         
         // Check if it's an SVG image element (DOM element)
         if (shape.tagName === 'image' || (shape.getAttribute && shape.getAttribute('type') === 'image')) {
             console.log('Checking image shape:', shape);
             const attachment = Arrow.getImageAttachmentPoint(point, shape, tolerance);
             if (attachment) {
-                console.log('Found image attachment:', attachment);
+                // console.log('Found image attachment:', attachment);
                 return { shape, attachment };
             }
         }
@@ -439,6 +490,12 @@ class Arrow {
         // Check for text objects (DOM elements with type attribute)
         else if ((shape.getAttribute && shape.getAttribute('type') === 'text') || shape.type === 'text') {
             const attachment = Arrow.getTextAttachmentPoint(point, shape, tolerance);
+            if (attachment) {
+                return { shape, attachment };
+            }
+        }
+        else if (shape.shapeName === 'frame') {
+            const attachment = Arrow.getFrameAttachmentPoint(point, shape, tolerance);
             if (attachment) {
                 return { shape, attachment };
             }
@@ -542,6 +599,66 @@ class Arrow {
             y: localPoint.y - imgY,
             side: closestSide
         };
+
+        return { side: closestSide, point: attachPoint, offset };
+    }
+
+    return null;
+}
+
+static getFrameAttachmentPoint(point, frame, tolerance = 20) {
+    const rect = {
+        left: frame.x,
+        right: frame.x + frame.width,
+        top: frame.y,
+        bottom: frame.y + frame.height
+    };
+
+    const distances = {
+        top: Math.abs(point.y - rect.top),
+        bottom: Math.abs(point.y - rect.bottom),
+        left: Math.abs(point.x - rect.left),
+        right: Math.abs(point.x - rect.right)
+    };
+
+    let closestSide = null;
+    let minDistance = tolerance;
+
+    for (let side in distances) {
+        if (distances[side] < minDistance) {
+            if ((side === 'top' || side === 'bottom') &&
+                point.x >= rect.left - tolerance && point.x <= rect.right + tolerance) {
+                closestSide = side;
+                minDistance = distances[side];
+            } else if ((side === 'left' || side === 'right') &&
+                       point.y >= rect.top - tolerance && point.y <= rect.bottom + tolerance) {
+                closestSide = side;
+                minDistance = distances[side];
+            }
+        }
+    }
+
+    if (closestSide) {
+        let attachPoint, offset;
+
+        switch (closestSide) {
+            case 'top':
+                attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.top };
+                offset = { x: attachPoint.x - frame.x, y: 0 };
+                break;
+            case 'bottom':
+                attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.bottom };
+                offset = { x: attachPoint.x - frame.x, y: frame.height };
+                break;
+            case 'left':
+                attachPoint = { x: rect.left, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
+                offset = { x: 0, y: attachPoint.y - frame.y };
+                break;
+            case 'right':
+                attachPoint = { x: rect.right, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
+                offset = { x: frame.width, y: attachPoint.y - frame.y };
+                break;
+        }
 
         return { side: closestSide, point: attachPoint, offset };
     }
@@ -856,6 +973,21 @@ class Arrow {
         }
 
         return localPoint;
+    }   
+    
+    else if (shape.shapeName === 'frame') {
+        switch (side) {
+            case 'top':
+                return { x: shape.x + offset.x, y: shape.y };
+            case 'bottom':
+                return { x: shape.x + offset.x, y: shape.y + shape.height };
+            case 'left':
+                return { x: shape.x, y: shape.y + offset.y };
+            case 'right':
+                return { x: shape.x + shape.width, y: shape.y + offset.y };
+            default:
+                return { x: shape.x + offset.x, y: shape.y + offset.y };
+        }
     }
 
     return { x: shape.x || 0, y: shape.y || 0 };
@@ -897,24 +1029,60 @@ class Arrow {
     }
 
     move(dx, dy) {
-        if (!this.attachedToStart) {
-            this.startPoint.x += dx;
-            this.startPoint.y += dy;
-        }
-        if (!this.attachedToEnd) {
-            this.endPoint.x += dx;
-            this.endPoint.y += dy;
-        }
-
-        if (this.controlPoint1 && (!this.attachedToStart && !this.attachedToEnd)) {
-            this.controlPoint1.x += dx;
-            this.controlPoint1.y += dy;
-        }
-        if (this.controlPoint2 && (!this.attachedToStart && !this.attachedToEnd)) {
-            this.controlPoint2.x += dx;
-            this.controlPoint2.y += dy;
-        }
+    if (!this.attachedToStart) {
+        this.startPoint.x += dx;
+        this.startPoint.y += dy;
     }
+    if (!this.attachedToEnd) {
+        this.endPoint.x += dx;
+        this.endPoint.y += dy;
+    }
+
+    if (this.controlPoint1 && (!this.attachedToStart && !this.attachedToEnd)) {
+        this.controlPoint1.x += dx;
+        this.controlPoint1.y += dy;
+    }
+    if (this.controlPoint2 && (!this.attachedToStart && !this.attachedToEnd)) {
+        this.controlPoint2.x += dx;
+        this.controlPoint2.y += dy;
+    }
+    
+    // Only update frame containment if we're actively dragging the shape itself
+    // and not being moved by a parent frame
+    if (isDragging && !this.isBeingMovedByFrame) {
+        this.updateFrameContainment();
+    }
+}
+
+updateFrameContainment() {
+    // Don't update if we're being moved by a frame
+    if (this.isBeingMovedByFrame) return;
+    
+    let targetFrame = null;
+    
+    // Find which frame this shape is over
+    shapes.forEach(shape => {
+        if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+            targetFrame = shape;
+        }
+    });
+    
+    // If we have a parent frame and we're being dragged, temporarily remove clipping
+    if (this.parentFrame && isDragging) {
+        this.parentFrame.temporarilyRemoveFromFrame(this);
+    }
+    
+    // Update frame highlighting
+    if (hoveredFrameArrow && hoveredFrameArrow !== targetFrame) {
+        hoveredFrameArrow.removeHighlight();
+    }
+    
+    if (targetFrame && targetFrame !== hoveredFrameArrow) {
+        targetFrame.highlightFrame();
+    }
+    
+    hoveredFrameArrow = targetFrame;
+}
 
     isNearAnchor(x, y) {
         const anchorSize = 10 / currentZoom;
@@ -1232,19 +1400,30 @@ const handleMouseDown = (e) => {
             if (anchorInfo && anchorInfo.type === 'anchor') {
                 clickedOnAnchor = true;
                 clickedOnShape = true;
-            } else if (currentShape.contains(x, y)) {
+            } 
+            if (currentShape.contains(x, y)) {
                 isDragging = true;
                 dragOldPosArrow = {
                     startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
                     endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
                     controlPoint1: currentShape.controlPoint1 ? { x: currentShape.controlPoint1.x, y: currentShape.controlPoint1.y } : null,
-                    controlPoint2: currentShape.controlPoint2 ? { x: currentShape.controlPoint2.x, y: currentShape.controlPoint2.y } : null
+                    controlPoint2: currentShape.controlPoint2 ? { x: currentShape.controlPoint2.x, y: currentShape.controlPoint2.y } : null,
+                    parentFrame: currentShape.parentFrame  // Add this line
                 };
+                
+                // Store initial frame state
+                draggedShapeInitialFrameArrow = currentShape.parentFrame || null;
+                
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = x;
                 startY = y;
                 clickedOnShape = true;
             }
-        }
+                    }
 
         if (!clickedOnShape) {
             let shapeToSelect = null;
@@ -1296,41 +1475,53 @@ const handleMouseMove = (e) => {
     const { x, y } = getSVGCoordsFromMouse(e);
 
     if (isDrawingArrow && currentArrow) {
-        currentArrow.endPoint = { x, y };
+            currentArrow.endPoint = { x, y };
 
-        // Check for potential attachment and show preview
-        const nearbyShape = Arrow.findNearbyShape({ x, y });
-        if (nearbyShape) {
-            // Snap to attachment point
-            currentArrow.endPoint = nearbyShape.attachment.point;
-            svg.style.cursor = 'crosshair';
+            // Check for potential attachment and show preview
+            const nearbyShape = Arrow.findNearbyShape({ x, y });
+            if (nearbyShape) {
+                // Snap to attachment point
+                currentArrow.endPoint = nearbyShape.attachment.point;
+                svg.style.cursor = 'crosshair';
 
+                const existingPreview = svg.querySelector('.attachment-preview');
+                if (existingPreview) existingPreview.remove();
 
-            const existingPreview = svg.querySelector('.attachment-preview');
-            if (existingPreview) existingPreview.remove();
+                const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                preview.setAttribute("cx", nearbyShape.attachment.point.x);
+                preview.setAttribute("cy", nearbyShape.attachment.point.y);
+                preview.setAttribute("r", 6);
+                preview.setAttribute("fill", "none");
+                preview.setAttribute("stroke", "#5B57D1");
+                preview.setAttribute("stroke-width", 2);
+                preview.setAttribute("class", "attachment-preview");
+                preview.setAttribute("opacity", "0.7");
+                svg.appendChild(preview);
+            } else {
+                // Remove preview if no nearby shape
+                const existingPreview = svg.querySelector('.attachment-preview');
+                if (existingPreview) existingPreview.remove();
+            }
 
-            const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            preview.setAttribute("cx", nearbyShape.attachment.point.x);
-            preview.setAttribute("cy", nearbyShape.attachment.point.y);
-            preview.setAttribute("r", 6);
-            preview.setAttribute("fill", "none");
-            preview.setAttribute("stroke", "#5B57D1");
-            preview.setAttribute("stroke-width", 2);
-            preview.setAttribute("class", "attachment-preview");
-            preview.setAttribute("opacity", "0.7");
-            svg.appendChild(preview);
-        } else {
-            // Remove preview if no nearby shape
-            const existingPreview = svg.querySelector('.attachment-preview');
-            if (existingPreview) existingPreview.remove();
+            // Check for frame containment while drawing (but don't apply clipping yet)
+            shapes.forEach(frame => {
+                if (frame.shapeName === 'frame') {
+                    if (frame.isShapeInFrame(currentArrow)) {
+                        frame.highlightFrame();
+                        hoveredFrameArrow = frame;
+                    } else if (hoveredFrameArrow === frame) {
+                        frame.removeHighlight();
+                        hoveredFrameArrow = null;
+                    }
+                }
+            });
+
+            // Update control points for curved arrows during drawing
+            if (currentArrow.arrowCurved) {
+                currentArrow.initializeCurveControlPoints();
+            }
+            currentArrow.draw();
         }
-
-        // Update control points for curved arrows during drawing
-        if (currentArrow.arrowCurved) {
-            currentArrow.initializeCurveControlPoints();
-        }
-        currentArrow.draw();
-    }
 
     else if (isDragging && currentShape && currentShape.isSelected) {
         const dx = x - startX;
@@ -1365,66 +1556,122 @@ const handleMouseMove = (e) => {
 };
 
 const handleMouseUp = (e) => {
-    if (isDrawingArrow && currentArrow) {
-        // Remove any attachment preview that might still be visible
-        const existingPreview = svg.querySelector('.attachment-preview');
-        if (existingPreview) existingPreview.remove();
+if (isDrawingArrow && currentArrow) {
+    // Remove any attachment preview that might still be visible
+    const existingPreview = svg.querySelector('.attachment-preview');
+    if (existingPreview) existingPreview.remove();
 
-        // Check if arrow is too small
-        const dx = currentArrow.endPoint.x - currentArrow.startPoint.x;
-        const dy = currentArrow.endPoint.y - currentArrow.startPoint.y;
-        const lengthSq = dx * dx + dy * dy;
+    // Check if arrow is too small
+    const dx = currentArrow.endPoint.x - currentArrow.startPoint.x;
+    const dy = currentArrow.endPoint.y - currentArrow.startPoint.y;
+    const lengthSq = dx * dx + dy * dy;
 
-        if (lengthSq < (5 / currentZoom) ** 2) {
-            shapes.pop();
-            if (currentArrow.group.parentNode) {
-                currentArrow.group.parentNode.removeChild(currentArrow.group);
-            }
-            currentArrow = null;
-            currentShape = null;
-        } else {
-
-            const startAttachment = Arrow.findNearbyShape(currentArrow.startPoint);
-            const endAttachment = Arrow.findNearbyShape(currentArrow.endPoint);
-
-            if (startAttachment) {
-                currentArrow.attachToShape(true, startAttachment.shape, startAttachment.attachment);
-                console.log(`Arrow start attached to ${startAttachment.shape.shapeName}`);
-            }
-
-            if (endAttachment) {
-                currentArrow.attachToShape(false, endAttachment.shape, endAttachment.attachment);
-                console.log(`Arrow end attached to ${endAttachment.shape.shapeName}`);
-            }
-
-            // Push create action for undo/redo
-            pushCreateAction(currentArrow);
+    if (lengthSq < (5 / currentZoom) ** 2) {
+        shapes.pop();
+        if (currentArrow.group.parentNode) {
+            currentArrow.group.parentNode.removeChild(currentArrow.group);
         }
-
         currentArrow = null;
-    }
+        currentShape = null;
+    } else {
+        const startAttachment = Arrow.findNearbyShape(currentArrow.startPoint);
+        const endAttachment = Arrow.findNearbyShape(currentArrow.endPoint);
 
-    if (isDragging && dragOldPosArrow && currentShape) {
-        const newPos = {
-            startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
-        };
-        const stateChanged = dragOldPosArrow.startPoint.x !== newPos.startPoint.x ||
-                           dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
-                           dragOldPosArrow.endPoint.x !== newPos.endPoint.x ||
-                           dragOldPosArrow.endPoint.y !== newPos.endPoint.y;
-
-        if (stateChanged) {
-            pushTransformAction(currentShape, dragOldPosArrow, newPos);
+        if (startAttachment) {
+            currentArrow.attachToShape(true, startAttachment.shape, startAttachment.attachment);
+            console.log(`Arrow start attached to ${startAttachment.shape.shapeName}`);
         }
-        dragOldPosArrow = null;
+
+        if (endAttachment) {
+            currentArrow.attachToShape(false, endAttachment.shape, endAttachment.attachment);
+            console.log(`Arrow end attached to ${endAttachment.shape.shapeName}`);
+        }
+
+        // Check for frame containment and track attachment
+        const finalFrame = hoveredFrameArrow;
+        if (finalFrame) {
+            finalFrame.addShapeToFrame(currentArrow);
+            // Track the attachment for undo
+            pushFrameAttachmentAction(finalFrame, currentArrow, 'attach', null);
+        }
+
+        // Push create action for undo/redo
+        pushCreateAction(currentArrow);
+    }
+    
+    // Clear frame highlighting
+    if (hoveredFrameArrow) {
+        hoveredFrameArrow.removeHighlight();
+        hoveredFrameArrow = null;
     }
 
-    isDrawingArrow = false;
-    isResizing = false;
-    isDragging = false;
-    activeAnchor = null;
-    svg.style.cursor = 'default';
+    currentArrow = null;
+}
+
+if (isDragging && dragOldPosArrow && currentShape) {
+    const newPos = {
+        startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+        endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+        parentFrame: currentShape.parentFrame  // Add this line
+    };
+    const oldPos = {
+        ...dragOldPosArrow,
+        parentFrame: draggedShapeInitialFrameArrow  // Add this line
+    };
+    
+    const stateChanged = dragOldPosArrow.startPoint.x !== newPos.startPoint.x ||
+                       dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
+                       dragOldPosArrow.endPoint.x !== newPos.endPoint.x ||
+                       dragOldPosArrow.endPoint.y !== newPos.endPoint.y;
+    
+    const frameChanged = oldPos.parentFrame !== newPos.parentFrame;
+
+    if (stateChanged || frameChanged) {
+        pushTransformAction(currentShape, oldPos, newPos);
+    }
+    
+    // Handle frame containment changes after drag
+    if (isDragging) {
+        const finalFrame = hoveredFrameArrow;
+        
+        // If shape moved to a different frame
+        if (draggedShapeInitialFrameArrow !== finalFrame) {
+            // Remove from initial frame
+            if (draggedShapeInitialFrameArrow) {
+                draggedShapeInitialFrameArrow.removeShapeFromFrame(currentShape);
+            }
+            
+            // Add to new frame
+            if (finalFrame) {
+                finalFrame.addShapeToFrame(currentShape);
+            }
+            
+            // Track the frame change for undo
+            if (frameChanged) {
+                pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameArrow, currentShape, 
+                    finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameArrow);
+            }
+        } else if (draggedShapeInitialFrameArrow) {
+            // Shape stayed in same frame, restore clipping
+            draggedShapeInitialFrameArrow.restoreToFrame(currentShape);
+        }
+    }
+    
+    draggedShapeInitialFrameArrow = null;
+    dragOldPosArrow = null;
+}
+
+// Clear frame highlighting
+if (hoveredFrameArrow) {
+    hoveredFrameArrow.removeHighlight();
+    hoveredFrameArrow = null;
+}
+
+isDrawingArrow = false;
+isResizing = false;
+isDragging = false;
+activeAnchor = null;
+svg.style.cursor = 'default';
 };
 
 // Remove old event listeners and add new ones
@@ -1591,11 +1838,10 @@ function detachSelectedArrow() {
     }
 }
 
-
 function updateAttachedArrows(shape) {
     if (!shape) return;
 
-    // Find all arrows attached to this shape
+    
     shapes.forEach(arrowShape => {
         if (arrowShape instanceof Arrow) {
             let needsUpdate = false;
@@ -1612,7 +1858,6 @@ function updateAttachedArrows(shape) {
         }
     });
 }
-
 
 function cleanupAttachments(deletedShape) {
     if (deletedShape.shapeName === 'rectangle' || deletedShape.shapeName === 'circle' ||
