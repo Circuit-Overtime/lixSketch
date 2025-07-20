@@ -1,4 +1,4 @@
-import { pushCreateAction, pushDeleteAction, pushTransformAction } from './undoAndRedo.js';
+import { pushCreateAction, pushDeleteAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
 
 
 let currentFrame = null;
@@ -137,6 +137,8 @@ class Frame {
 
     addShapeToFrame(shape) {
     if (shape && !this.containedShapes.includes(shape)) {
+        const oldFrame = shape.parentFrame;
+        
         // Remove from other frames first
         shapes.forEach(otherFrame => {
             if (otherFrame.shapeName === 'frame' && otherFrame !== this) {
@@ -170,6 +172,9 @@ class Frame {
         }
         
         delete shape.isDraggedOutTemporarily;
+        
+        // Don't automatically track here - let the calling code decide
+        // pushFrameAttachmentAction(this, shape, 'detach');
     }
 }
 
@@ -391,6 +396,8 @@ startLabelEdit(labelElement) {
     const input = document.createElement("input");
     input.type = "text";
     input.value = this.frameName || "Frame";
+    const oldName = this.frameName; // Store old name for undo
+    
     input.style.cssText = `
         position: absolute;
         width: 100%;
@@ -421,6 +428,29 @@ startLabelEdit(labelElement) {
     
     const finishEdit = () => {
         const newName = input.value.trim() || "Frame";
+        
+        // Track name change in undo system if it actually changed
+        if (newName !== oldName) {
+            pushTransformAction(this, 
+                { 
+                    x: this.x, 
+                    y: this.y, 
+                    width: this.width, 
+                    height: this.height, 
+                    rotation: this.rotation,
+                    frameName: oldName 
+                },
+                { 
+                    x: this.x, 
+                    y: this.y, 
+                    width: this.width, 
+                    height: this.height, 
+                    rotation: this.rotation,
+                    frameName: newName 
+                }
+            );
+        }
+        
         this.frameName = newName;
         
         // Remove the input

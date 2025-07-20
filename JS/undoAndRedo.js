@@ -30,6 +30,9 @@ export function pushCreateAction(shape) {
         type: 'create',
         shape: shape
     });
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
 }
 
 export function pushDeleteAction(shape) {
@@ -37,6 +40,9 @@ export function pushDeleteAction(shape) {
         type: 'delete',
         shape: shape
     });
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
 }
 
 // Enhanced delete action to clean up attached arrows
@@ -62,9 +68,32 @@ export function pushDeleteActionWithAttachments(shape) {
         shape: shape,
         affectedArrows: affectedArrows
     });
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
 }
 
-// Function to handle text creation with potential arrow reattachment
+export function pushFrameAttachmentAction(frame, shape, action, oldFrame = null) {
+    undoStack.push({
+        type: 'frameAttachment',
+        frame: frame,
+        shape: shape,
+        action: action, // 'attach' or 'detach'
+        oldFrame: oldFrame, // Previous frame if shape was moved between frames
+        // Store shape position for potential restoration
+        shapeState: {
+            x: shape.x,
+            y: shape.y,
+            width: shape.width || 0,
+            height: shape.height || 0,
+            rotation: shape.rotation || 0
+        }
+    });
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
+}
+
 export function pushCreateActionWithAttachments(shape) {
     undoStack.push({
         type: 'create',
@@ -72,11 +101,57 @@ export function pushCreateActionWithAttachments(shape) {
         // Store any arrows that might need to reattach when this is undone
         potentialAttachments: []
     });
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
 }
 
 export function pushTransformAction(shape, oldPos, newPos) {
-    if (shape.type === 'text') {
-        // Enhanced text handling - also update attached arrows
+    if (shape.shapeName === 'frame') {
+        // Handle frame transformation with contained shapes
+        const containedShapesStates = shape.containedShapes.map(containedShape => ({
+            shape: containedShape,
+            oldState: {
+                x: containedShape.x - (newPos.x - oldPos.x),
+                y: containedShape.y - (newPos.y - oldPos.y),
+                width: containedShape.width || 0,
+                height: containedShape.height || 0,
+                rotation: containedShape.rotation || 0
+            },
+            newState: {
+                x: containedShape.x,
+                y: containedShape.y,
+                width: containedShape.width || 0,
+                height: containedShape.height || 0,
+                rotation: containedShape.rotation || 0
+            }
+        }));
+
+        undoStack.push({
+            type: 'frameTransform',
+            shape: shape,
+            oldPos: {
+                x: oldPos.x,
+                y: oldPos.y,
+                width: oldPos.width,
+                height: oldPos.height,
+                rotation: oldPos.rotation,
+                frameName: oldPos.frameName || shape.frameName
+            },
+            newPos: {
+                x: newPos.x,
+                y: newPos.y,
+                width: newPos.width,
+                height: newPos.height,
+                rotation: newPos.rotation,
+                frameName: newPos.frameName || shape.frameName
+            },
+            containedShapes: containedShapesStates
+        });
+    } else if (shape.type === 'text') {
+        // Enhanced text handling - also track frame attachment changes
+        const currentFrame = shape.parentFrame || null;
+        
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -92,6 +167,11 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 rotation: newPos.rotation,
                 fontSize: newPos.fontSize
             },
+            // Track frame attachment state
+            frameAttachment: {
+                oldFrame: oldPos.parentFrame || null,
+                newFrame: currentFrame
+            },
             // Store affected arrows with their attachment states
             affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
                 (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
@@ -105,7 +185,9 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 }))
         });
     } else if (shape.type === 'image') {
-        // Enhanced image handling - also update attached arrows
+        // Enhanced image handling - also track frame attachment changes
+        const currentFrame = shape.parentFrame || null;
+        
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -123,6 +205,11 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 height: newPos.height,
                 rotation: newPos.rotation
             },
+            // Track frame attachment state
+            frameAttachment: {
+                oldFrame: oldPos.parentFrame || null,
+                newFrame: currentFrame
+            },
             // Store affected arrows with their attachment states
             affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
                 (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
@@ -136,7 +223,9 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 }))
         });
     } else if (shape.shapeName === 'circle') {
-        // Enhanced circle handling - also update attached arrows
+        // Enhanced circle handling - also track frame attachment changes
+        const currentFrame = shape.parentFrame || null;
+        
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -154,6 +243,49 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 ry: newPos.ry,
                 rotation: newPos.rotation
             },
+            // Track frame attachment state
+            frameAttachment: {
+                oldFrame: oldPos.parentFrame || null,
+                newFrame: currentFrame
+            },
+            // Store affected arrows with their attachment states
+            affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
+                (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+                .map(arrow => ({
+                    arrow: arrow,
+                    oldAttachments: arrow.getAttachmentState(),
+                    oldPoints: {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    }
+                }))
+        });
+    } else if (shape.shapeName === "rectangle") {
+        // Enhanced rectangle handling - also track frame attachment changes
+        const currentFrame = shape.parentFrame || null;
+        
+        undoStack.push({
+            type: 'transform',
+            shape: shape,
+            oldPos: { 
+                x: oldPos.x, 
+                y: oldPos.y, 
+                width: oldPos.width, 
+                height: oldPos.height, 
+                rotation: oldPos.rotation
+            },
+            newPos: { 
+                x: newPos.x, 
+                y: newPos.y, 
+                width: newPos.width, 
+                height: newPos.height, 
+                rotation: newPos.rotation
+            },
+            // Track frame attachment state
+            frameAttachment: {
+                oldFrame: oldPos.parentFrame || null,
+                newFrame: currentFrame
+            },
             // Store affected arrows with their attachment states
             affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
                 (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
@@ -167,6 +299,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 }))
         });
     } else if (shape.shapeName === 'line') {
+        // Handle line transform
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -180,7 +313,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
             }
         });
     } else if (shape.shapeName === 'arrow') {
-        // Enhanced arrow handling with attachment tracking
+        // Handle arrow transform with attachment state
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -200,6 +333,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
             }
         });
     } else if (shape.shapeName === 'freehandStroke') {
+        // Handle freehand stroke transform
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -212,38 +346,10 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 rotation: newPos.rotation
             }
         });
-    } else if (shape.shapeName === "rectangle") {
-        // Enhanced rectangle handling - also update attached arrows
-        undoStack.push({
-            type: 'transform',
-            shape: shape,
-            oldPos: { 
-                x: oldPos.x, 
-                y: oldPos.y, 
-                width: oldPos.width, 
-                height: oldPos.height, 
-                rotation: oldPos.rotation
-            },
-            newPos: { 
-                x: newPos.x, 
-                y: newPos.y, 
-                width: newPos.width, 
-                height: newPos.height, 
-                rotation: newPos.rotation
-            },
-            // Store affected arrows with their attachment states
-            affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
-                (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
-                .map(arrow => ({
-                    arrow: arrow,
-                    oldAttachments: arrow.getAttachmentState(),
-                    oldPoints: {
-                        startPoint: { ...arrow.startPoint },
-                        endPoint: { ...arrow.endPoint }
-                    }
-                }))
-        });
     }
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
     console.log(undoStack);
 }
 
@@ -253,12 +359,103 @@ export function pushOptionsChangeAction(shape, oldOptions) {
         shape: shape,
         oldOptions: oldOptions
     });
+    
+    // Clear redo stack when new action is performed
+    redoStack.length = 0;
 }
 
 export function undo() {
     if (undoStack.length === 0) return;
     const action = undoStack.pop();
     
+    if (action.type === 'frameTransform') {
+        // Handle frame transformation undo
+        action.shape.x = action.oldPos.x;
+        action.shape.y = action.oldPos.y;
+        action.shape.width = action.oldPos.width;
+        action.shape.height = action.oldPos.height;
+        action.shape.rotation = action.oldPos.rotation;
+        action.shape.frameName = action.oldPos.frameName;
+        
+        // Restore contained shapes to their old positions
+        action.containedShapes.forEach(shapeData => {
+            const shape = shapeData.shape;
+            shape.x = shapeData.oldState.x;
+            shape.y = shapeData.oldState.y;
+            shape.width = shapeData.oldState.width;
+            shape.height = shapeData.oldState.height;
+            shape.rotation = shapeData.oldState.rotation;
+            
+            if (typeof shape.draw === 'function') {
+                shape.draw();
+            }
+        });
+        
+        action.shape.isSelected = false;
+        if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+        action.shape.draw();
+        action.shape.updateClipPath();
+        
+        redoStack.push(action);
+        return;
+    }
+    
+    if (action.type === 'frameAttachment') {
+        // Handle frame attachment/detachment undo WITHOUT calling the methods that track undo
+        if (action.action === 'attach') {
+            // Undo attach: manually remove shape from frame
+            const frameIndex = action.frame.containedShapes.indexOf(action.shape);
+            if (frameIndex > -1) {
+                action.frame.containedShapes.splice(frameIndex, 1);
+                action.shape.parentFrame = null;
+                
+                // Move shape back to main SVG
+                if (action.shape.group && action.shape.group.parentNode === action.frame.clipGroup) {
+                    action.frame.clipGroup.removeChild(action.shape.group);
+                    svg.appendChild(action.shape.group);
+                }
+            }
+            
+            // If shape was moved from another frame, restore it there
+            if (action.oldFrame) {
+                action.oldFrame.containedShapes.push(action.shape);
+                action.shape.parentFrame = action.oldFrame;
+                
+                // Move to old frame's clipped group
+                if (action.shape.group && action.shape.group.parentNode === svg) {
+                    svg.removeChild(action.shape.group);
+                    action.oldFrame.clipGroup.appendChild(action.shape.group);
+                }
+            }
+        } else if (action.action === 'detach') {
+            // Undo detach: manually add shape back to frame
+            if (!action.frame.containedShapes.includes(action.shape)) {
+                action.frame.containedShapes.push(action.shape);
+                action.shape.parentFrame = action.frame;
+                
+                // Move to frame's clipped group
+                if (action.shape.group && action.shape.group.parentNode === svg) {
+                    svg.removeChild(action.shape.group);
+                    action.frame.clipGroup.appendChild(action.shape.group);
+                }
+            }
+        }
+        
+        // Restore shape state
+        action.shape.x = action.shapeState.x;
+        action.shape.y = action.shapeState.y;
+        action.shape.width = action.shapeState.width;
+        action.shape.height = action.shapeState.height;
+        action.shape.rotation = action.shapeState.rotation;
+        
+        if (typeof action.shape.draw === 'function') {
+            action.shape.draw();
+        }
+        
+        redoStack.push(action);
+        return;
+    }
+
     if (action.type === 'create') {
         if (action.shape.type === 'text') {
             // Handle text creation undo
@@ -287,9 +484,17 @@ export function undo() {
             if (action.shape.group && action.shape.group.parentNode) {
                 action.shape.group.parentNode.removeChild(action.shape.group);
             }
+            
+            // Handle frame cleanup
+            if (action.shape.shapeName === 'frame') {
+                action.shape.destroy();
+            }
         }
         redoStack.push(action);
-    } else if (action.type === 'delete') {
+        return;
+    }
+    
+    if (action.type === 'delete') {
         if (action.shape.type === 'text') {
             // Handle text deletion undo
             if (svg) {
@@ -317,8 +522,37 @@ export function undo() {
             }
         }
         redoStack.push(action);
+        return;
     }
-    else if (action.type === 'transform') {
+    
+    if (action.type === 'transform') {
+        // Handle frame attachment changes first
+        if (action.frameAttachment) {
+            // Use manual frame operations to avoid undo recursion
+            if (action.frameAttachment.newFrame) {
+                const frameIndex = action.frameAttachment.newFrame.containedShapes.indexOf(action.shape);
+                if (frameIndex > -1) {
+                    action.frameAttachment.newFrame.containedShapes.splice(frameIndex, 1);
+                    if (action.shape.group && action.shape.group.parentNode === action.frameAttachment.newFrame.clipGroup) {
+                        action.frameAttachment.newFrame.clipGroup.removeChild(action.shape.group);
+                        svg.appendChild(action.shape.group);
+                    }
+                }
+            }
+            if (action.frameAttachment.oldFrame) {
+                if (!action.frameAttachment.oldFrame.containedShapes.includes(action.shape)) {
+                    action.frameAttachment.oldFrame.containedShapes.push(action.shape);
+                    action.shape.parentFrame = action.frameAttachment.oldFrame;
+                    if (action.shape.group && action.shape.group.parentNode === svg) {
+                        svg.removeChild(action.shape.group);
+                        action.frameAttachment.oldFrame.clipGroup.appendChild(action.shape.group);
+                    }
+                }
+            } else {
+                action.shape.parentFrame = null;
+            }
+        }
+        
         if (action.shape.type === 'text') {
             // Enhanced text transform undo
             const textElement = (action.shape.element || action.shape).querySelector('text');
@@ -439,7 +673,6 @@ export function undo() {
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
         } else if (action.shape.shapeName === "rectangle") {
-            // Enhanced rectangle transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
             action.shape.height = action.oldPos.height;
@@ -453,10 +686,7 @@ export function undo() {
             if (action.affectedArrows) {
                 action.affectedArrows.forEach(arrowData => {
                     const arrow = arrowData.arrow;
-                    // Restore arrow attachments to old state
                     arrow.restoreAttachmentState(arrowData.oldAttachments);
-                    
-                    // Store current state for redo
                     arrowData.newPoints = {
                         startPoint: { ...arrow.startPoint },
                         endPoint: { ...arrow.endPoint }
@@ -466,8 +696,10 @@ export function undo() {
             }
         }
         redoStack.push(action);
+        return;
     }
-    else if (action.type === 'optionsChange') {
+    
+    if (action.type === 'optionsChange') {
         if (action.shape.type === 'text') {
             // Handle text options change undo
             const textElement = (action.shape.element || action.shape).querySelector('text');
@@ -496,6 +728,7 @@ export function undo() {
             action.shape.draw();
         }
         redoStack.push(action);
+        return;
     }
 }
 
@@ -503,6 +736,86 @@ export function redo() {
     if (redoStack.length === 0) return;
     const action = redoStack.pop();
     
+    if (action.type === 'frameTransform') {
+        // Handle frame transformation redo
+        action.shape.x = action.newPos.x;
+        action.shape.y = action.newPos.y;
+        action.shape.width = action.newPos.width;
+        action.shape.height = action.newPos.height;
+        action.shape.rotation = action.newPos.rotation;
+        action.shape.frameName = action.newPos.frameName;
+        
+        // Restore contained shapes to their new positions
+        action.containedShapes.forEach(shapeData => {
+            const shape = shapeData.shape;
+            shape.x = shapeData.newState.x;
+            shape.y = shapeData.newState.y;
+            shape.width = shapeData.newState.width;
+            shape.height = shapeData.newState.height;
+            shape.rotation = shapeData.newState.rotation;
+            
+            if (typeof shape.draw === 'function') {
+                shape.draw();
+            }
+        });
+        
+        action.shape.isSelected = false;
+        if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
+        action.shape.draw();
+        action.shape.updateClipPath();
+        
+        undoStack.push(action);
+        return;
+    }
+    
+    if (action.type === 'frameAttachment') {
+        // Handle frame attachment/detachment redo WITHOUT calling the methods that track undo
+        if (action.action === 'attach') {
+            // Redo attach: manually add shape to frame
+            if (action.oldFrame) {
+                // Remove from old frame
+                const oldFrameIndex = action.oldFrame.containedShapes.indexOf(action.shape);
+                if (oldFrameIndex > -1) {
+                    action.oldFrame.containedShapes.splice(oldFrameIndex, 1);
+                    if (action.shape.group && action.shape.group.parentNode === action.oldFrame.clipGroup) {
+                        action.oldFrame.clipGroup.removeChild(action.shape.group);
+                        svg.appendChild(action.shape.group);
+                    }
+                }
+            }
+            
+            // Add to new frame
+            if (!action.frame.containedShapes.includes(action.shape)) {
+                action.frame.containedShapes.push(action.shape);
+                action.shape.parentFrame = action.frame;
+                
+                if (action.shape.group && action.shape.group.parentNode === svg) {
+                    svg.removeChild(action.shape.group);
+                    action.frame.clipGroup.appendChild(action.shape.group);
+                }
+            }
+        } else if (action.action === 'detach') {
+            // Redo detach: manually remove shape from frame
+            const frameIndex = action.frame.containedShapes.indexOf(action.shape);
+            if (frameIndex > -1) {
+                action.frame.containedShapes.splice(frameIndex, 1);
+                action.shape.parentFrame = null;
+                
+                if (action.shape.group && action.shape.group.parentNode === action.frame.clipGroup) {
+                    action.frame.clipGroup.removeChild(action.shape.group);
+                    svg.appendChild(action.shape.group);
+                }
+            }
+        }
+        
+        if (typeof action.shape.draw === 'function') {
+            action.shape.draw();
+        }
+        
+        undoStack.push(action);
+        return;
+    }
+
     if (action.type === 'create') {
         if (action.shape.type === 'text') {
             // Handle text creation redo
@@ -523,7 +836,10 @@ export function redo() {
             }
         }
         undoStack.push(action);
-    } else if (action.type === 'delete') {
+        return;
+    }
+    
+    if (action.type === 'delete') {
         if (action.shape.type === 'text') {
             // Handle text deletion redo
             if ((action.shape.element || action.shape).parentNode) {
@@ -558,10 +874,44 @@ export function redo() {
             if (action.shape.group && action.shape.group.parentNode) {
                 action.shape.group.parentNode.removeChild(action.shape.group);
             }
+            
+            // Handle frame cleanup
+            if (action.shape.shapeName === 'frame') {
+                action.shape.destroy();
+            }
         }
         undoStack.push(action);
+        return;
     }
-    else if (action.type === 'transform') {
+    
+    if (action.type === 'transform') {
+        // Handle frame attachment changes first
+        if (action.frameAttachment) {
+            // Use manual frame operations to avoid undo recursion
+            if (action.frameAttachment.oldFrame) {
+                const oldFrameIndex = action.frameAttachment.oldFrame.containedShapes.indexOf(action.shape);
+                if (oldFrameIndex > -1) {
+                    action.frameAttachment.oldFrame.containedShapes.splice(oldFrameIndex, 1);
+                    if (action.shape.group && action.shape.group.parentNode === action.frameAttachment.oldFrame.clipGroup) {
+                        action.frameAttachment.oldFrame.clipGroup.removeChild(action.shape.group);
+                        svg.appendChild(action.shape.group);
+                    }
+                }
+            }
+            if (action.frameAttachment.newFrame) {
+                if (!action.frameAttachment.newFrame.containedShapes.includes(action.shape)) {
+                    action.frameAttachment.newFrame.containedShapes.push(action.shape);
+                    action.shape.parentFrame = action.frameAttachment.newFrame;
+                    if (action.shape.group && action.shape.group.parentNode === svg) {
+                        svg.removeChild(action.shape.group);
+                        action.frameAttachment.newFrame.clipGroup.appendChild(action.shape.group);
+                    }
+                }
+            } else {
+                action.shape.parentFrame = null;
+            }
+        }
+        
         if (action.shape.type === 'text') {
             // Enhanced text transform redo
             const textElement = (action.shape.element || action.shape).querySelector('text');
@@ -701,7 +1051,10 @@ export function redo() {
             }
         }
         undoStack.push(action);
-    } else if (action.type === 'optionsChange') {
+        return;
+    }
+    
+    if (action.type === 'optionsChange') {
         if (action.shape.type === 'text') {
             // Handle text options change redo
             const textElement = (action.shape.element || action.shape).querySelector('text');
@@ -736,6 +1089,7 @@ export function redo() {
             action.shape.draw();
         }
         undoStack.push(action);
+        return;
     }
 }
 
@@ -744,12 +1098,10 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         undo();
-       
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
         e.preventDefault();
         redo();
-       
     }
 });
 

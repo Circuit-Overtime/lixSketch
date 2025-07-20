@@ -1,4 +1,4 @@
-import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
 import { cleanupAttachments } from './drawArrow.js';
 let isDrawingSquare = false;
 let isDraggingShapeSquare = false;
@@ -774,7 +774,7 @@ const handleMouseMoveRect = (e) => {
     }
 };
 
-// Update handleMouseUpRect function
+    // Update handleMouseUpRect to properly track frame attachment changes
 const handleMouseUpRect = (e) => {
     if (isDrawingSquare && currentShape) {
         if (currentShape.width === 0 || currentShape.height === 0) {
@@ -786,12 +786,13 @@ const handleMouseUpRect = (e) => {
             shapes.push(currentShape);
             pushCreateAction(currentShape);
             
-            // Now apply frame containment with clipping
-            shapes.forEach(frame => {
-                if (frame.shapeName === 'frame') {
-                    frame.updateContainedShapes(true); // Apply clipping
-                }
-            });
+            // Check for frame containment and track attachment
+            const finalFrame = hoveredFrame;
+            if (finalFrame) {
+                finalFrame.addShapeToFrame(currentShape);
+                // Track the attachment for undo
+                pushFrameAttachmentAction(finalFrame, currentShape, 'attach', null);
+            }
         }
         
         // Clear frame highlighting
@@ -802,13 +803,27 @@ const handleMouseUpRect = (e) => {
     }
 
     if ((isDraggingShapeSquare || isResizingShapeSquare || isRotatingShapeSquare) && dragOldPosSquare && currentShape) {
-        const newPos = { x: currentShape.x, y: currentShape.y, width: currentShape.width, height: currentShape.height, rotation: currentShape.rotation };
-        const stateChanged = dragOldPosSquare.x !== newPos.x || dragOldPosSquare.y !== newPos.y ||
-                             dragOldPosSquare.width !== newPos.width || dragOldPosSquare.height !== newPos.height ||
-                             dragOldPosSquare.rotation !== newPos.rotation;
+        const newPos = { 
+            x: currentShape.x, 
+            y: currentShape.y, 
+            width: currentShape.width, 
+            height: currentShape.height, 
+            rotation: currentShape.rotation,
+            parentFrame: currentShape.parentFrame
+        };
+        const oldPos = {
+            ...dragOldPosSquare,
+            parentFrame: draggedShapeInitialFrame
+        };
+        
+        const stateChanged = oldPos.x !== newPos.x || oldPos.y !== newPos.y ||
+                             oldPos.width !== newPos.width || oldPos.height !== newPos.height ||
+                             oldPos.rotation !== newPos.rotation;
 
-        if (stateChanged) {
-             pushTransformAction(currentShape, dragOldPosSquare, newPos);
+        const frameChanged = oldPos.parentFrame !== newPos.parentFrame;
+
+        if (stateChanged || frameChanged) {
+             pushTransformAction(currentShape, oldPos, newPos);
         }
         
         // Handle frame containment changes after drag
@@ -826,17 +841,16 @@ const handleMouseUpRect = (e) => {
                 if (finalFrame) {
                     finalFrame.addShapeToFrame(currentShape);
                 }
+                
+                // Track the frame change for undo
+                if (frameChanged) {
+                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrame, currentShape, 
+                        finalFrame ? 'attach' : 'detach', draggedShapeInitialFrame);
+                }
             } else if (draggedShapeInitialFrame) {
                 // Shape stayed in same frame, restore clipping
                 draggedShapeInitialFrame.restoreToFrame(currentShape);
             }
-            
-            // Update all frames with clipping applied
-            shapes.forEach(frame => {
-                if (frame.shapeName === 'frame') {
-                    frame.updateContainedShapes(true); // Apply clipping
-                }
-            });
         }
         
         dragOldPosSquare = null;
@@ -858,7 +872,6 @@ const handleMouseUpRect = (e) => {
     startShapeRotationSquare = 0;
     svg.style.cursor = 'default';
 };
-
 
 SquarecolorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
