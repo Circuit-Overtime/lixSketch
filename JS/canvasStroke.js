@@ -1,4 +1,4 @@
-import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
 
 const strokeColors = document.querySelectorAll(".strokeColors span");
 const strokeThicknesses = document.querySelectorAll(".strokeThickness span");
@@ -18,6 +18,10 @@ let startRotationMouseAngle = null;
 let startShapeRotation = null;
 let copiedShapeData = null;
 let startX, startY;
+
+// Frame attachment variables
+let draggedShapeInitialFrameStroke = null;
+let hoveredFrameStroke = null;
 
 // Enhanced mouse tracking with better point collection
 let lastPoint = null;
@@ -85,8 +89,66 @@ class FreehandStroke {
         this.selectionOutline = null;
         this.boundingBox = { x: 0, y: 0, width: 0, height: 0 };
         this.shapeName = "freehandStroke";
+        
+        // Frame attachment properties
+        this.parentFrame = null;
+        
         svg.appendChild(this.group);
         this.draw();
+    }
+
+    // Add position and dimension properties for frame compatibility
+    get x() {
+        return this.boundingBox.x;
+    }
+    
+    set x(value) {
+        const dx = value - this.boundingBox.x;
+        const dy = 0;
+        this.points = this.points.map(point => [point[0] + dx, point[1] + dy, point[2] || 0.5]);
+        this.boundingBox.x = value;
+    }
+    
+    get y() {
+        return this.boundingBox.y;
+    }
+    
+    set y(value) {
+        const dy = value - this.boundingBox.y;
+        this.points = this.points.map(point => [point[0], point[1] + dy, point[2] || 0.5]);
+        this.boundingBox.y = value;
+    }
+    
+    get width() {
+        return this.boundingBox.width;
+    }
+    
+    set width(value) {
+        if (this.boundingBox.width === 0) return;
+        const scaleX = value / this.boundingBox.width;
+        const centerX = this.boundingBox.x + this.boundingBox.width / 2;
+        this.points = this.points.map(point => [
+            centerX + (point[0] - centerX) * scaleX,
+            point[1],
+            point[2] || 0.5
+        ]);
+        this.boundingBox.width = value;
+    }
+    
+    get height() {
+        return this.boundingBox.height;
+    }
+    
+    set height(value) {
+        if (this.boundingBox.height === 0) return;
+        const scaleY = value / this.boundingBox.height;
+        const centerY = this.boundingBox.y + this.boundingBox.height / 2;
+        this.points = this.points.map(point => [
+            point[0],
+            centerY + (point[1] - centerY) * scaleY,
+            point[2] || 0.5
+        ]);
+        this.boundingBox.height = value;
     }
 
     // Enhanced smoothing algorithm
@@ -239,6 +301,46 @@ class FreehandStroke {
         }
     }
 
+    move(dx, dy) {
+        this.points = this.points.map(point => [point[0] + dx, point[1] + dy, point[2] || 0.5]);
+        
+        // Only update frame containment if we're actively dragging the shape itself
+        // and not being moved by a parent frame
+        if (isDraggingStroke && !this.isBeingMovedByFrame) {
+            this.updateFrameContainment();
+        }
+    }
+
+    updateFrameContainment() {
+        // Don't update if we're being moved by a frame
+        if (this.isBeingMovedByFrame) return;
+        
+        let targetFrame = null;
+        
+        // Find which frame this shape is over
+        shapes.forEach(shape => {
+            if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+                targetFrame = shape;
+            }
+        });
+        
+        // If we have a parent frame and we're being dragged, temporarily remove clipping
+        if (this.parentFrame && isDraggingStroke) {
+            this.parentFrame.temporarilyRemoveFromFrame(this);
+        }
+        
+        // Update frame highlighting
+        if (hoveredFrameStroke && hoveredFrameStroke !== targetFrame) {
+            hoveredFrameStroke.removeHighlight();
+        }
+        
+        if (targetFrame && targetFrame !== hoveredFrameStroke) {
+            targetFrame.highlightFrame();
+        }
+        
+        hoveredFrameStroke = targetFrame;
+    }
+
     selectStroke() {
         this.isSelected = true;
         this.draw();
@@ -342,10 +444,6 @@ class FreehandStroke {
         }
         
         return null;
-    }
-
-    move(dx, dy) {
-        this.points = this.points.map(point => [point[0] + dx, point[1] + dy]);
     }
 
     rotate(angle) {
@@ -497,7 +595,8 @@ class FreehandStroke {
             const relY = point[1] - centerY;
             return [
                 centerX + relX * scaleX,
-                centerY + relY * scaleY
+                centerY + relY * scaleY,
+                point[2] || 0.5
             ];
         });
         
@@ -566,6 +665,15 @@ function handleMouseDown(e) {
             } else if (currentShape.contains(x, y)) {
                 isDraggingStroke = true;
                 dragOldPosStroke = cloneStrokeData(currentShape);
+                
+                // Store initial frame state
+                draggedShapeInitialFrameStroke = currentShape.parentFrame || null;
+                
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = x;
                 startY = y;
                 clickedOnShape = true;
@@ -609,6 +717,15 @@ function handleMouseDown(e) {
                 } else {
                     isDraggingStroke = true;
                     dragOldPosStroke = cloneStrokeData(currentShape);
+                    
+                    // Store initial frame state
+                    draggedShapeInitialFrameStroke = currentShape.parentFrame || null;
+                    
+                    // Temporarily remove from frame clipping if dragging
+                    if (currentShape.parentFrame) {
+                        currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                    }
+                    
                     startX = x;
                     startY = y;
                 }
@@ -627,6 +744,13 @@ function handleMouseDown(e) {
 function handleMouseMove(e) {
     const { x, y } = getSvgCoordinates(e);
     const currentTime = Date.now();
+    
+    // Keep lastMousePos in screen coordinates for other functions
+    const svgRect = svg.getBoundingClientRect();
+    lastMousePos = {
+        x: e.clientX - svgRect.left, 
+        y: e.clientY - svgRect.top
+    };
     
     if (isDrawingStroke && isPaintToolActive) {
         const pressure = e.pressure || 0.5;
@@ -667,6 +791,19 @@ function handleMouseMove(e) {
             lastPoint = [x, y, pressure];
             lastTime = currentTime;
         }
+        
+        // Check for frame containment while drawing (but don't apply clipping yet)
+        shapes.forEach(frame => {
+            if (frame.shapeName === 'frame') {
+                if (frame.isShapeInFrame(currentStroke)) {
+                    frame.highlightFrame();
+                    hoveredFrameStroke = frame;
+                } else if (hoveredFrameStroke === frame) {
+                    frame.removeHighlight();
+                    hoveredFrameStroke = null;
+                }
+            }
+        });
     } else if (isDraggingStroke && currentShape && currentShape.isSelected) {
         const dx = x - startX;
         const dy = y - startY;
@@ -695,12 +832,26 @@ function handleMouseUp(e) {
         if (currentStroke && currentStroke.points.length >= 2) {
             currentStroke.draw(); // Redraw with final smoothing
             pushCreateAction(currentStroke);
+            
+            // Check for frame containment and track attachment
+            const finalFrame = hoveredFrameStroke;
+            if (finalFrame) {
+                finalFrame.addShapeToFrame(currentStroke);
+                // Track the attachment for undo
+                pushFrameAttachmentAction(finalFrame, currentStroke, 'attach', null);
+            }
         } else if (currentStroke) {
             // Remove strokes that are too small
             shapes.pop();
             if (currentStroke.group.parentNode) {
                 currentStroke.group.parentNode.removeChild(currentStroke.group);
             }
+        }
+        
+        // Clear frame highlighting
+        if (hoveredFrameStroke) {
+            hoveredFrameStroke.removeHighlight();
+            hoveredFrameStroke = null;
         }
         
         currentStroke = null;
@@ -712,10 +863,56 @@ function handleMouseUp(e) {
             JSON.stringify(dragOldPosStroke.points) !== JSON.stringify(newPos.points) ||
             dragOldPosStroke.rotation !== newPos.rotation;
         
-        if (stateChanged) {
-            pushTransformAction(currentShape, dragOldPosStroke, newPos);
+        const oldPos = {
+            ...dragOldPosStroke,
+            parentFrame: draggedShapeInitialFrameStroke
+        };
+        const newPosForUndo = {
+            ...newPos,
+            parentFrame: currentShape.parentFrame
+        };
+        
+        const frameChanged = oldPos.parentFrame !== newPosForUndo.parentFrame;
+        
+        if (stateChanged || frameChanged) {
+            pushTransformAction(currentShape, oldPos, newPosForUndo);
         }
+        
+        // Handle frame containment changes after drag
+        if (isDraggingStroke) {
+            const finalFrame = hoveredFrameStroke;
+            
+            // If shape moved to a different frame
+            if (draggedShapeInitialFrameStroke !== finalFrame) {
+                // Remove from initial frame
+                if (draggedShapeInitialFrameStroke) {
+                    draggedShapeInitialFrameStroke.removeShapeFromFrame(currentShape);
+                }
+                
+                // Add to new frame
+                if (finalFrame) {
+                    finalFrame.addShapeToFrame(currentShape);
+                }
+                
+                // Track the frame change for undo
+                if (frameChanged) {
+                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameStroke, currentShape, 
+                        finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameStroke);
+                }
+            } else if (draggedShapeInitialFrameStroke) {
+                // Shape stayed in same frame, restore clipping
+                draggedShapeInitialFrameStroke.restoreToFrame(currentShape);
+            }
+        }
+        
         dragOldPosStroke = null;
+        draggedShapeInitialFrameStroke = null;
+    }
+    
+    // Clear frame highlighting
+    if (hoveredFrameStroke) {
+        hoveredFrameStroke.removeHighlight();
+        hoveredFrameStroke = null;
     }
     
     isDraggingStroke = false;

@@ -14,7 +14,6 @@ let startX, startY;
 let dragOldPosFrame = null;
 let copiedFrameData = null;
 
-// Add coordinate conversion function
 function getSVGCoordsFromMouse(e) {
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
@@ -172,9 +171,6 @@ class Frame {
         }
         
         delete shape.isDraggedOutTemporarily;
-        
-        // Don't automatically track here - let the calling code decide
-        // pushFrameAttachmentAction(this, shape, 'detach');
     }
 }
 

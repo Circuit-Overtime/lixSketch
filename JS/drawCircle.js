@@ -1,4 +1,4 @@
-import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
 import { cleanupAttachments } from './drawArrow.js';
 let isDrawingCircle = false;
 let isDraggingShapeCircle = false;
@@ -19,6 +19,8 @@ let circleStrokeThicknes = 2;
 let circleOutlineStyle = "solid";
 
 let dragOldPosCircle = null;
+let draggedShapeInitialFrameCircle = null;
+let hoveredFrameCircle = null;
 let copiedShapeData = null;
 
 let colorOptionsCircle = document.querySelectorAll(".circleStrokeSpan");
@@ -53,6 +55,10 @@ class Circle {
         this.shapeName = "circle";
         this.shapeID = `circle-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
         this.group.setAttribute('id', this.shapeID);
+        
+        // Frame attachment properties
+        this.parentFrame = null;
+        
         if(!this.group.parentNode) {
             svg.appendChild(this.group);
         }
@@ -63,6 +69,24 @@ class Circle {
         };
         this.draw();
     }
+
+    // Add width and height properties for frame compatibility
+    get width() {
+        return this.rx * 2;
+    }
+    
+    set width(value) {
+        this.rx = value / 2;
+    }
+    
+    get height() {
+        return this.ry * 2;
+    }
+    
+    set height(value) {
+        this.ry = value / 2;
+    }
+
     draw() {
         const childrenToRemove = [];
         for (let i = 0; i < this.group.children.length; i++) {
@@ -101,6 +125,51 @@ class Circle {
             svg.appendChild(this.group);
         }
     }
+
+    move(dx, dy) {
+        this.x += dx;
+        this.y += dy;
+        this.updateAttachedArrows();
+        
+        // Only update frame containment if we're actively dragging the shape itself
+        // and not being moved by a parent frame
+        if (isDraggingShapeCircle && !this.isBeingMovedByFrame) {
+            this.updateFrameContainment();
+        }
+
+        this.draw();
+    }
+
+    updateFrameContainment() {
+        // Don't update if we're being moved by a frame
+        if (this.isBeingMovedByFrame) return;
+        
+        let targetFrame = null;
+        
+        // Find which frame this shape is over
+        shapes.forEach(shape => {
+            if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+                targetFrame = shape;
+            }
+        });
+        
+        // If we have a parent frame and we're being dragged, temporarily remove clipping
+        if (this.parentFrame && isDraggingShapeCircle) {
+            this.parentFrame.temporarilyRemoveFromFrame(this);
+        }
+        
+        // Update frame highlighting
+        if (hoveredFrameCircle && hoveredFrameCircle !== targetFrame) {
+            hoveredFrameCircle.removeHighlight();
+        }
+        
+        if (targetFrame && targetFrame !== hoveredFrameCircle) {
+            targetFrame.highlightFrame();
+        }
+        
+        hoveredFrameCircle = targetFrame;
+    }
+
     getRotatedCursor(direction, angle) {
         const directions = ['ns', 'nesw', 'ew', 'nwse'];
         angle = angle % 360;
@@ -333,11 +402,7 @@ class Circle {
 
         return null;
     }
-     move(dx, dy) {
-        this.x += dx;
-        this.y += dy;
-        this.updateAttachedArrows();
-    }
+
     updatePosition(anchorIndex, newMouseX, newMouseY) {
         const CTM = this.group.getCTM();
         if (!CTM) return;
@@ -558,6 +623,15 @@ const handleMouseDown = (e) => {
                     ry: currentShape.ry, 
                     rotation: currentShape.rotation 
                 };
+                
+                // Store initial frame state
+                draggedShapeInitialFrameCircle = currentShape.parentFrame || null;
+                
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = svgMouseX;
                 startY = svgMouseY;
                 clickedOnShape = true;
@@ -591,6 +665,15 @@ const handleMouseDown = (e) => {
                     ry: currentShape.ry, 
                     rotation: currentShape.rotation 
                 };
+                
+                // Store initial frame state
+                draggedShapeInitialFrameCircle = currentShape.parentFrame || null;
+                
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = svgMouseX;
                 startY = svgMouseY;
                 clickedOnShape = true;
@@ -622,6 +705,19 @@ const handleMouseMove = (e) => {
         currentShape.rx = Math.abs(svgMouseX - startX) / 2;
         currentShape.ry = Math.abs(svgMouseY - startY) / 2;
         currentShape.draw();
+        
+        // Check for frame containment while drawing (but don't apply clipping yet)
+        shapes.forEach(frame => {
+            if (frame.shapeName === 'frame') {
+                if (frame.isShapeInFrame(currentShape)) {
+                    frame.highlightFrame();
+                    hoveredFrameCircle = frame;
+                } else if (hoveredFrameCircle === frame) {
+                    frame.removeHighlight();
+                    hoveredFrameCircle = null;
+                }
+            }
+        });
     }
     else if (isDraggingShapeCircle && currentShape && currentShape.isSelected) {
         const dx = svgMouseX - startX;
@@ -703,46 +799,107 @@ const handleMouseMove = (e) => {
 }
 
 const handleMouseUp = (e) => {
-    if (isDrawingCircle && currentShape) 
-    {
-        if(currentShape.rx === 0 && currentShape.ry === 0)
-        {
+    if (isDrawingCircle && currentShape) {
+        if(currentShape.rx === 0 && currentShape.ry === 0) {
             if (currentShape.group.parentNode) {
                 currentShape.group.parentNode.removeChild(currentShape.group);
             }
             currentShape = null;
-        }
-        else 
-        {
+        } else {
             shapes.push(currentShape);
             pushCreateAction(currentShape);
+            
+            // Check for frame containment and track attachment
+            const finalFrame = hoveredFrameCircle;
+            if (finalFrame) {
+                finalFrame.addShapeToFrame(currentShape);
+                // Track the attachment for undo
+                pushFrameAttachmentAction(finalFrame, currentShape, 'attach', null);
+            }
         }
         
+        // Clear frame highlighting
+        if (hoveredFrameCircle) {
+            hoveredFrameCircle.removeHighlight();
+            hoveredFrameCircle = null;
+        }
     }
-    if((isDraggingShapeCircle || isResizingShapeCircle || isRotatingShapeCircle) && dragOldPosCircle && currentShape) 
-    {
-        const newPos = { x: currentShape.x, y: currentShape.y, rx: currentShape.rx, ry: currentShape.ry, rotation: currentShape.rotation };
-        const stateChanged = dragOldPosCircle.x !== newPos.x || dragOldPosCircle.y !== newPos.y ||
-                              dragOldPosCircle.rx !== newPos.rx || dragOldPosCircle.ry !== newPos.ry || 
-                              dragOldPosCircle.rotation !== newPos.rotation;
-        if (stateChanged) {
+    
+    if((isDraggingShapeCircle || isResizingShapeCircle || isRotatingShapeCircle) && dragOldPosCircle && currentShape) {
+        const newPos = { 
+            x: currentShape.x, 
+            y: currentShape.y, 
+            rx: currentShape.rx, 
+            ry: currentShape.ry, 
+            rotation: currentShape.rotation,
+            parentFrame: currentShape.parentFrame 
+        };
+        const oldPos = {
+            ...dragOldPosCircle,
+            parentFrame: draggedShapeInitialFrameCircle
+        };
+        
+        const stateChanged = oldPos.x !== newPos.x || oldPos.y !== newPos.y ||
+                              oldPos.rx !== newPos.rx || oldPos.ry !== newPos.ry || 
+                              oldPos.rotation !== newPos.rotation;
+
+        const frameChanged = oldPos.parentFrame !== newPos.parentFrame;
+
+        if (stateChanged || frameChanged) {
             const oldPosForUndo = {
-                x: dragOldPosCircle.x,
-                y: dragOldPosCircle.y,
-                rx: dragOldPosCircle.rx,
-                ry: dragOldPosCircle.ry,
-                rotation: dragOldPosCircle.rotation
+                x: oldPos.x,
+                y: oldPos.y,
+                rx: oldPos.rx,
+                ry: oldPos.ry,
+                rotation: oldPos.rotation,
+                parentFrame: oldPos.parentFrame
             };
             const newPosForUndo = {
                 x: newPos.x,
                 y: newPos.y,
                 rx: newPos.rx,
                 ry: newPos.ry,
-                rotation: newPos.rotation
+                rotation: newPos.rotation,
+                parentFrame: newPos.parentFrame
             };
             pushTransformAction(currentShape, oldPosForUndo, newPosForUndo);
         }
+        
+        // Handle frame containment changes after drag
+        if (isDraggingShapeCircle) {
+            const finalFrame = hoveredFrameCircle;
+            
+            // If shape moved to a different frame
+            if (draggedShapeInitialFrameCircle !== finalFrame) {
+                // Remove from initial frame
+                if (draggedShapeInitialFrameCircle) {
+                    draggedShapeInitialFrameCircle.removeShapeFromFrame(currentShape);
+                }
+                
+                // Add to new frame
+                if (finalFrame) {
+                    finalFrame.addShapeToFrame(currentShape);
+                }
+                
+                // Track the frame change for undo
+                if (frameChanged) {
+                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameCircle, currentShape, 
+                        finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameCircle);
+                }
+            } else if (draggedShapeInitialFrameCircle) {
+                // Shape stayed in same frame, restore clipping
+                draggedShapeInitialFrameCircle.restoreToFrame(currentShape);
+            }
+        }
+        
         dragOldPosCircle = null;
+        draggedShapeInitialFrameCircle = null;
+    }
+    
+    // Clear frame highlighting
+    if (hoveredFrameCircle) {
+        hoveredFrameCircle.removeHighlight();
+        hoveredFrameCircle = null;
     }
 
     isDrawingCircle = false;

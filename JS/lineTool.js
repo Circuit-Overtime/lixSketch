@@ -1,21 +1,24 @@
-import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
+import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
 
 // Update event handlers to use the Line class
 let isDrawingLine = false;
 let currentLine = null;
-let lineStartX = 0;       // Starting X coordinate of the line
-let lineStartY = 0;       // Starting Y coordinate of the line
-let currentLineGroup = null;    // Reference to the current line element being drawn
+let lineStartX = 0;      
+let lineStartY = 0;      
+let currentLineGroup = null;    
 let lineColor = "#fff";
 let lineStrokeWidth = 3;
 let lineStrokeStyle = "solid";
 let lineEdgeType = 1;
 let lineSktetchRate = 3;
 
-// Add variables for dragging functionality
 let isDraggingLine = false;
 let dragOldPosLine = null;
 let copiedShapeData = null;
+
+// Frame attachment variables
+let draggedShapeInitialFrameLine = null;
+let hoveredFrameLine = null;
 
 let startX, startY;
 
@@ -25,7 +28,7 @@ let lineOutlineOptions = document.querySelectorAll(".lineStyleSpan");
 let lineSlopeOptions = document.querySelectorAll(".lineSlopeSpan");
 let lineEdgeOptions = document.querySelectorAll(".lineEdgeSpan");
 
-// Add coordinate conversion function like in drawCircle.js
+
 function getSVGCoordsFromMouse(e) {
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
@@ -46,11 +49,57 @@ class Line {
         this.anchors = [];
         this.selectionOutline = null;
         this.shapeName = "line"; 
-        this.shapeName = 'line';
         this.shapeID = `line-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
         this.group.setAttribute('id', this.shapeID);
+        
+        // Frame attachment properties
+        this.parentFrame = null;
+        
         svg.appendChild(this.group);
         this.draw();
+    }
+
+    // Add position and dimension properties for frame compatibility
+    get x() {
+        return Math.min(this.startPoint.x, this.endPoint.x);
+    }
+    
+    set x(value) {
+        const currentX = this.x;
+        const dx = value - currentX;
+        this.startPoint.x += dx;
+        this.endPoint.x += dx;
+    }
+    
+    get y() {
+        return Math.min(this.startPoint.y, this.endPoint.y);
+    }
+    
+    set y(value) {
+        const currentY = this.y;
+        const dy = value - currentY;
+        this.startPoint.y += dy;
+        this.endPoint.y += dy;
+    }
+    
+    get width() {
+        return Math.abs(this.endPoint.x - this.startPoint.x);
+    }
+    
+    set width(value) {
+        const centerX = (this.startPoint.x + this.endPoint.x) / 2;
+        this.startPoint.x = centerX - value / 2;
+        this.endPoint.x = centerX + value / 2;
+    }
+    
+    get height() {
+        return Math.abs(this.endPoint.y - this.startPoint.y);
+    }
+    
+    set height(value) {
+        const centerY = (this.startPoint.y + this.endPoint.y) / 2;
+        this.startPoint.y = centerY - value / 2;
+        this.endPoint.y = centerY + value / 2;
     }
 
     draw() {
@@ -121,7 +170,8 @@ class Line {
         // Store old position for undo
         dragOldPosLine = {
             startPoint: { x: this.startPoint.x, y: this.startPoint.y },
-            endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+            endPoint: { x: this.endPoint.x, y: this.endPoint.y },
+            parentFrame: this.parentFrame
         };
 
         const onPointerMove = (event) => {
@@ -133,7 +183,8 @@ class Line {
             if (dragOldPosLine) {
                 const newPos = {
                     startPoint: { x: this.startPoint.x, y: this.startPoint.y },
-                    endPoint: { x: this.endPoint.x, y: this.endPoint.y }
+                    endPoint: { x: this.endPoint.x, y: this.endPoint.y },
+                    parentFrame: this.parentFrame
                 };
                 console.log(newPos);
                 pushTransformAction(this, dragOldPosLine, newPos);
@@ -165,6 +216,42 @@ class Line {
         this.startPoint.y += dy;
         this.endPoint.x += dx;
         this.endPoint.y += dy;
+        
+        // Only update frame containment if we're actively dragging the shape itself
+        // and not being moved by a parent frame
+        if (isDraggingLine && !this.isBeingMovedByFrame) {
+            this.updateFrameContainment();
+        }
+    }
+
+    updateFrameContainment() {
+        // Don't update if we're being moved by a frame
+        if (this.isBeingMovedByFrame) return;
+        
+        let targetFrame = null;
+        
+        // Find which frame this shape is over
+        shapes.forEach(shape => {
+            if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+                targetFrame = shape;
+            }
+        });
+        
+        // If we have a parent frame and we're being dragged, temporarily remove clipping
+        if (this.parentFrame && isDraggingLine) {
+            this.parentFrame.temporarilyRemoveFromFrame(this);
+        }
+        
+        // Update frame highlighting
+        if (hoveredFrameLine && hoveredFrameLine !== targetFrame) {
+            hoveredFrameLine.removeHighlight();
+        }
+        
+        if (targetFrame && targetFrame !== hoveredFrameLine) {
+            targetFrame.highlightFrame();
+        }
+        
+        hoveredFrameLine = targetFrame;
     }
 
     contains(x, y) {
@@ -247,8 +334,18 @@ const handleMouseDown = (e) => {
                 isDraggingLine = true;
                 dragOldPosLine = {
                     startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                    parentFrame: currentShape.parentFrame
                 };
+                
+                // Store initial frame state
+                draggedShapeInitialFrameLine = currentShape.parentFrame || null;
+                
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = x;
                 startY = y;
                 clickedOnShape = true;
@@ -277,8 +374,18 @@ const handleMouseDown = (e) => {
                 isDraggingLine = true;
                 dragOldPosLine = {
                     startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                    parentFrame: currentShape.parentFrame
                 };
+                
+                // Store initial frame state
+                draggedShapeInitialFrameLine = currentShape.parentFrame || null;
+                
+                // Temporarily remove from frame clipping if dragging
+                if (currentShape.parentFrame) {
+                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
+                }
+                
                 startX = x;
                 startY = y;
                 clickedOnShape = true;
@@ -295,9 +402,29 @@ const handleMouseDown = (e) => {
 const handleMouseMove = (e) => {
     const { x, y } = getSVGCoordsFromMouse(e);
     
+    // Keep lastMousePos in screen coordinates for other functions
+    const svgRect = svg.getBoundingClientRect();
+    lastMousePos = {
+        x: e.clientX - svgRect.left, 
+        y: e.clientY - svgRect.top
+    };
+    
     if (isDrawingLine && currentLine) {
         currentLine.endPoint = { x, y };
         currentLine.draw();
+        
+        // Check for frame containment while drawing (but don't apply clipping yet)
+        shapes.forEach(frame => {
+            if (frame.shapeName === 'frame') {
+                if (frame.isShapeInFrame(currentLine)) {
+                    frame.highlightFrame();
+                    hoveredFrameLine = frame;
+                } else if (hoveredFrameLine === frame) {
+                    frame.removeHighlight();
+                    hoveredFrameLine = null;
+                }
+            }
+        });
     } else if (isDraggingLine && currentShape && currentShape.isSelected) {
         const dx = x - startX;
         const dy = y - startY;
@@ -327,6 +454,20 @@ const handleMouseUp = (e) => {
         } else {
             // Push create action for undo/redo
             pushCreateAction(currentLine);
+            
+            // Check for frame containment and track attachment
+            const finalFrame = hoveredFrameLine;
+            if (finalFrame) {
+                finalFrame.addShapeToFrame(currentLine);
+                // Track the attachment for undo
+                pushFrameAttachmentAction(finalFrame, currentLine, 'attach', null);
+            }
+        }
+        
+        // Clear frame highlighting
+        if (hoveredFrameLine) {
+            hoveredFrameLine.removeHighlight();
+            hoveredFrameLine = null;
         }
         
         currentLine = null;
@@ -335,25 +476,66 @@ const handleMouseUp = (e) => {
     if (isDraggingLine && dragOldPosLine && currentShape) {
         const newPos = {
             startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
+            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+            parentFrame: currentShape.parentFrame
         };
+        const oldPos = {
+            ...dragOldPosLine,
+            parentFrame: draggedShapeInitialFrameLine
+        };
+        
         const stateChanged = dragOldPosLine.startPoint.x !== newPos.startPoint.x || 
                            dragOldPosLine.startPoint.y !== newPos.startPoint.y ||
                            dragOldPosLine.endPoint.x !== newPos.endPoint.x || 
                            dragOldPosLine.endPoint.y !== newPos.endPoint.y;
+
+        const frameChanged = oldPos.parentFrame !== newPos.parentFrame;
         
-        if (stateChanged) {
-            pushTransformAction(currentShape, dragOldPosLine, newPos);
+        if (stateChanged || frameChanged) {
+            pushTransformAction(currentShape, oldPos, newPos);
         }
+        
+        // Handle frame containment changes after drag
+        if (isDraggingLine) {
+            const finalFrame = hoveredFrameLine;
+            
+            // If shape moved to a different frame
+            if (draggedShapeInitialFrameLine !== finalFrame) {
+                // Remove from initial frame
+                if (draggedShapeInitialFrameLine) {
+                    draggedShapeInitialFrameLine.removeShapeFromFrame(currentShape);
+                }
+                
+                // Add to new frame
+                if (finalFrame) {
+                    finalFrame.addShapeToFrame(currentShape);
+                }
+                
+                // Track the frame change for undo
+                if (frameChanged) {
+                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameLine, currentShape, 
+                        finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameLine);
+                }
+            } else if (draggedShapeInitialFrameLine) {
+                // Shape stayed in same frame, restore clipping
+                draggedShapeInitialFrameLine.restoreToFrame(currentShape);
+            }
+        }
+        
         dragOldPosLine = null;
+        draggedShapeInitialFrameLine = null;
+    }
+    
+    // Clear frame highlighting
+    if (hoveredFrameLine) {
+        hoveredFrameLine.removeHighlight();
+        hoveredFrameLine = null;
     }
     
     isDraggingLine = false;
 };
 
 // --- Event Handlers ---
-
-
 
 // --- Style Option Event Listeners ---
 lineColorOptions.forEach((span) => {
@@ -516,9 +698,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// svg.addEventListener("mousedown", handleMouseDown);
-// svg.addEventListener("mousemove", handleMouseMove);
-// svg.addEventListener("mouseup", handleMouseUp);
 export {
     handleMouseDown as handleMouseDownLine,
     handleMouseMove as handleMouseMoveLine,

@@ -1,5 +1,6 @@
-import { pushCreateAction, pushDeleteAction, pushTransformAction } from './undoAndRedo.js';
-import { updateAttachedArrows } from './drawArrow.js';
+import { pushCreateAction, pushDeleteAction, pushTransformAction, pushFrameAttachmentAction } from './undoAndRedo.js';
+import { updateAttachedArrows, cleanupAttachments } from './drawArrow.js';
+
 let isDraggingImage = false;
 let imageToPlace = null;
 let imageX = 0;
@@ -18,6 +19,178 @@ let startImageRotation = null;
 let imageRotation = 0;
 let aspect_ratio_lock = true;
 const minImageSize = 20; 
+
+// Frame attachment variables
+let draggedShapeInitialFrameImage = null;
+let hoveredFrameImage = null;
+
+// Image class to make it consistent with other shapes
+class ImageShape {
+    constructor(element) {
+        this.element = element;
+        this.shapeName = 'image';
+        this.shapeID = element.shapeID || `image-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
+        
+        // Frame attachment properties
+        this.parentFrame = null;
+        
+        // Update element attributes
+        this.element.setAttribute('type', 'image');
+        this.element.shapeID = this.shapeID;
+        
+        // Create a group wrapper for the image to work with frames properly
+        this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.group.setAttribute('id', this.shapeID);
+        
+        // Move the image element into the group
+        if (this.element.parentNode) {
+            this.element.parentNode.removeChild(this.element);
+        }
+        this.group.appendChild(this.element);
+        svg.appendChild(this.group);
+    }
+    
+    // Position and dimension properties for frame compatibility
+    get x() {
+        return parseFloat(this.element.getAttribute('x'));
+    }
+    
+    set x(value) {
+        this.element.setAttribute('x', value);
+        this.element.setAttribute('data-shape-x', value);
+    }
+    
+    get y() {
+        return parseFloat(this.element.getAttribute('y'));
+    }
+    
+    set y(value) {
+        this.element.setAttribute('y', value);
+        this.element.setAttribute('data-shape-y', value);
+    }
+    
+    get width() {
+        return parseFloat(this.element.getAttribute('width'));
+    }
+    
+    set width(value) {
+        this.element.setAttribute('width', value);
+        this.element.setAttribute('data-shape-width', value);
+    }
+    
+    get height() {
+        return parseFloat(this.element.getAttribute('height'));
+    }
+    
+    set height(value) {
+        this.element.setAttribute('height', value);
+        this.element.setAttribute('data-shape-height', value);
+    }
+    
+    get rotation() {
+        const transform = this.element.getAttribute('transform');
+        if (transform) {
+            const rotateMatch = transform.match(/rotate\(([^,]+)/);
+            if (rotateMatch) {
+                return parseFloat(rotateMatch[1]);
+            }
+        }
+        return 0;
+    }
+    
+    set rotation(value) {
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        this.element.setAttribute('transform', `rotate(${value}, ${centerX}, ${centerY})`);
+        this.element.setAttribute('data-shape-rotation', value);
+    }
+
+    move(dx, dy) {
+        this.x += dx;
+        this.y += dy;
+        
+        // Update transform for rotation
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        this.element.setAttribute('transform', `rotate(${this.rotation}, ${centerX}, ${centerY})`);
+        
+        // Only update frame containment if we're actively dragging the shape itself
+        // and not being moved by a parent frame
+        if (isDragging && !this.isBeingMovedByFrame) {
+            this.updateFrameContainment();
+        }
+        
+        // Update attached arrows
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(this.element);
+        }
+    }
+
+    updateFrameContainment() {
+        // Don't update if we're being moved by a frame
+        if (this.isBeingMovedByFrame) return;
+        
+        let targetFrame = null;
+        
+        // Find which frame this shape is over
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            shapes.forEach(shape => {
+                if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+                    targetFrame = shape;
+                }
+            });
+        }
+        
+        // If we have a parent frame and we're being dragged, temporarily remove clipping
+        if (this.parentFrame && isDragging) {
+            this.parentFrame.temporarilyRemoveFromFrame(this);
+        }
+        
+        // Update frame highlighting
+        if (hoveredFrameImage && hoveredFrameImage !== targetFrame) {
+            hoveredFrameImage.removeHighlight();
+        }
+        
+        if (targetFrame && targetFrame !== hoveredFrameImage) {
+            targetFrame.highlightFrame();
+        }
+        
+        hoveredFrameImage = targetFrame;
+    }
+
+    contains(x, y) {
+        const imgX = this.x;
+        const imgY = this.y;
+        const imgWidth = this.width;
+        const imgHeight = this.height;
+        
+        // Simple bounding box check (could be enhanced for rotation)
+        return x >= imgX && x <= imgX + imgWidth && y >= imgY && y <= imgY + imgHeight;
+    }
+
+    // Add draw method for consistency with other shapes
+    draw() {
+        // Images don't need redrawing like other shapes, but we need this method for consistency
+        // Update any visual state if needed
+    }
+
+    // Add methods for frame compatibility
+    removeSelection() {
+        // Remove any selection UI if needed
+        removeSelectionOutline();
+    }
+
+    selectShape() {
+        // Select the image
+        selectImage({ target: this.element, stopPropagation: () => {} });
+    }
+}
+
+// Convert SVG element to our ImageShape class
+function wrapImageElement(element) {
+    const imageShape = new ImageShape(element);
+    return imageShape;
+}
 
 document.getElementById("importImage").addEventListener('click', () => {
     console.log('Import image clicked');
@@ -62,16 +235,50 @@ const handleImageUpload = (file) => {
     reader.readAsDataURL(file);
 };
 
+// Add coordinate conversion function like in other tools
+function getSVGCoordsFromMouse(e) {
+    const viewBox = svg.viewBox.baseVal;
+    const rect = svg.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const svgX = viewBox.x + (mouseX / rect.width) * viewBox.width;
+    const svgY = viewBox.y + (mouseY / rect.height) * viewBox.height;
+    return { x: svgX, y: svgY };
+}
+
 // Event handler for mousemove on the SVG
 const handleMouseMoveImage = (e) => {
     if (!isDraggingImage || !imageToPlace || !isImageToolActive) return; // Also check isImageToolActive
 
     // Get mouse coordinates relative to the SVG element
-    const rect = svg.getBoundingClientRect();
-    imageX = e.clientX - rect.left;
-    imageY = e.clientY - rect.top;
+    const { x, y } = getSVGCoordsFromMouse(e);
+    imageX = x;
+    imageY = y;
 
     drawMiniatureImage();
+    
+    // Check for frame containment while placing image (but don't apply clipping yet)
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        shapes.forEach(frame => {
+            if (frame.shapeName === 'frame') {
+                // Create temporary image bounds for frame checking
+                const tempImageBounds = {
+                    x: imageX - 50, // Half of miniature width
+                    y: imageY - 50, // Approximate half height
+                    width: 100,
+                    height: 100
+                };
+                
+                if (frame.isShapeInFrame(tempImageBounds)) {
+                    frame.highlightFrame();
+                    hoveredFrameImage = frame;
+                } else if (hoveredFrameImage === frame) {
+                    frame.removeHighlight();
+                    hoveredFrameImage = null;
+                }
+            }
+        });
+    }
 };
 
 const drawMiniatureImage = () => {
@@ -118,6 +325,7 @@ function getImageAspectRatio(dataUrl) {
     });
 }
 
+// Update the handleMouseDownImage function to create proper group structure
 const handleMouseDownImage = async (e) => {
     if (!isDraggingImage || !imageToPlace || !isImageToolActive) {
         // Handle image selection if selection tool is active
@@ -145,10 +353,8 @@ const handleMouseDownImage = async (e) => {
         const placedImageWidth = 200; // Adjust as needed
         const placedImageHeight = placedImageWidth * aspectRatio;
 
-        //Get mouse coordinates relative to the SVG element
-        const rect = svg.getBoundingClientRect();
-        let placedX = e.clientX - rect.left;
-        let placedY = e.clientY - rect.top;
+        // Get SVG coordinates
+        const { x: placedX, y: placedY } = getSVGCoordsFromMouse(e);
 
         // Create a new SVG image element for the final image
         const finalImage = document.createElementNS("http://www.w3.org/2000/svg", "image");
@@ -175,27 +381,39 @@ const handleMouseDownImage = async (e) => {
         finalImage.setAttribute('data-shape-rotation', 0);
         finalImage.shapeID = `image-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
 
-        svg.appendChild(finalImage);
+        // Don't add to SVG directly - let ImageShape wrapper handle it
+        // svg.appendChild(finalImage);
 
-        // Add to shapes array for arrow attachment - check if shapes exists
+        // Create ImageShape wrapper for frame functionality
+        const imageShape = wrapImageElement(finalImage);
+
+        // Add to shapes array for arrow attachment and frame functionality
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-            shapes.push(finalImage);
-            console.log('Image added to shapes array for arrow attachment');
+            shapes.push(imageShape);
+            console.log('Image added to shapes array for arrow attachment and frame functionality');
         } else {
-            console.warn('shapes array not found - arrows may not attach to images');
+            console.warn('shapes array not found - arrows and frames may not work with images');
+        }
+
+        // Check for frame containment and track attachment
+        const finalFrame = hoveredFrameImage;
+        if (finalFrame) {
+            finalFrame.addShapeToFrame(imageShape);
+            // Track the attachment for undo
+            pushFrameAttachmentAction(finalFrame, imageShape, 'attach', null);
         }
 
         // Add to undo stack for image creation
         pushCreateAction({
             type: 'image',
-            element: finalImage,
+            element: imageShape,
             remove: () => {
-                if (finalImage.parentNode) {
-                    finalImage.parentNode.removeChild(finalImage);
+                if (imageShape.group && imageShape.group.parentNode) {
+                    imageShape.group.parentNode.removeChild(imageShape.group);
                 }
                 // Remove from shapes array
                 if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-                    const idx = shapes.indexOf(finalImage);
+                    const idx = shapes.indexOf(imageShape);
                     if (idx !== -1) shapes.splice(idx, 1);
                 }
                 // Clean up arrow attachments when image is removed
@@ -204,11 +422,11 @@ const handleMouseDownImage = async (e) => {
                 }
             },
             restore: () => {
-                svg.appendChild(finalImage);
+                svg.appendChild(imageShape.group);
                 // Add back to shapes array
                 if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-                    if (shapes.indexOf(finalImage) === -1) {
-                        shapes.push(finalImage);
+                    if (shapes.indexOf(imageShape) === -1) {
+                        shapes.push(imageShape);
                     }
                 }
             }
@@ -217,19 +435,23 @@ const handleMouseDownImage = async (e) => {
         // Add click event to the newly added image
         finalImage.addEventListener('click', selectImage);
 
+        // Clear frame highlighting
+        if (hoveredFrameImage) {
+            hoveredFrameImage.removeHighlight();
+            hoveredFrameImage = null;
+        }
+
     } catch (error) {
         console.error("Error placing image:", error);
         isDraggingImage = false;
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.
     } finally {
-
         isDraggingImage = false;
         imageToPlace = null;
         isImageToolActive = false; // Important: Reset the tool state.
     }
 };
-
 
 const handleMouseUpImage = (e) => {
     // Handle image deselection when clicking outside
@@ -246,6 +468,12 @@ const handleMouseUpImage = (e) => {
             removeSelectionOutline();
             selectedImage = null;
         }
+    }
+    
+    // Clear frame highlighting if placing image
+    if (hoveredFrameImage) {
+        hoveredFrameImage.removeHighlight();
+        hoveredFrameImage = null;
     }
 };
 
@@ -330,7 +558,6 @@ function addSelectionOutline() {
     // Add rotation anchor
     addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY);
 }
-
 
 function removeSelectionOutline() {
     // Remove the selection outline
@@ -486,13 +713,10 @@ function stopResize(event) {
     document.removeEventListener('mouseup', stopResize); // Remove the global mouseup listener
 }
 
-
 function resizeImage(event) {
     if (!selectedImage || !currentAnchor) return;
 
-    const rect = svg.getBoundingClientRect();
-    const globalX = event.clientX - rect.left;
-    const globalY = event.clientY - rect.top;
+    const { x: globalX, y: globalY } = getSVGCoordsFromMouse(event);
 
     // Get the current image center for rotation calculations
     const imgX = parseFloat(selectedImage.getAttribute('x'));
@@ -604,8 +828,8 @@ function resizeImage(event) {
     removeSelectionOutline();
     addSelectionOutline();
 }
+
 function stopRotation(event) {
-    
     if (!isRotatingImage) return;
     stopInteracting();
     isRotatingImage = false;
@@ -614,7 +838,6 @@ function stopRotation(event) {
     svg.removeEventListener('mousemove', rotateImage);
     document.removeEventListener('mouseup', stopRotation);
     svg.style.cursor = 'default';
-    
 }
 
 function startDrag(event) {
@@ -640,9 +863,25 @@ function startDrag(event) {
         }
     }
 
-    const rect = svg.getBoundingClientRect();
-    dragOffsetX = event.clientX - rect.left - parseFloat(selectedImage.getAttribute('x'));
-    dragOffsetY = event.clientY - rect.top - parseFloat(selectedImage.getAttribute('y'));
+    // Find the ImageShape wrapper for frame functionality
+    let imageShape = null;
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        imageShape = shapes.find(shape => shape.shapeName === 'image' && shape.element === selectedImage);
+    }
+
+    if (imageShape) {
+        // Store initial frame state
+        draggedShapeInitialFrameImage = imageShape.parentFrame || null;
+        
+        // Temporarily remove from frame clipping if dragging
+        if (imageShape.parentFrame) {
+            imageShape.parentFrame.temporarilyRemoveFromFrame(imageShape);
+        }
+    }
+
+    const { x, y } = getSVGCoordsFromMouse(event);
+    dragOffsetX = x - parseFloat(selectedImage.getAttribute('x'));
+    dragOffsetY = y - parseFloat(selectedImage.getAttribute('y'));
 
     svg.addEventListener('mousemove', dragImage);
     document.addEventListener('mouseup', stopDrag);
@@ -651,21 +890,29 @@ function startDrag(event) {
 function dragImage(event) {
     if (!isDragging || !selectedImage) return;
 
-    const rect = svg.getBoundingClientRect();
-    let x = event.clientX - rect.left - dragOffsetX;
-    let y = event.clientY - rect.top - dragOffsetY;
+    const { x, y } = getSVGCoordsFromMouse(event);
+    let newX = x - dragOffsetX;
+    let newY = y - dragOffsetY;
 
-    selectedImage.setAttribute('x', x);
-    selectedImage.setAttribute('y', y);
+    selectedImage.setAttribute('x', newX);
+    selectedImage.setAttribute('y', newY);
 
     // Update data attributes for arrow attachment
-    selectedImage.setAttribute('data-shape-x', x);
-    selectedImage.setAttribute('data-shape-y', y);
+    selectedImage.setAttribute('data-shape-x', newX);
+    selectedImage.setAttribute('data-shape-y', newY);
 
     // Reapply the rotation transform with the new position
-    const newCenterX = x + parseFloat(selectedImage.getAttribute('width')) / 2;
-    const newCenterY = y + parseFloat(selectedImage.getAttribute('height')) / 2;
+    const newCenterX = newX + parseFloat(selectedImage.getAttribute('width')) / 2;
+    const newCenterY = newY + parseFloat(selectedImage.getAttribute('height')) / 2;
     selectedImage.setAttribute('transform', `rotate(${imageRotation}, ${newCenterX}, ${newCenterY})`);
+
+    // Update frame containment for ImageShape wrapper
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        const imageShape = shapes.find(shape => shape.shapeName === 'image' && shape.element === selectedImage);
+        if (imageShape) {
+            imageShape.updateFrameContainment();
+        }
+    }
 
     // Update attached arrows during drag
     if (typeof updateAttachedArrows === 'function') {
@@ -681,8 +928,6 @@ function stopDrag(event) {
     stopInteracting(); // Call the combined stop function
     document.removeEventListener('mouseup', stopDrag); // Remove the global mouseup listener
 }
-
-
 
 function startRotation(event) {
     event.preventDefault();
@@ -702,9 +947,7 @@ function startRotation(event) {
     const centerY = imgY + imgHeight / 2;
 
     // Calculate initial mouse angle relative to image center
-    const rect = svg.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(event);
     
     startRotationMouseAngle = Math.atan2(mouseY - centerY, mouseX - centerX) * 180 / Math.PI;
     startImageRotation = imageRotation;
@@ -728,9 +971,7 @@ function rotateImage(event) {
     const centerY = imgY + imgHeight / 2;
 
     // Calculate current mouse angle
-    const rect = svg.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(event);
     
     const currentMouseAngle = Math.atan2(mouseY - centerY, mouseX - centerX) * 180 / Math.PI;
     const angleDiff = currentMouseAngle - startRotationMouseAngle;
@@ -779,13 +1020,30 @@ function stopInteracting() {
             height: originalHeight,
             rotation: originalRotation
         };
-        console.log(oldPos, newPos);
-        console.log(oldPos.x, newPos.x)
+
+        // Find the ImageShape wrapper for frame tracking
+        let imageShape = null;
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            imageShape = shapes.find(shape => shape.shapeName === 'image' && shape.element === selectedImage);
+        }
+
+        // Add frame information for undo tracking
+        const oldPosWithFrame = {
+            ...oldPos,
+            parentFrame: draggedShapeInitialFrameImage
+        };
+        const newPosWithFrame = {
+            ...newPos,
+            parentFrame: imageShape ? imageShape.parentFrame : null
+        };
+
         // Only push transform action if something actually changed
-        if (newPos.x !== oldPos.x || newPos.y !== oldPos.y || 
-            newPos.width !== oldPos.width || newPos.height !== oldPos.height ||
-            newPos.rotation !== oldPos.rotation) {
-            
+        const stateChanged = newPos.x !== oldPos.x || newPos.y !== oldPos.y || 
+                           newPos.width !== oldPos.width || newPos.height !== oldPos.height ||
+                           newPos.rotation !== oldPos.rotation;
+        const frameChanged = oldPosWithFrame.parentFrame !== newPosWithFrame.parentFrame;
+
+        if (stateChanged || frameChanged) {
             pushTransformAction({
                 type: 'image',
                 element: selectedImage,
@@ -816,12 +1074,44 @@ function stopInteracting() {
                     if (typeof updateAttachedArrows === 'function') {
                         updateAttachedArrows(selectedImage);
                     }
-                    
-                    console.log("Pushed the transform")
                 }
-            }, oldPos, newPos);
-            
+            }, oldPosWithFrame, newPosWithFrame);
         }
+
+        // Handle frame containment changes after drag
+        if (isDragging && imageShape) {
+            const finalFrame = hoveredFrameImage;
+            
+            // If shape moved to a different frame
+            if (draggedShapeInitialFrameImage !== finalFrame) {
+                // Remove from initial frame
+                if (draggedShapeInitialFrameImage) {
+                    draggedShapeInitialFrameImage.removeShapeFromFrame(imageShape);
+                }
+                
+                // Add to new frame
+                if (finalFrame) {
+                    finalFrame.addShapeToFrame(imageShape);
+                }
+                
+                // Track the frame change for undo
+                if (frameChanged) {
+                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameImage, imageShape, 
+                        finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameImage);
+                }
+            } else if (draggedShapeInitialFrameImage) {
+                // Shape stayed in same frame, restore clipping
+                draggedShapeInitialFrameImage.restoreToFrame(imageShape);
+            }
+        }
+        
+        draggedShapeInitialFrameImage = null;
+    }
+
+    // Clear frame highlighting
+    if (hoveredFrameImage) {
+        hoveredFrameImage.removeHighlight();
+        hoveredFrameImage = null;
     }
 
     isDragging = false;
@@ -863,5 +1153,49 @@ function stopInteracting() {
     }
 }
 
+// Add delete functionality for images
+function deleteCurrentImage() {
+    if (selectedImage) {
+        // Find the ImageShape wrapper
+        let imageShape = null;
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            imageShape = shapes.find(shape => shape.shapeName === 'image' && shape.element === selectedImage);
+            if (imageShape) {
+                const idx = shapes.indexOf(imageShape);
+                if (idx !== -1) shapes.splice(idx, 1);
+                
+                // Remove the group (which contains the image)
+                if (imageShape.group && imageShape.group.parentNode) {
+                    imageShape.group.parentNode.removeChild(imageShape.group);
+                }
+            }
+        }
+        
+        // Fallback: if no ImageShape wrapper found, remove the image directly
+        if (!imageShape && selectedImage.parentNode) {
+            selectedImage.parentNode.removeChild(selectedImage);
+        }
+        
+        // Clean up any arrow attachments before deleting
+        if (typeof cleanupAttachments === 'function') {
+            cleanupAttachments(selectedImage);
+        }
+        
+        // Push delete action for undo
+        if (imageShape) {
+            pushDeleteAction(imageShape);
+        }
+        
+        // Clean up selection
+        removeSelectionOutline();
+        selectedImage = null;
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && selectedImage) {
+        deleteCurrentImage();
+    }
+});
 
 export { handleMouseDownImage, handleMouseMoveImage, handleMouseUpImage };
