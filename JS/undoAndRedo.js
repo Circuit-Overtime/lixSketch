@@ -79,6 +79,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
             }
         });
     } else if (shape.shapeName === 'circle') {
+        // Enhanced circle handling - also update attached arrows
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -95,7 +96,18 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 rx: newPos.rx,
                 ry: newPos.ry,
                 rotation: newPos.rotation
-            }
+            },
+            // Store affected arrows with their attachment states
+            affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
+                (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+                .map(arrow => ({
+                    arrow: arrow,
+                    oldAttachments: arrow.getAttachmentState(),
+                    oldPoints: {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    }
+                }))
         });
     } else if (shape.shapeName === 'line') {
         undoStack.push({
@@ -254,7 +266,7 @@ export function undo() {
             // Handle image transform undo
             action.shape.restore(action.oldPos);
         } else if (action.shape.shapeName === 'circle') {
-            // Handle circle transform undo
+            // Enhanced circle transform undo
             action.shape.x = action.oldPos.x;
             action.shape.y = action.oldPos.y;
             action.shape.rx = action.oldPos.rx;
@@ -263,6 +275,22 @@ export function undo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+
+            // Update attached arrows after circle undo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to old state
+                    arrow.restoreAttachmentState(arrowData.oldAttachments);
+                    
+                    // Store current state for redo
+                    arrowData.newPoints = {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    };
+                    arrowData.newAttachments = arrow.getAttachmentState();
+                });
+            }
         } else if (action.shape.shapeName === 'line') {
             // Handle line transform undo
             action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
@@ -429,7 +457,7 @@ export function redo() {
             // Handle image transform redo
             action.shape.restore(action.newPos);
         } else if (action.shape.shapeName === 'circle') {
-            // Handle circle transform redo
+            // Enhanced circle transform redo
             action.shape.x = action.newPos.x;
             action.shape.y = action.newPos.y;
             action.shape.rx = action.newPos.rx;
@@ -438,6 +466,20 @@ export function redo() {
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
+
+            // Update attached arrows after circle redo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to new state
+                    if (arrowData.newAttachments) {
+                        arrow.restoreAttachmentState(arrowData.newAttachments);
+                    } else {
+                        // If no new attachments stored, recalculate based on current circle position
+                        arrow.updateAttachments();
+                    }
+                });
+            }
         } else if (action.shape.shapeName === 'line') {
             // Handle line transform redo
             action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };

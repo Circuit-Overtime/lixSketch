@@ -270,7 +270,7 @@ class Arrow {
             anchor.setAttribute("r", anchorSize); 
             
             if (this.arrowCurved && index >= 2) {
-                anchor.setAttribute("fill", "#FF6B6B");
+                anchor.setAttribute("fill", "#121212");
                 anchor.setAttribute("stroke", "#5B57D1");
             } else {
                 anchor.setAttribute("fill", "#121212");
@@ -450,18 +450,17 @@ class Arrow {
         const dy = point.y - circle.y;
         const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
         
-        // Check if point is near the circle perimeter
         const averageRadius = (circle.rx + circle.ry) / 2;
         const distanceToPerimeter = Math.abs(distanceToCenter - averageRadius);
         
         if (distanceToPerimeter <= tolerance) {
-            // Find the closest point on the ellipse perimeter
+
             const angle = Math.atan2(dy, dx);
             
-            // For ellipse, we need to find the actual intersection point
+
             const attachPoint = this.getEllipsePerimeterPoint(circle, angle);
             
-            // Calculate offset as angle and radius ratio for easier updating
+
             const offset = {
                 angle: angle,
                 radiusRatioX: (attachPoint.x - circle.x) / circle.rx,
@@ -479,11 +478,9 @@ class Arrow {
     }
 
     static getEllipsePerimeterPoint(circle, angle) {
-        // Calculate point on ellipse perimeter at given angle
         const cosAngle = Math.cos(angle);
         const sinAngle = Math.sin(angle);
         
-        // Parametric equation for ellipse point
         const x = circle.x + circle.rx * cosAngle;
         const y = circle.y + circle.ry * sinAngle;
         
@@ -651,7 +648,7 @@ class Arrow {
                     // Snap to attachment point
                     this.updatePosition(index, nearbyShape.attachment.point.x, nearbyShape.attachment.point.y);
                 } else {
-                    // Remove preview if no nearby shape
+                    
                     const existingPreview = svg.querySelector('.attachment-preview');
                     if (existingPreview) existingPreview.remove();
                     
@@ -663,16 +660,15 @@ class Arrow {
         };
         
         const onPointerUp = () => {
-            // Remove any attachment preview
+            
             const existingPreview = svg.querySelector('.attachment-preview');
             if (existingPreview) existingPreview.remove();
             
-            // Check for attachments when releasing start or end anchors
             if (index === 0) {
                 // Check for start point attachment
                 const startAttachment = Arrow.findNearbyShape(this.startPoint);
                 if (startAttachment) {
-                    // Detach if previously attached to different shape
+                    
                     if (this.attachedToStart && this.attachedToStart.shape !== startAttachment.shape) {
                         this.detachFromShape(true);
                     }
@@ -885,7 +881,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Updated mouse event handlers with better selection detection
+
 const handleMouseDown = (e) => {
     if (!isArrowToolActive && !isSelectionToolActive) return;
 
@@ -1063,7 +1059,7 @@ const handleMouseUp = (e) => {
             currentArrow = null;
             currentShape = null;
         } else {
-            // Check for potential attachments at start and end points
+            
             const startAttachment = Arrow.findNearbyShape(currentArrow.startPoint);
             const endAttachment = Arrow.findNearbyShape(currentArrow.endPoint);
 
