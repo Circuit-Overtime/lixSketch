@@ -115,8 +115,8 @@ const handleMainMouseMove = (e) => {
         handleMouseMoveFrame(e);
     }
     else if (isSelectionToolActive) {
-        // Handle multi-selection first when selection tool is active
-        if (isMultiSelecting || multiSelection.isDragging) {
+        // Handle multi-selection operations first - these take priority
+        if (isMultiSelecting || multiSelection.isDragging || multiSelection.isResizing || multiSelection.isRotating) {
             if (handleMultiSelectionMouseMove(e)) {
                 return; // Multi-selection handled the event
             }
@@ -185,8 +185,8 @@ const handleMainMouseUp = (e) => {
         handleMouseUpFrame(e);
     }
     else if (isSelectionToolActive) {
-        // Handle multi-selection first when selection tool is active
-        if (isMultiSelecting || multiSelection.isDragging) {
+        // Handle multi-selection operations first - these take priority
+        if (isMultiSelecting || multiSelection.isDragging || multiSelection.isResizing || multiSelection.isRotating) {
             if (handleMultiSelectionMouseUp(e)) {
                 return; // Multi-selection handled the event
             }
@@ -215,6 +215,7 @@ const handleMainMouseUp = (e) => {
             handleMouseUpFrame(e);
         }
         else {
+            handleMultiSelectionMouseUp(e);
             handleMouseUpRect(e);
             handleMouseUpArrow(e);
             handleMouseUpCircle(e);

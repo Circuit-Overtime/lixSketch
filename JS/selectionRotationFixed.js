@@ -1,10 +1,10 @@
-let multiSelectionStart = { x: 0, y: 0 };
+// Multi-selection variables
 let isMultiSelecting = false;
+let multiSelectionStart = { x: 0, y: 0 };
 let multiSelectionRect = null;
 let isDraggingMultiSelection = false;
 
 function getSVGCoordsFromMouse(e) {
-    // Use the SVG's current viewBox to map mouse to SVG coordinates
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -13,7 +13,6 @@ function getSVGCoordsFromMouse(e) {
     const svgY = viewBox.y + (mouseY / rect.height) * viewBox.height;
     return { x: svgX, y: svgY };
 }
-
 
 function createMultiSelectionRect(startX, startY) {
     multiSelectionRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -29,7 +28,6 @@ function createMultiSelectionRect(startX, startY) {
     svg.appendChild(multiSelectionRect);
 }
 
-// Update multi-selection rectangle
 function updateMultiSelectionRect(currentX, currentY) {
     if (!multiSelectionRect) return;
     
@@ -44,7 +42,6 @@ function updateMultiSelectionRect(currentX, currentY) {
     multiSelectionRect.setAttribute('height', height);
 }
 
-// Remove multi-selection rectangle
 function removeMultiSelectionRect() {
     if (multiSelectionRect && multiSelectionRect.parentNode) {
         multiSelectionRect.parentNode.removeChild(multiSelectionRect);
@@ -55,7 +52,6 @@ function removeMultiSelectionRect() {
 function isShapeInSelectionRect(shape, selectionBounds) {
     let shapeBounds;
     
-    // Handle different shape types
     switch (shape.shapeName) {
         case 'rectangle':
             shapeBounds = {
@@ -78,7 +74,7 @@ function isShapeInSelectionRect(shape, selectionBounds) {
                 x: Math.min(shape.startPoint.x, shape.endPoint.x),
                 y: Math.min(shape.startPoint.y, shape.endPoint.y),
                 width: Math.abs(shape.endPoint.x - shape.startPoint.x),
-                height: Math.abs(shape.endPoint.y - shape.startPoint.y)
+                height: Math.abs(shape.endPoint.y - shape.endPoint.y)
             };
             break;
         case 'arrow':
@@ -138,7 +134,6 @@ function isShapeInSelectionRect(shape, selectionBounds) {
             };
             break;
         default:
-            // Fallback for unknown shape types
             shapeBounds = {
                 x: shape.x || 0,
                 y: shape.y || 0,
@@ -147,7 +142,6 @@ function isShapeInSelectionRect(shape, selectionBounds) {
             };
     }
     
-    // Check intersection
     return !(selectionBounds.x > shapeBounds.x + shapeBounds.width ||
              selectionBounds.x + selectionBounds.width < shapeBounds.x ||
              selectionBounds.y > shapeBounds.y + shapeBounds.height ||
@@ -157,17 +151,15 @@ function isShapeInSelectionRect(shape, selectionBounds) {
 class MultiSelection {
     constructor() {
         this.selectedShapes = new Set();
-        this.group = null;
-        this.tempGroup = null; // Add tempGroup for transformations
+        this.tempGroup = null;
         this.anchors = [];
         this.outline = null;
         this.rotationAnchor = null;
         this.rotationLine = null;
         this.selectionPadding = 12;
         this.bounds = null;
-        this.initialPositions = new Map();
+        this.initialShapesData = new Map();
         
-        // Interaction states
         this.isDragging = false;
         this.isResizing = false;
         this.isRotating = false;
@@ -175,23 +167,31 @@ class MultiSelection {
         this.dragStart = { x: 0, y: 0 };
         this.rotationCenter = { x: 0, y: 0 };
         this.startRotationMouseAngle = 0;
-        this.initialRotation = 0;
-        this.initialTempGroupTransform = null; // Add for temp group transform tracking
     }
 
     addShape(shape) {
-        this.selectedShapes.add(shape);
-        shape.isSelected = true;
-        this.updateControls();
+        if (!this.selectedShapes.has(shape)) {
+            this.selectedShapes.add(shape);
+            shape.isSelected = true;
+            if (typeof shape.removeSelection === 'function') {
+                shape.removeSelection();
+            }
+            this.updateControls();
+        }
     }
 
     removeShape(shape) {
-        this.selectedShapes.delete(shape);
-        shape.isSelected = false;
-        if (this.selectedShapes.size === 0) {
-            this.clearSelection();
-        } else {
-            this.updateControls();
+        if (this.selectedShapes.has(shape)) {
+            this.selectedShapes.delete(shape);
+            shape.isSelected = false;
+            if (typeof shape.removeSelection === 'function') {
+                shape.removeSelection();
+            }
+            if (this.selectedShapes.size === 0) {
+                this.clearSelection();
+            } else {
+                this.updateControls();
+            }
         }
     }
 
@@ -204,7 +204,7 @@ class MultiSelection {
         });
         this.selectedShapes.clear();
         this.removeControls();
-        this.removeTempGroup(); // Add temp group removal
+        this.removeTempGroup();
         if (typeof currentShape !== 'undefined') {
             currentShape = null;
         }
@@ -325,14 +325,14 @@ class MultiSelection {
 
     updateControls() {
         this.removeControls();
-        this.removeTempGroup(); // Remove existing temp group
+        this.removeTempGroup();
 
         if (this.selectedShapes.size === 0) return;
 
         this.bounds = this.getBounds();
         if (!this.bounds) return;
 
-        this.createTempGroup(); // Create temp group
+        this.createTempGroup();
         this.createControls();
     }
 
@@ -343,7 +343,7 @@ class MultiSelection {
             this.tempGroup.setAttribute('transform', `translate(0,0) rotate(0,${this.bounds.x + this.bounds.width/2},${this.bounds.y + this.bounds.height/2})`);
             svg.appendChild(this.tempGroup);
         }
-        isMultiSelecting = true;
+
         // Append actual SVG elements of selected shapes to the temp group
         this.selectedShapes.forEach(shape => {
             let elementToAppend = null;
@@ -382,7 +382,6 @@ class MultiSelection {
                 }
             });
             this.tempGroup.parentNode.removeChild(this.tempGroup);
-            isMultiSelecting = false;
         }
         this.tempGroup = null;
     }
@@ -475,7 +474,6 @@ class MultiSelection {
 
         this.rotationAnchor.addEventListener('mousedown', (e) => this.startRotation(e));
 
-        // Rotation line
         this.rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         this.rotationLine.setAttribute('x1', rotationAnchorPos.x);
         this.rotationLine.setAttribute('y1', rotationAnchorPos.y);
@@ -510,38 +508,44 @@ class MultiSelection {
     }
 
     move(dx, dy) {
-        this.selectedShapes.forEach(shape => {
-            switch (shape.shapeName) {
-                case 'rectangle':
-                case 'circle':
-                case 'freehandStroke':
-                case 'frame':
-                    if (typeof shape.move === 'function') {
-                        shape.move(dx, dy);
-                        shape.draw();
-                    }
-                    break;
-                case 'line':
-                case 'arrow':
-                    if (typeof shape.move === 'function') {
-                        shape.move(dx, dy);
-                        shape.draw();
-                    }
-                    break;
-                case 'text':
-                case 'image':
-                    if (typeof shape.move === 'function') {
-                        shape.move(dx, dy);
-                    }
-                    break;
+        if (this.tempGroup) {
+            let transform = this.tempGroup.transform.baseVal.consolidate();
+            if (!transform) {
+                transform = svg.createSVGTransform();
+                this.tempGroup.transform.baseVal.appendItem(transform);
             }
-
-            if (typeof shape.updateAttachedArrows === 'function') {
-                shape.updateAttachedArrows();
-            }
-        });
-
-        this.updateControls();
+            transform.setTranslate(transform.matrix.e + dx, transform.matrix.f + dy);
+            
+            // Manually update shape positions to reflect the move for controls
+            this.selectedShapes.forEach(shape => {
+                switch (shape.shapeName) {
+                    case 'rectangle':
+                    case 'circle':
+                    case 'freehandStroke':
+                    case 'frame':
+                    case 'text':
+                    case 'image':
+                        shape.x += dx;
+                        shape.y += dy;
+                        break;
+                    case 'line':
+                    case 'arrow':
+                        shape.startPoint.x += dx;
+                        shape.startPoint.y += dy;
+                        shape.endPoint.x += dx;
+                        shape.endPoint.y += dy;
+                        if (shape.controlPoint) {
+                            shape.controlPoint.x += dx;
+                            shape.controlPoint.y += dy;
+                        }
+                        break;
+                }
+                if (typeof shape.updateAttachedArrows === 'function') {
+                    shape.updateAttachedArrows();
+                }
+            });
+            this.updateControls();
+        }
     }
 
     startRotation(e) {
@@ -617,15 +621,187 @@ class MultiSelection {
         transform.setMatrix(newMatrix);
     }
 
+    startResize(e, anchorIndex) {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        this.isResizing = true;
+        this.resizingAnchorIndex = anchorIndex;
+        
+        // Store initial bounds and transform of the temp group
+        this.initialBounds = { ...this.bounds };
+        const currentTransform = this.tempGroup.transform.baseVal.consolidate();
+        this.initialTempGroupTransform = currentTransform ? currentTransform.matrix : svg.createSVGMatrix();
+
+        if (typeof svg !== 'undefined') {
+            svg.addEventListener('mousemove', this.handleResizeWrapper);
+            svg.addEventListener('mouseup', this.endResizeWrapper);
+        }
+    }
+
+    handleResizeWrapper = (e) => {
+        if (this.isResizing) {
+            this.handleResize(e);
+        }
+    }
+
+    endResizeWrapper = () => {
+        if (this.isResizing) {
+            this.isResizing = false;
+            this.resizingAnchorIndex = null;
+            this.initialBounds = null;
+            this.initialTempGroupTransform = null;
+            if (typeof svg !== 'undefined') {
+                svg.removeEventListener('mousemove', this.handleResizeWrapper);
+                svg.removeEventListener('mouseup', this.endResizeWrapper);
+                svg.style.cursor = 'default';
+            }
+            this.applyTempGroupTransformToShapes();
+            this.updateControls(); // Re-render controls after applying transforms
+        }
+    }
+
+    handleResize(e) {
+        if (!this.tempGroup || !this.initialBounds) return;
+
+        const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
+        
+        let newX = this.initialBounds.x;
+        let newY = this.initialBounds.y;
+        let newWidth = this.initialBounds.width;
+        let newHeight = this.initialBounds.height;
+
+        switch (this.resizingAnchorIndex) {
+            case 0: // top-left
+                newX = mouseX;
+                newY = mouseY;
+                newWidth = this.initialBounds.x + this.initialBounds.width - mouseX;
+                newHeight = this.initialBounds.y + this.initialBounds.height - mouseY;
+                break;
+            case 1: // top-right
+                newY = mouseY;
+                newWidth = mouseX - this.initialBounds.x;
+                newHeight = this.initialBounds.y + this.initialBounds.height - mouseY;
+                break;
+            case 2: // bottom-left
+                newX = mouseX;
+                newWidth = this.initialBounds.x + this.initialBounds.width - mouseX;
+                newHeight = mouseY - this.initialBounds.y;
+                break;
+            case 3: // bottom-right
+                newWidth = mouseX - this.initialBounds.x;
+                newHeight = mouseY - this.initialBounds.y;
+                break;
+            case 4: // top-center
+                newY = mouseY;
+                newHeight = this.initialBounds.y + this.initialBounds.height - mouseY;
+                break;
+            case 5: // bottom-center
+                newHeight = mouseY - this.initialBounds.y;
+                break;
+            case 6: // left-center
+                newX = mouseX;
+                newWidth = this.initialBounds.x + this.initialBounds.width - mouseX;
+                break;
+            case 7: // right-center
+                newWidth = mouseX - this.initialBounds.x;
+                break;
+        }
+
+        // Clamp minimum size
+        newWidth = Math.max(1, newWidth);
+        newHeight = Math.max(1, newHeight);
+
+        // Update the temporary group's transform
+        let transform = this.tempGroup.transform.baseVal.consolidate();
+        if (!transform) {
+            transform = svg.createSVGTransform();
+            this.tempGroup.transform.baseVal.appendItem(transform);
+        }
+
+        // Calculate scaling and translation
+        const scaleX = newWidth / this.initialBounds.width;
+        const scaleY = newHeight / this.initialBounds.height;
+        const translateX = newX - this.initialBounds.x;
+        const translateY = newY - this.initialBounds.y;
+
+        const newMatrix = svg.createSVGMatrix()
+                            .translate(translateX, translateY)
+                            .scaleNonUniform(scaleX, scaleY)
+                            .multiply(this.initialTempGroupTransform); // Apply initial rotation/translation if any
+
+        transform.setMatrix(newMatrix);
+        
+        // Update controls immediately for visual feedback
+        this.bounds = { x: newX, y: newY, width: newWidth, height: newHeight };
+        this.createControls(); // Recreate controls based on new bounds
+    }
+
+    startDrag(e) {
+        this.isDragging = true;
+        isDraggingMultiSelection = true;
+        const { x, y } = getSVGCoordsFromMouse(e);
+        this.dragStart = { x, y };
+        
+        const currentTransform = this.tempGroup.transform.baseVal.consolidate();
+        this.initialTempGroupTransform = currentTransform ? currentTransform.matrix : svg.createSVGMatrix();
+        
+        if (typeof svg !== 'undefined') {
+            svg.style.cursor = 'move';
+            svg.addEventListener('mousemove', this.handleDragWrapper);
+            svg.addEventListener('mouseup', this.endDragWrapper);
+        }
+    }
+
+    handleDragWrapper = (e) => {
+        if (this.isDragging) {
+            this.handleDrag(e);
+        }
+    }
+
+    endDragWrapper = () => {
+        if (this.isDragging) {
+            this.isDragging = false;
+            isDraggingMultiSelection = false;
+            if (typeof svg !== 'undefined') {
+                svg.removeEventListener('mousemove', this.handleDragWrapper);
+                svg.removeEventListener('mouseup', this.endDragWrapper);
+                svg.style.cursor = 'default';
+            }
+            this.applyTempGroupTransformToShapes();
+            this.updateControls(); // Re-render controls after applying transforms
+        }
+    }
+
+    handleDrag(e) {
+        if (!this.tempGroup) return;
+        const { x, y } = getSVGCoordsFromMouse(e);
+        const dx = x - this.dragStart.x;
+        const dy = y - this.dragStart.y;
+        
+        let transform = this.tempGroup.transform.baseVal.consolidate();
+        if (!transform) {
+            transform = svg.createSVGTransform();
+            this.tempGroup.transform.baseVal.appendItem(transform);
+        }
+
+        const newMatrix = svg.createSVGMatrix()
+                            .translate(dx, dy)
+                            .multiply(this.initialTempGroupTransform);
+        
+        transform.setMatrix(newMatrix);
+        
+        // Update bounds for control redrawing
+        this.bounds.x += dx;
+        this.bounds.y += dy;
+        this.dragStart = { x, y }; // Update dragStart for next move
+        this.createControls(); // Recreate controls based on new bounds
+    }
 
     applyTempGroupTransformToShapes() {
         if (!this.tempGroup) return;
 
-        // Get the group's transform matrix
-        const groupTransform = this.tempGroup.transform.baseVal.consolidate();
-        if (!groupTransform) return;
-        
-        const groupMatrix = groupTransform.matrix;
+        const groupTransformMatrix = this.tempGroup.transform.baseVal.consolidate().matrix;
         
         this.selectedShapes.forEach(shape => {
             let element = null;
@@ -638,102 +814,104 @@ class MultiSelection {
             }
 
             if (element && element.parentNode === this.tempGroup) {
-                // Update shape properties based on transformation
+                // Get the current local transform of the shape
+                let shapeLocalMatrix = svg.createSVGMatrix();
+                if (element.transform && element.transform.baseVal.numberOfItems > 0) {
+                    shapeLocalMatrix = element.transform.baseVal.consolidate().matrix;
+                }
+
+                // Combine the shape's local transform with the group's transform
+                const finalMatrix = shapeLocalMatrix.multiply(groupTransformMatrix);
+
+                // Decompose the matrix to update shape properties
+                // This is a simplified decomposition, a full decomposition can be complex
+                // For this scenario, we primarily care about translation and potentially scaling/rotation
+                
+                // For simplicity, let's derive new x, y, width, height from the transformed BBox
+                const bbox = element.getBBox();
+                const transformedP1 = finalMatrix.transformPoint(svg.createSVGPoint(bbox.x, bbox.y));
+                const transformedP2 = finalMatrix.transformPoint(svg.createSVGPoint(bbox.x + bbox.width, bbox.y + bbox.height));
+
+                const newX = transformedP1.x;
+                const newY = transformedP1.y;
+                const newWidth = transformedP2.x - transformedP1.x;
+                const newHeight = transformedP2.y - transformedP1.y;
+                
+                // Clear the element's transform as its position/size will be updated directly
+                if (element.transform && element.transform.baseVal) {
+                    element.transform.baseVal.clear();
+                }
+
+                // Update shape properties based on its new absolute position/size
                 switch (shape.shapeName) {
                     case 'rectangle':
                     case 'frame':
-                        // Calculate transformed position using the center point
-                        const centerX = shape.x + shape.width / 2;
-                        const centerY = shape.y + shape.height / 2;
-                        
-                        // Transform the center point
-                        const transformedCenterX = groupMatrix.a * centerX + groupMatrix.c * centerY + groupMatrix.e;
-                        const transformedCenterY = groupMatrix.b * centerX + groupMatrix.d * centerY + groupMatrix.f;
-                        
-                        // Update shape position
-                        shape.x = transformedCenterX - shape.width / 2;
-                        shape.y = transformedCenterY - shape.height / 2;
+                        shape.x = newX;
+                        shape.y = newY;
+                        shape.width = newWidth;
+                        shape.height = newHeight;
                         break;
-                        
                     case 'circle':
-                        // Transform the circle center
-                        const transformedCircleX = groupMatrix.a * shape.x + groupMatrix.c * shape.y + groupMatrix.e;
-                        const transformedCircleY = groupMatrix.b * shape.x + groupMatrix.d * shape.y + groupMatrix.f;
-                        
-                        shape.x = transformedCircleX;
-                        shape.y = transformedCircleY;
+                        // Assuming uniform scaling, adjust rx/ry
+                        shape.x = newX + newWidth / 2;
+                        shape.y = newY + newHeight / 2;
+                        shape.rx = newWidth / 2;
+                        shape.ry = newHeight / 2;
                         break;
-                        
                     case 'line':
                     case 'arrow':
-                        // Transform start point
-                        const transformedStartX = groupMatrix.a * shape.startPoint.x + groupMatrix.c * shape.startPoint.y + groupMatrix.e;
-                        const transformedStartY = groupMatrix.b * shape.startPoint.x + groupMatrix.d * shape.startPoint.y + groupMatrix.f;
+                        // This is more complex as lines don't have width/height directly.
+                        // For lines/arrows, transforming the individual start/end points is better.
+                        // Since they were already moved with the group, their relative positions are maintained.
+                        // We need to calculate new absolute positions based on the group's transform.
+                        const startPoint = svg.createSVGPoint(shape.startPoint.x, shape.startPoint.y);
+                        const endPoint = svg.createSVGPoint(shape.endPoint.x, shape.endPoint.y);
                         
-                        // Transform end point
-                        const transformedEndX = groupMatrix.a * shape.endPoint.x + groupMatrix.c * shape.endPoint.y + groupMatrix.e;
-                        const transformedEndY = groupMatrix.b * shape.endPoint.x + groupMatrix.d * shape.endPoint.y + groupMatrix.f;
-                        
-                        shape.startPoint.x = transformedStartX;
-                        shape.startPoint.y = transformedStartY;
-                        shape.endPoint.x = transformedEndX;
-                        shape.endPoint.y = transformedEndY;
+                        const newStart = groupTransformMatrix.transformPoint(startPoint);
+                        const newEnd = groupTransformMatrix.transformPoint(endPoint);
+
+                        shape.startPoint.x = newStart.x;
+                        shape.startPoint.y = newStart.y;
+                        shape.endPoint.x = newEnd.x;
+                        shape.endPoint.y = newEnd.y;
                         
                         if (shape.controlPoint) {
-                            const transformedControlX = groupMatrix.a * shape.controlPoint.x + groupMatrix.c * shape.controlPoint.y + groupMatrix.e;
-                            const transformedControlY = groupMatrix.b * shape.controlPoint.x + groupMatrix.d * shape.controlPoint.y + groupMatrix.f;
-                            
-                            shape.controlPoint.x = transformedControlX;
-                            shape.controlPoint.y = transformedControlY;
+                            const controlPoint = svg.createSVGPoint(shape.controlPoint.x, shape.controlPoint.y);
+                            const newControl = groupTransformMatrix.transformPoint(controlPoint);
+                            shape.controlPoint.x = newControl.x;
+                            shape.controlPoint.y = newControl.y;
                         }
                         break;
-                        
                     case 'freehandStroke':
                         // Transform each point in the polyline
                         shape.points = shape.points.map(p => {
-                            const transformedX = groupMatrix.a * p.x + groupMatrix.c * p.y + groupMatrix.e;
-                            const transformedY = groupMatrix.b * p.x + groupMatrix.d * p.y + groupMatrix.f;
-                            return { x: transformedX, y: transformedY };
+                            const point = svg.createSVGPoint(p.x, p.y);
+                            const newPoint = groupTransformMatrix.transformPoint(point);
+                            return { x: newPoint.x, y: newPoint.y };
                         });
                         if (typeof shape.updateBoundingBox === 'function') {
                             shape.updateBoundingBox();
                         }
                         break;
-                        
                     case 'text':
-                        const transformedTextX = groupMatrix.a * shape.x + groupMatrix.c * shape.y + groupMatrix.e;
-                        const transformedTextY = groupMatrix.b * shape.x + groupMatrix.d * shape.y + groupMatrix.f;
-                        
-                        shape.x = transformedTextX;
-                        shape.y = transformedTextY;
+                        // Text position usually refers to x,y of the text element itself
+                        // This might require adjusting text 'x' and 'y' attributes and font size
+                        // For now, let's just use the transformed bbox top-left
+                        shape.x = newX;
+                        shape.y = newY; // This might need adjustment based on text baseline
+                        // For scaled text, might need to derive new font-size based on scale factors
                         break;
-                        
                     case 'image':
-                        const imgCenterX = shape.x + shape.width / 2;
-                        const imgCenterY = shape.y + shape.height / 2;
-                        
-                        const transformedImgCenterX = groupMatrix.a * imgCenterX + groupMatrix.c * imgCenterY + groupMatrix.e;
-                        const transformedImgCenterY = groupMatrix.b * imgCenterX + groupMatrix.d * imgCenterY + groupMatrix.f;
-                        
-                        shape.x = transformedImgCenterX - shape.width / 2;
-                        shape.y = transformedImgCenterY - shape.height / 2;
+                        shape.x = newX;
+                        shape.y = newY;
+                        shape.width = newWidth;
+                        shape.height = newHeight;
                         break;
                 }
                 
-                // Clear any existing transform on the element
-                if (element.transform && element.transform.baseVal) {
-                    element.transform.baseVal.clear();
-                }
-                
-                // Re-append the element to the main SVG
-                if (element.parentNode === this.tempGroup) {
-                    svg.appendChild(element);
-                }
-                
-                // Redraw the shape with new coordinates
-                if (typeof shape.draw === 'function') {
-                    shape.draw();
-                }
+                // Re-append the element to the main SVG or its correct layer
+                svg.appendChild(element); // Re-append to main SVG
+                shape.draw(); // Redraw to update internal properties and visual representation
 
                 if (typeof shape.updateAttachedArrows === 'function') {
                     shape.updateAttachedArrows();
@@ -742,304 +920,12 @@ class MultiSelection {
         });
 
         // Clear the transform on the temporary group itself
-        if (this.tempGroup.transform && this.tempGroup.transform.baseVal) {
-            this.tempGroup.transform.baseVal.clear();
-        }
-    }
-
-    startResize(e, anchorIndex) {
-        e.stopPropagation();
-        e.preventDefault();
-        
-        this.isResizing = true;
-        this.resizingAnchorIndex = anchorIndex;
-        
-        // Store initial positions for all shapes
-        this.initialPositions.clear();
-        const initialBounds = this.getBounds();
-        
-        this.selectedShapes.forEach(shape => {
-            let shapeData;
-            shape.removeSelection();
-            switch (shape.shapeName) {
-                case 'rectangle':
-                    shapeData = {
-                        x: shape.x,
-                        y: shape.y,
-                        width: shape.width,
-                        height: shape.height,
-                        rotation: shape.rotation
-                    };
-                    break;
-                case 'circle':
-                    shapeData = {
-                        x: shape.x,
-                        y: shape.y,
-                        rx: shape.rx,
-                        ry: shape.ry,
-                        rotation: shape.rotation
-                    };
-                    break;
-                case 'line':
-                case 'arrow':
-                    shapeData = {
-                        startPoint: { ...shape.startPoint },
-                        endPoint: { ...shape.endPoint }
-                    };
-                    break;
-                default:
-                    shapeData = {
-                        x: shape.x || 0,
-                        y: shape.y || 0,
-                        width: shape.width || 0,
-                        height: shape.height || 0
-                    };
-            }
-            this.initialPositions.set(shape, shapeData);
-        });
-        
-        this.initialPositions.set('bounds', initialBounds);
-        
-        const onMouseMove = (event) => {
-            if (this.isResizing) {
-                this.handleResize(event);
-            }
-        };
-        
-        const onMouseUp = () => {
-            this.isResizing = false;
-            this.resizingAnchorIndex = null;
-            this.initialPositions.clear();
-            if (typeof svg !== 'undefined') {
-                svg.removeEventListener('mousemove', onMouseMove);
-                svg.removeEventListener('mouseup', onMouseUp);
-                svg.style.cursor = 'default';
-            }
-        };
-        
-        if (typeof svg !== 'undefined') {
-            svg.addEventListener('mousemove', onMouseMove);
-            svg.addEventListener('mouseup', onMouseUp);
-        }
-    }
-
-    handleResize(e) {
-        const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
-        const initialBounds = this.initialPositions.get('bounds');
-        if (!initialBounds) return;
-        
-        // Calculate scale factors based on anchor and mouse position
-        let scaleX = 1, scaleY = 1;
-        let newBounds = { ...initialBounds };
-        
-        switch (this.resizingAnchorIndex) {
-            case 0: // top-left
-                scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
-                scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
-                newBounds.x = mouseX;
-                newBounds.y = mouseY;
-                newBounds.width = initialBounds.x + initialBounds.width - mouseX;
-                newBounds.height = initialBounds.y + initialBounds.height - mouseY;
-                break;
-            case 1: // top-right
-                scaleX = (mouseX - initialBounds.x) / initialBounds.width;
-                scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
-                newBounds.y = mouseY;
-                newBounds.width = mouseX - initialBounds.x;
-                newBounds.height = initialBounds.y + initialBounds.height - mouseY;
-                break;
-            case 2: // bottom-left
-                scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
-                scaleY = (mouseY - initialBounds.y) / initialBounds.height;
-                newBounds.x = mouseX;
-                newBounds.width = initialBounds.x + initialBounds.width - mouseX;
-                newBounds.height = mouseY - initialBounds.y;
-                break;
-            case 3: // bottom-right
-                scaleX = (mouseX - initialBounds.x) / initialBounds.width;
-                scaleY = (mouseY - initialBounds.y) / initialBounds.height;
-                newBounds.width = mouseX - initialBounds.x;
-                newBounds.height = mouseY - initialBounds.y;
-                break;
-            case 4: // top-center
-                scaleY = (initialBounds.y + initialBounds.height - mouseY) / initialBounds.height;
-                newBounds.y = mouseY;
-                newBounds.height = initialBounds.y + initialBounds.height - mouseY;
-                break;
-            case 5: // bottom-center
-                scaleY = (mouseY - initialBounds.y) / initialBounds.height;
-                newBounds.height = mouseY - initialBounds.y;
-                break;
-            case 6: // left-center
-                scaleX = (initialBounds.x + initialBounds.width - mouseX) / initialBounds.width;
-                newBounds.x = mouseX;
-                newBounds.width = initialBounds.x + initialBounds.width - mouseX;
-                break;
-            case 7: // right-center
-                scaleX = (mouseX - initialBounds.x) / initialBounds.width;
-                newBounds.width = mouseX - initialBounds.x;
-                break;
-        }
-        
-        // Ensure minimum scale
-        scaleX = Math.max(0.1, Math.abs(scaleX));
-        scaleY = Math.max(0.1, Math.abs(scaleY));
-        
-        // Apply transformations to all selected shapes
-        this.selectedShapes.forEach(shape => {
-            const initialData = this.initialPositions.get(shape);
-            if (!initialData) return;
-            shape.removeSelection();
-            switch (shape.shapeName) {
-                case 'rectangle':
-                    const relX = (initialData.x - initialBounds.x) / initialBounds.width;
-                    const relY = (initialData.y - initialBounds.y) / initialBounds.height;
-                    const relW = initialData.width / initialBounds.width;
-                    const relH = initialData.height / initialBounds.height;
-                    
-                    shape.x = newBounds.x + relX * newBounds.width;
-                    shape.y = newBounds.y + relY * newBounds.height;
-                    shape.width = relW * newBounds.width;
-                    shape.height = relH * newBounds.height;
-                    shape.draw();
-                    break;
-                    
-                case 'circle':
-                    const relXCircle = (initialData.x - initialBounds.x) / initialBounds.width;
-                    const relYCircle = (initialData.y - initialBounds.y) / initialBounds.height;
-                    
-                    shape.x = newBounds.x + relXCircle * newBounds.width;
-                    shape.y = newBounds.y + relYCircle * newBounds.height;
-                    shape.rx = initialData.rx * scaleX;
-                    shape.ry = initialData.ry * scaleY;
-                    shape.draw();
-                    break;
-                    
-                case 'line':
-                case 'arrow':
-                    const relStartX = (initialData.startPoint.x - initialBounds.x) / initialBounds.width;
-                    const relStartY = (initialData.startPoint.y - initialBounds.y) / initialBounds.height;
-                    const relEndX = (initialData.endPoint.x - initialBounds.x) / initialBounds.width;
-                    const relEndY = (initialData.endPoint.y - initialBounds.y) / initialBounds.height;
-                    
-                    shape.startPoint.x = newBounds.x + relStartX * newBounds.width;
-                    shape.startPoint.y = newBounds.y + relStartY * newBounds.height;
-                    shape.endPoint.x = newBounds.x + relEndX * newBounds.width;
-                    shape.endPoint.y = newBounds.y + relEndY * newBounds.height;
-                    
-                    if (shape.shapeName === 'arrow' && shape.arrowCurved) {
-                        if (typeof shape.initializeCurveControlPoints === 'function') {
-                            shape.initializeCurveControlPoints();
-                        }
-                    }
-                    shape.draw();
-                    break;
-                    
-                default:
-                    const relXDefault = (initialData.x - initialBounds.x) / initialBounds.width;
-                    const relYDefault = (initialData.y - initialBounds.y) / initialBounds.height;
-                    const relWDefault = initialData.width / initialBounds.width;
-                    const relHDefault = initialData.height / initialBounds.height;
-                    
-                    shape.x = newBounds.x + relXDefault * newBounds.width;
-                    shape.y = newBounds.y + relYDefault * newBounds.height;
-                    if (shape.width !== undefined) shape.width = relWDefault * newBounds.width;
-                    if (shape.height !== undefined) shape.height = relHDefault * newBounds.height;
-                    
-                    if (typeof shape.draw === 'function') {
-                        shape.draw();
-                    }
-            }
-            
-            if (typeof shape.updateAttachedArrows === 'function') {
-                shape.updateAttachedArrows();
-            }
-        });
-        
-        this.updateControls();
-    }
-
-    startDrag(e) {
-        this.isDragging = true;
-        isDraggingMultiSelection = true;
-        const { x, y } = getSVGCoordsFromMouse(e);
-        this.dragStart = { x, y };
-        
-        // Store initial positions for undo
-        this.initialPositions.clear();
-        this.selectedShapes.forEach(shape => {
-            let shapeData;
-            shape.removeSelection();
-            switch (shape.shapeName) {
-                case 'rectangle':
-                    shapeData = {
-                        x: shape.x,
-                        y: shape.y,
-                        width: shape.width,
-                        height: shape.height,
-                        rotation: shape.rotation
-                    };
-                    break;
-                case 'circle':
-                    shapeData = {
-                        x: shape.x,
-                        y: shape.y,
-                        rx: shape.rx,
-                        ry: shape.ry,
-                        rotation: shape.rotation
-                    };
-                    break;
-                case 'line':
-                case 'arrow':
-                    shapeData = {
-                        startPoint: { ...shape.startPoint },
-                        endPoint: { ...shape.endPoint }
-                    };
-                    break;
-                default:
-                    shapeData = {
-                        x: shape.x || 0,
-                        y: shape.y || 0,
-                        width: shape.width || 0,
-                        height: shape.height || 0,
-                        rotation: shape.rotation || 0
-                    };
-            }
-            this.initialPositions.set(shape, shapeData);
-        });
-        
-        if (typeof svg !== 'undefined') {
-            svg.style.cursor = 'move';
-        }
-    }
-
-    handleDrag(e) {
-        if (!this.isDragging) return;
-        isDraggingMultiSelection = true;
-        const { x, y } = getSVGCoordsFromMouse(e);
-        const dx = x - this.dragStart.x;
-        const dy = y - this.dragStart.y;
-        
-        this.move(dx, dy);
-        
-        this.dragStart = { x, y };
-    }
-
-    endDrag() {
-        if (!this.isDragging) return;
-        isDraggingMultiSelection = false;
-        this.isDragging = false;
-        this.initialPositions.clear();
-        if (typeof svg !== 'undefined') {
-            svg.style.cursor = 'default';
-        }
+        this.tempGroup.transform.baseVal.clear();
     }
 }
 
-// Create global multi-selection instance
 const multiSelection = new MultiSelection();
 
-// Update the existing functions to use the new class
 function selectShapesInRect(selectionBounds) {
     multiSelection.selectShapesInRect(selectionBounds);
 }
@@ -1068,13 +954,10 @@ function moveSelectedShapes(dx, dy) {
     multiSelection.move(dx, dy);
 }
 
-// Update the mouse handlers to use the multi-selection class
 function handleMultiSelectionMouseDown(e) {
     const { x, y } = getSVGCoordsFromMouse(e);
     
-    // Check if clicking on multi-selection area or anchors
-    if (multiSelection.selectedShapes.size > 1) {
-        // Check if clicking on resize anchor
+    if (multiSelection.selectedShapes.size > 0) { // Check for existing selection
         const anchor = e.target.closest('.multi-selection-anchor');
         if (anchor) {
             const anchorIndex = parseInt(anchor.getAttribute('data-index'));
@@ -1082,33 +965,27 @@ function handleMultiSelectionMouseDown(e) {
             return true;
         }
         
-        // Check if clicking on rotation anchor
         if (e.target.closest('.multi-selection-rotation-anchor')) {
             multiSelection.startRotation(e);
             return true;
         }
         
-        // Check if clicking within multi-selection bounds for dragging
         if (multiSelection.isPointInBounds(x, y)) {
             multiSelection.startDrag(e);
             return true;
         }
     }
     
-    // Start new multi-selection
     multiSelectionStart = { x, y };
     isMultiSelecting = true;
     createMultiSelectionRect(x, y);
     
-    // Clear existing selections
     clearAllSelections();
     
     return true;
 }
 
 function handleMultiSelectionMouseMove(e) {
-    const { x, y } = getSVGCoordsFromMouse(e);
-    
     if (multiSelection.isDragging) {
         multiSelection.handleDrag(e);
         return true;
@@ -1125,16 +1002,21 @@ function handleMultiSelectionMouseMove(e) {
     }
     
     if (isMultiSelecting) {
+        const { x, y } = getSVGCoordsFromMouse(e);
         updateMultiSelectionRect(x, y);
         return true;
     }
     
-    // Update cursor for multi-selection area
-    if (multiSelection.selectedShapes.size > 1 && multiSelection.isPointInBounds(x, y)) {
-        if (typeof svg !== 'undefined') {
+    if (multiSelection.selectedShapes.size > 0 && multiSelection.isPointInBounds(e.x, e.y)) {
+        if (typeof svg !== 'undefined' && !multiSelection.isDragging && !multiSelection.isResizing && !multiSelection.isRotating) {
             svg.style.cursor = 'move';
         }
         return true;
+    } else {
+        if (typeof svg !== 'undefined' && !multiSelection.isDragging && !multiSelection.isResizing && !multiSelection.isRotating) {
+            // Restore default cursor if outside multi-selection
+            svg.style.cursor = 'default';
+        }
     }
     
     return false;
@@ -1146,10 +1028,19 @@ function handleMultiSelectionMouseUp(e) {
         return true;
     }
     
+    if (multiSelection.isResizing) {
+        multiSelection.endResizeWrapper();
+        return true;
+    }
+
+    if (multiSelection.isRotating) {
+        multiSelection.endRotationWrapper();
+        return true;
+    }
+    
     if (isMultiSelecting) {
         const { x, y } = getSVGCoordsFromMouse(e);
         
-        // Calculate selection bounds
         const selectionBounds = {
             x: Math.min(multiSelectionStart.x, x),
             y: Math.min(multiSelectionStart.y, y),
@@ -1157,9 +1048,25 @@ function handleMultiSelectionMouseUp(e) {
             height: Math.abs(y - multiSelectionStart.y)
         };
         
-        // Only select if there's a meaningful selection area
         if (selectionBounds.width > 5 && selectionBounds.height > 5) {
             multiSelection.selectShapesInRect(selectionBounds);
+        } else {
+            // If it's a click, check if it's on an existing shape
+            let clickedOnShape = false;
+            if (typeof shapes !== 'undefined') {
+                for (let i = shapes.length - 1; i >= 0; i--) {
+                    const shape = shapes[i];
+                    if (shape.isPointInShape && shape.isPointInShape(x, y)) {
+                        multiSelection.clearSelection();
+                        multiSelection.addShape(shape);
+                        clickedOnShape = true;
+                        break;
+                    }
+                }
+            }
+            if (!clickedOnShape) {
+                multiSelection.clearSelection();
+            }
         }
         
         removeMultiSelectionRect();
@@ -1170,7 +1077,6 @@ function handleMultiSelectionMouseUp(e) {
     return false;
 }
 
-// Export the updated functions and the multi-selection instance
 export {
     handleMultiSelectionMouseDown,
     handleMultiSelectionMouseMove,
@@ -1182,5 +1088,6 @@ export {
     isPointInMultiSelection,
     moveSelectedShapes,
     multiSelection,
+    isDraggingMultiSelection,
     isMultiSelecting
 };
