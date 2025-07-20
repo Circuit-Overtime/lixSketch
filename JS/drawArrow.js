@@ -125,7 +125,30 @@ class Arrow {
         this.anchors = [];
         this.isSelected = false;
     }
-
+    attachToShape(isStartPoint, shape, attachment) {
+        if (isStartPoint) {
+            this.attachedToStart = {
+                shape: shape,
+                side: attachment.side,
+                offset: attachment.offset
+            };
+            this.startPoint = attachment.point;
+        } else {
+            this.attachedToEnd = {
+                shape: shape,
+                side: attachment.side,
+                offset: attachment.offset
+            };
+            this.endPoint = attachment.point;
+        }
+        
+        // Update control points if curved
+        if (this.arrowCurved) {
+            this.initializeCurveControlPoints();
+        }
+        
+        this.draw();
+    }
     draw() {
         while (this.group.firstChild) {
             this.group.removeChild(this.group.firstChild);
@@ -208,7 +231,21 @@ class Arrow {
             this.addAttachmentIndicators();
         }
     }
-
+    static getEllipsePerimeterPoint(circle, angle) {
+        // Calculate point on ellipse perimeter at given angle
+        const cosAngle = Math.cos(angle);
+        const sinAngle = Math.sin(angle);
+        
+        const a = circle.rx;
+        const b = circle.ry;
+        
+        const t = Math.atan2(a * sinAngle, b * cosAngle);
+        
+        return {
+            x: circle.x + a * Math.cos(t),
+            y: circle.y + b * Math.sin(t)
+        };
+    }
     getCubicBezierPoint(t) {
         if (!this.controlPoint1 || !this.controlPoint2) return this.startPoint;
         
@@ -379,6 +416,11 @@ class Arrow {
                 if (attachment) {
                     return { shape, attachment };
                 }
+            } else if (shape.type === 'text') {
+                const attachment = Arrow.getTextAttachmentPoint(point, shape, tolerance);
+                if (attachment) {
+                    return { shape, attachment };
+                }
             }
         }
         return null;
@@ -477,29 +519,249 @@ class Arrow {
         return null;
     }
 
-    static getEllipsePerimeterPoint(circle, angle) {
-        const cosAngle = Math.cos(angle);
-        const sinAngle = Math.sin(angle);
+    static getTextAttachmentPoint(point, textGroup, tolerance = 20) {
+        if (!textGroup || textGroup.type !== 'text') return null;
+
+        const textElement = textGroup.querySelector('text');
+        if (!textElement) return null;
+
+        // Get the text bounding box
+        const bbox = textElement.getBBox();
         
-        const x = circle.x + circle.rx * cosAngle;
-        const y = circle.y + circle.ry * sinAngle;
+        // Get the group's transform
+        const groupTransform = textGroup.transform.baseVal.consolidate();
+        const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
         
-        return { x, y };
+        // Transform the bounding box corners to world coordinates
+        const corners = [
+            { x: bbox.x, y: bbox.y }, // top-left
+            { x: bbox.x + bbox.width, y: bbox.y }, // top-right
+            { x: bbox.x + bbox.width, y: bbox.y + bbox.height }, // bottom-right
+            { x: bbox.x, y: bbox.y + bbox.height } // bottom-left
+        ];
+        
+        // Transform corners using the group's transform matrix
+        const transformedCorners = corners.map(corner => ({
+            x: corner.x * matrix.a + corner.y * matrix.c + matrix.e,
+            y: corner.x * matrix.b + corner.y * matrix.d + matrix.f
+        }));
+        
+        // Calculate sides of the transformed rectangle
+        const sides = [
+            { name: 'top', start: transformedCorners[0], end: transformedCorners[1] },
+            { name: 'right', start: transformedCorners[1], end: transformedCorners[2] },
+            { name: 'bottom', start: transformedCorners[2], end: transformedCorners[3] },
+            { name: 'left', start: transformedCorners[3], end: transformedCorners[0] }
+        ];
+        
+        let closestSide = null;
+        let minDistance = tolerance;
+        let attachPoint = null;
+        
+        sides.forEach(side => {
+            const distance = Arrow.pointToLineSegmentDistance(point, side.start, side.end);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestSide = side.name;
+                
+                // Calculate the closest point on the line segment
+                attachPoint = Arrow.closestPointOnLineSegment(point, side.start, side.end);
+            }
+        });
+        
+        if (closestSide && attachPoint) {
+            // Calculate offset relative to the original bounding box
+            // Transform the attach point back to local coordinates
+            const det = matrix.a * matrix.d - matrix.b * matrix.c;
+            if (det === 0) return null;
+            
+            const invMatrix = {
+                a: matrix.d / det,
+                b: -matrix.b / det,
+                c: -matrix.c / det,
+                d: matrix.a / det,
+                e: (matrix.c * matrix.f - matrix.d * matrix.e) / det,
+                f: (matrix.b * matrix.e - matrix.a * matrix.f) / det
+            };
+            
+            const localPoint = {
+                x: attachPoint.x * invMatrix.a + attachPoint.y * invMatrix.c + invMatrix.e,
+                y: attachPoint.x * invMatrix.b + attachPoint.y * invMatrix.d + invMatrix.f
+            };
+            
+            // Calculate offset relative to the bounding box
+            const offset = {
+                x: localPoint.x - bbox.x,
+                y: localPoint.y - bbox.y,
+                side: closestSide
+            };
+            
+            return { side: closestSide, point: attachPoint, offset };
+        }
+        
+        return null;
     }
 
-    attachToShape(isStartPoint, shape, attachmentInfo) {
-        const attachment = {
-            shape: shape,
-            side: attachmentInfo.side,
-            offset: attachmentInfo.offset
-        };
+    static pointToLineSegmentDistance(point, lineStart, lineEnd) {
+        const A = point.x - lineStart.x;
+        const B = point.y - lineStart.y;
+        const C = lineEnd.x - lineStart.x;
+        const D = lineEnd.y - lineStart.y;
+        
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        
+        if (lenSq === 0) {
+            // Line segment is a point
+            return Math.sqrt(A * A + B * B);
+        }
+        
+        let param = dot / lenSq;
+        param = Math.max(0, Math.min(1, param)); // Clamp to [0,1]
+        
+        const xx = lineStart.x + param * C;
+        const yy = lineStart.y + param * D;
+        
+        const dx = point.x - xx;
+        const dy = point.y - yy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
 
-        if (isStartPoint) {
-            this.attachedToStart = attachment;
-            this.startPoint = { ...attachmentInfo.point };
-        } else {
-            this.attachedToEnd = attachment;
-            this.endPoint = { ...attachmentInfo.point };
+    static closestPointOnLineSegment(point, lineStart, lineEnd) {
+        const A = point.x - lineStart.x;
+        const B = point.y - lineStart.y;
+        const C = lineEnd.x - lineStart.x;
+        const D = lineEnd.y - lineStart.y;
+        
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        
+        if (lenSq === 0) {
+            return { x: lineStart.x, y: lineStart.y };
+        }
+        
+        let param = dot / lenSq;
+        param = Math.max(0, Math.min(1, param));
+        
+        return {
+            x: lineStart.x + param * C,
+            y: lineStart.y + param * D
+        };
+    }
+
+    addAnchors() {
+        const anchorSize = 5 / currentZoom;
+        const anchorStrokeWidth = 2 / currentZoom;
+        
+        let anchorPositions = [this.startPoint, this.endPoint];
+        
+        if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
+            anchorPositions.push(this.controlPoint1, this.controlPoint2);
+        } else if (!this.arrowCurved) {
+            const arrowAngle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
+            const arrowHeadClearance = this.arrowHeadLength + anchorSize - 10;
+            const offsetEndAnchor = {
+                x: this.endPoint.x + arrowHeadClearance * Math.cos(arrowAngle),
+                y: this.endPoint.y + arrowHeadClearance * Math.sin(arrowAngle)
+            };
+            anchorPositions[1] = offsetEndAnchor;
+        }
+    
+        anchorPositions.forEach((point, index) => {
+            const anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            anchor.setAttribute("cx", point.x);
+            anchor.setAttribute("cy", point.y);
+            anchor.setAttribute("r", anchorSize); 
+            
+            if (this.arrowCurved && index >= 2) {
+                anchor.setAttribute("fill", "#121212");
+                anchor.setAttribute("stroke", "#5B57D1");
+            } else {
+                anchor.setAttribute("fill", "#121212");
+                anchor.setAttribute("stroke", "#5B57D1");
+            }
+            
+            anchor.setAttribute("stroke-width", anchorStrokeWidth); 
+            anchor.setAttribute("class", "anchor arrow-anchor"); 
+            anchor.setAttribute("data-index", index); 
+            anchor.style.cursor = "grab"; 
+            anchor.style.pointerEvents = "all"; 
+            anchor.addEventListener('pointerdown', (e) => this.startAnchorDrag(e, index));
+    
+            this.group.appendChild(anchor); 
+            this.anchors[index] = anchor;   
+        });
+    }
+
+    addAttachmentIndicators() {
+        if (this.attachedToStart) {
+            const attachPoint = this.calculateAttachedPoint(this.attachedToStart);
+            const indicator = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            indicator.setAttribute("cx", attachPoint.x);
+            indicator.setAttribute("cy", attachPoint.y);
+            indicator.setAttribute("r", 4);
+            indicator.setAttribute("fill", "#5B57D1");
+            indicator.setAttribute("stroke", "#121212");
+            indicator.setAttribute("stroke-width", 1);
+            indicator.setAttribute("class", "attachment-indicator");
+            this.group.appendChild(indicator);
+        }
+
+        if (this.attachedToEnd) {
+            const attachPoint = this.calculateAttachedPoint(this.attachedToEnd);
+            const indicator = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            indicator.setAttribute("cx", attachPoint.x);
+            indicator.setAttribute("cy", attachPoint.y);
+            indicator.setAttribute("r", 4);
+            indicator.setAttribute("fill", "#5B57D1");
+            indicator.setAttribute("stroke", "#121212");
+            indicator.setAttribute("stroke-width", 1);
+            indicator.setAttribute("class", "attachment-indicator");
+            this.group.appendChild(indicator);
+        }
+    }
+
+    getAttachmentState() {
+        return {
+            attachedToStart: this.attachedToStart ? {
+                shapeId: this.attachedToStart.shape.shapeID,
+                side: this.attachedToStart.side,
+                offset: { ...this.attachedToStart.offset }
+            } : null,
+            attachedToEnd: this.attachedToEnd ? {
+                shapeId: this.attachedToEnd.shape.shapeID,
+                side: this.attachedToEnd.side,
+                offset: { ...this.attachedToEnd.offset }
+            } : null
+        };
+    }
+
+    restoreAttachmentState(attachmentState) {
+        this.attachedToStart = null;
+        this.attachedToEnd = null;
+
+        if (attachmentState.attachedToStart) {
+            const shape = shapes.find(s => s.shapeID === attachmentState.attachedToStart.shapeId);
+            if (shape) {
+                this.attachedToStart = {
+                    shape: shape,
+                    side: attachmentState.attachedToStart.side,
+                    offset: { ...attachmentState.attachedToStart.offset }
+                };
+                this.startPoint = this.calculateAttachedPoint(this.attachedToStart);
+            }
+        }
+
+        if (attachmentState.attachedToEnd) {
+            const shape = shapes.find(s => s.shapeID === attachmentState.attachedToEnd.shapeId);
+            if (shape) {
+                this.attachedToEnd = {
+                    shape: shape,
+                    side: attachmentState.attachedToEnd.side,
+                    offset: { ...attachmentState.attachedToEnd.offset }
+                };
+                this.endPoint = this.calculateAttachedPoint(this.attachedToEnd);
+            }
         }
 
         if (this.arrowCurved) {
@@ -507,6 +769,251 @@ class Arrow {
         }
         
         this.draw();
+    }
+
+    static findNearbyShape(point, tolerance = 20) {
+        for (let shape of shapes) {
+            if (shape.shapeName === 'rectangle') {
+                const attachment = Arrow.getRectangleAttachmentPoint(point, shape, tolerance);
+                if (attachment) {
+                    return { shape, attachment };
+                }
+            } else if (shape.shapeName === 'circle') {
+                const attachment = Arrow.getCircleAttachmentPoint(point, shape, tolerance);
+                if (attachment) {
+                    return { shape, attachment };
+                }
+            } else if (shape.type === 'text') {
+                const attachment = Arrow.getTextAttachmentPoint(point, shape, tolerance);
+                if (attachment) {
+                    return { shape, attachment };
+                }
+            }
+        }
+        return null;
+    }
+
+    static getRectangleAttachmentPoint(point, rectangle, tolerance = 20) {
+        const rect = {
+            left: rectangle.x,
+            right: rectangle.x + rectangle.width,
+            top: rectangle.y,
+            bottom: rectangle.y + rectangle.height
+        };
+
+        const distances = {
+            top: Math.abs(point.y - rect.top),
+            bottom: Math.abs(point.y - rect.bottom),
+            left: Math.abs(point.x - rect.left),
+            right: Math.abs(point.x - rect.right)
+        };
+
+        let closestSide = null;
+        let minDistance = tolerance;
+
+        for (let side in distances) {
+            if (distances[side] < minDistance) {
+                if ((side === 'top' || side === 'bottom') && 
+                    point.x >= rect.left - tolerance && point.x <= rect.right + tolerance) {
+                    closestSide = side;
+                    minDistance = distances[side];
+                } else if ((side === 'left' || side === 'right') && 
+                           point.y >= rect.top - tolerance && point.y <= rect.bottom + tolerance) {
+                    closestSide = side;
+                    minDistance = distances[side];
+                }
+            }
+        }
+
+        if (closestSide) {
+            let attachPoint, offset;
+            
+            switch (closestSide) {
+                case 'top':
+                    attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.top };
+                    offset = { x: attachPoint.x - rectangle.x, y: 0 };
+                    break;
+                case 'bottom':
+                    attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.bottom };
+                    offset = { x: attachPoint.x - rectangle.x, y: rectangle.height };
+                    break;
+                case 'left':
+                    attachPoint = { x: rect.left, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
+                    offset = { x: 0, y: attachPoint.y - rectangle.y };
+                    break;
+                case 'right':
+                    attachPoint = { x: rect.right, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
+                    offset = { x: rectangle.width, y: attachPoint.y - rectangle.y };
+                    break;
+            }
+
+            return { side: closestSide, point: attachPoint, offset };
+        }
+
+        return null;
+    }
+
+    static getCircleAttachmentPoint(point, circle, tolerance = 20) {
+        // Calculate distance from point to circle center
+        const dx = point.x - circle.x;
+        const dy = point.y - circle.y;
+        const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
+        
+        const averageRadius = (circle.rx + circle.ry) / 2;
+        const distanceToPerimeter = Math.abs(distanceToCenter - averageRadius);
+        
+        if (distanceToPerimeter <= tolerance) {
+
+            const angle = Math.atan2(dy, dx);
+            
+
+            const attachPoint = this.getEllipsePerimeterPoint(circle, angle);
+            
+
+            const offset = {
+                angle: angle,
+                radiusRatioX: (attachPoint.x - circle.x) / circle.rx,
+                radiusRatioY: (attachPoint.y - circle.y) / circle.ry
+            };
+
+            return { 
+                side: 'perimeter', 
+                point: attachPoint, 
+                offset: offset 
+            };
+        }
+
+        return null;
+    }
+
+    static getTextAttachmentPoint(point, textGroup, tolerance = 20) {
+        if (!textGroup || textGroup.type !== 'text') return null;
+
+        const textElement = textGroup.querySelector('text');
+        if (!textElement) return null;
+
+        // Get the text bounding box
+        const bbox = textElement.getBBox();
+        
+        // Get the group's transform
+        const groupTransform = textGroup.transform.baseVal.consolidate();
+        const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
+        
+        // Transform the bounding box corners to world coordinates
+        const corners = [
+            { x: bbox.x, y: bbox.y }, // top-left
+            { x: bbox.x + bbox.width, y: bbox.y }, // top-right
+            { x: bbox.x + bbox.width, y: bbox.y + bbox.height }, // bottom-right
+            { x: bbox.x, y: bbox.y + bbox.height } // bottom-left
+        ];
+        
+        // Transform corners using the group's transform matrix
+        const transformedCorners = corners.map(corner => ({
+            x: corner.x * matrix.a + corner.y * matrix.c + matrix.e,
+            y: corner.x * matrix.b + corner.y * matrix.d + matrix.f
+        }));
+        
+        // Calculate sides of the transformed rectangle
+        const sides = [
+            { name: 'top', start: transformedCorners[0], end: transformedCorners[1] },
+            { name: 'right', start: transformedCorners[1], end: transformedCorners[2] },
+            { name: 'bottom', start: transformedCorners[2], end: transformedCorners[3] },
+            { name: 'left', start: transformedCorners[3], end: transformedCorners[0] }
+        ];
+        
+        let closestSide = null;
+        let minDistance = tolerance;
+        let attachPoint = null;
+        
+        sides.forEach(side => {
+            const distance = Arrow.pointToLineSegmentDistance(point, side.start, side.end);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestSide = side.name;
+                
+                // Calculate the closest point on the line segment
+                attachPoint = Arrow.closestPointOnLineSegment(point, side.start, side.end);
+            }
+        });
+        
+        if (closestSide && attachPoint) {
+            // Calculate offset relative to the original bounding box
+            // Transform the attach point back to local coordinates
+            const det = matrix.a * matrix.d - matrix.b * matrix.c;
+            if (det === 0) return null;
+            
+            const invMatrix = {
+                a: matrix.d / det,
+                b: -matrix.b / det,
+                c: -matrix.c / det,
+                d: matrix.a / det,
+                e: (matrix.c * matrix.f - matrix.d * matrix.e) / det,
+                f: (matrix.b * matrix.e - matrix.a * matrix.f) / det
+            };
+            
+            const localPoint = {
+                x: attachPoint.x * invMatrix.a + attachPoint.y * invMatrix.c + invMatrix.e,
+                y: attachPoint.x * invMatrix.b + attachPoint.y * invMatrix.d + invMatrix.f
+            };
+            
+            // Calculate offset relative to the bounding box
+            const offset = {
+                x: localPoint.x - bbox.x,
+                y: localPoint.y - bbox.y,
+                side: closestSide
+            };
+            
+            return { side: closestSide, point: attachPoint, offset };
+        }
+        
+        return null;
+    }
+
+    static pointToLineSegmentDistance(point, lineStart, lineEnd) {
+        const A = point.x - lineStart.x;
+        const B = point.y - lineStart.y;
+        const C = lineEnd.x - lineStart.x;
+        const D = lineEnd.y - lineStart.y;
+        
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        
+        if (lenSq === 0) {
+            // Line segment is a point
+            return Math.sqrt(A * A + B * B);
+        }
+        
+        let param = dot / lenSq;
+        param = Math.max(0, Math.min(1, param)); // Clamp to [0,1]
+        
+        const xx = lineStart.x + param * C;
+        const yy = lineStart.y + param * D;
+        
+        const dx = point.x - xx;
+        const dy = point.y - yy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    static closestPointOnLineSegment(point, lineStart, lineEnd) {
+        const A = point.x - lineStart.x;
+        const B = point.y - lineStart.y;
+        const C = lineEnd.x - lineStart.x;
+        const D = lineEnd.y - lineStart.y;
+        
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        
+        if (lenSq === 0) {
+            return { x: lineStart.x, y: lineStart.y };
+        }
+        
+        let param = dot / lenSq;
+        param = Math.max(0, Math.min(1, param));
+        
+        return {
+            x: lineStart.x + param * C,
+            y: lineStart.y + param * D
+        };
     }
 
     calculateAttachedPoint(attachment) {
@@ -532,6 +1039,25 @@ class Arrow {
                 // Recalculate point on ellipse perimeter using stored angle
                 return Arrow.getEllipsePerimeterPoint(shape, offset.angle);
             }
+        } else if (shape.type === 'text') {
+            const textElement = shape.querySelector('text');
+            if (!textElement) return { x: 0, y: 0 };
+            
+            const bbox = textElement.getBBox();
+            const groupTransform = shape.transform.baseVal.consolidate();
+            const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
+            
+            // Calculate the point on the text box using the stored offset
+            let localPoint = {
+                x: bbox.x + offset.x,
+                y: bbox.y + offset.y
+            };
+            
+            // Transform to world coordinates
+            return {
+                x: localPoint.x * matrix.a + localPoint.y * matrix.c + matrix.e,
+                y: localPoint.x * matrix.b + localPoint.y * matrix.d + matrix.f
+            };
         }
 
         return { x: shape.x, y: shape.y };
@@ -1269,7 +1795,7 @@ function detachSelectedArrow() {
 
 // Function to clean up attachments when shapes are deleted
 function cleanupAttachments(deletedShape) {
-    if (deletedShape.shapeName === 'rectangle' || deletedShape.shapeName === 'circle') {
+    if (deletedShape.shapeName === 'rectangle' || deletedShape.shapeName === 'circle' || deletedShape.type === 'text') {
         // Remove attachments to this shape
         shapes.forEach(shape => {
             if (shape instanceof Arrow) {

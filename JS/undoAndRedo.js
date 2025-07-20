@@ -39,9 +39,44 @@ export function pushDeleteAction(shape) {
     });
 }
 
+// Enhanced delete action to clean up attached arrows
+export function pushDeleteActionWithAttachments(shape) {
+    let affectedArrows = [];
+    
+    // If deleting a text element, find all attached arrows
+    if (shape.type === 'text' || shape.shapeName === 'text') {
+        affectedArrows = shapes.filter(s => s.shapeName === 'arrow' && 
+            (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+            .map(arrow => ({
+                arrow: arrow,
+                oldAttachments: arrow.getAttachmentState(),
+                oldPoints: {
+                    startPoint: { ...arrow.startPoint },
+                    endPoint: { ...arrow.endPoint }
+                }
+            }));
+    }
+    
+    undoStack.push({
+        type: 'delete',
+        shape: shape,
+        affectedArrows: affectedArrows
+    });
+}
+
+// Function to handle text creation with potential arrow reattachment
+export function pushCreateActionWithAttachments(shape) {
+    undoStack.push({
+        type: 'create',
+        shape: shape,
+        // Store any arrows that might need to reattach when this is undone
+        potentialAttachments: []
+    });
+}
+
 export function pushTransformAction(shape, oldPos, newPos) {
     if (shape.type === 'text') {
-        // Handle text transforms
+        // Enhanced text handling - also update attached arrows
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -56,7 +91,18 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 y: newPos.y,
                 rotation: newPos.rotation,
                 fontSize: newPos.fontSize
-            }
+            },
+            // Store affected arrows with their attachment states
+            affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
+                (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+                .map(arrow => ({
+                    arrow: arrow,
+                    oldAttachments: arrow.getAttachmentState(),
+                    oldPoints: {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    }
+                }))
         });
     } else if (shape.type === 'image') {
         // Handle image transforms
@@ -205,8 +251,19 @@ export function undo() {
     if (action.type === 'create') {
         if (action.shape.type === 'text') {
             // Handle text creation undo
-            if (action.shape.element.parentNode) {
+            if (action.shape.element && action.shape.element.parentNode) {
                 action.shape.element.parentNode.removeChild(action.shape.element);
+            } else if (action.shape.parentNode) {
+                action.shape.parentNode.removeChild(action.shape);
+            }
+            
+            // Remove from shapes array
+            const idx = shapes.indexOf(action.shape.element || action.shape);
+            if (idx !== -1) shapes.splice(idx, 1);
+            
+            // Clean up any arrow attachments to this text
+            if (typeof cleanupAttachments === 'function') {
+                cleanupAttachments(action.shape.element || action.shape);
             }
         }
         else if (action.shape.type === 'image') {
@@ -216,7 +273,7 @@ export function undo() {
             // Handle other shape creation undo
             const idx = shapes.indexOf(action.shape);
             if (idx !== -1) shapes.splice(idx, 1);
-            if (action.shape.group.parentNode) {
+            if (action.shape.group && action.shape.group.parentNode) {
                 action.shape.group.parentNode.removeChild(action.shape.group);
             }
         }
@@ -225,7 +282,18 @@ export function undo() {
         if (action.shape.type === 'text') {
             // Handle text deletion undo
             if (svg) {
-                svg.appendChild(action.shape.element);
+                svg.appendChild(action.shape.element || action.shape);
+                // Add back to shapes array
+                shapes.push(action.shape.element || action.shape);
+            }
+            
+            // Restore arrow attachments if any existed
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore the old attachment state
+                    arrow.restoreAttachmentState(arrowData.oldAttachments);
+                });
             }
         } else if (action.shape.type === 'image') {
             // Handle image deletion undo
@@ -241,8 +309,8 @@ export function undo() {
     }
     else if (action.type === 'transform') {
         if (action.shape.type === 'text') {
-            // Handle text transform undo
-            const textElement = action.shape.element.querySelector('text');
+            // Enhanced text transform undo
+            const textElement = (action.shape.element || action.shape).querySelector('text');
             if (textElement && action.oldPos.fontSize !== undefined) {
                 textElement.setAttribute('font-size', action.oldPos.fontSize + 'px');
             }
@@ -251,15 +319,31 @@ export function undo() {
             const centerX = textElement ? textElement.getBBox().x + textElement.getBBox().width / 2 : 0;
             const centerY = textElement ? textElement.getBBox().y + textElement.getBBox().height / 2 : 0;
             
-            action.shape.element.setAttribute('transform', 
+            (action.shape.element || action.shape).setAttribute('transform', 
                 `translate(${action.oldPos.x}, ${action.oldPos.y}) rotate(${action.oldPos.rotation}, ${centerX}, ${centerY})`
             );
             
-            action.shape.element.setAttribute('data-x', action.oldPos.x);
-            action.shape.element.setAttribute('data-y', action.oldPos.y);
+            (action.shape.element || action.shape).setAttribute('data-x', action.oldPos.x);
+            (action.shape.element || action.shape).setAttribute('data-y', action.oldPos.y);
+            
+            // Update attached arrows after text undo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to old state
+                    arrow.restoreAttachmentState(arrowData.oldAttachments);
+                    
+                    // Store current state for redo
+                    arrowData.newPoints = {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    };
+                    arrowData.newAttachments = arrow.getAttachmentState();
+                });
+            }
             
             // Update feedback if selected
-            if (selectedElement === action.shape.element && updateSelectionFeedback) {
+            if (selectedElement === (action.shape.element || action.shape) && updateSelectionFeedback) {
                 setTimeout(updateSelectionFeedback, 0);
             }
         } else if (action.shape.type === 'image') {
@@ -359,7 +443,7 @@ export function undo() {
     else if (action.type === 'optionsChange') {
         if (action.shape.type === 'text') {
             // Handle text options change undo
-            const textElement = action.shape.element.querySelector('text');
+            const textElement = (action.shape.element || action.shape).querySelector('text');
             if (textElement) {
                 if (action.oldOptions.color) textElement.setAttribute('fill', action.oldOptions.color);
                 if (action.oldOptions.font) textElement.setAttribute('font-family', action.oldOptions.font);
@@ -367,7 +451,7 @@ export function undo() {
                 if (action.oldOptions.align) textElement.setAttribute('text-anchor', action.oldOptions.align);
                 
                 // Update feedback if selected
-                if (selectedElement === action.shape.element && updateSelectionFeedback) {
+                if (selectedElement === (action.shape.element || action.shape) && updateSelectionFeedback) {
                     setTimeout(updateSelectionFeedback, 0);
                 }
             }
@@ -396,7 +480,9 @@ export function redo() {
         if (action.shape.type === 'text') {
             // Handle text creation redo
             if (svg) {
-                svg.appendChild(action.shape.element);
+                svg.appendChild(action.shape.element || action.shape);
+                // Add back to shapes array
+                shapes.push(action.shape.element || action.shape);
             }
         }
         else if (action.shape.type === 'image') {
@@ -413,8 +499,26 @@ export function redo() {
     } else if (action.type === 'delete') {
         if (action.shape.type === 'text') {
             // Handle text deletion redo
-            if (action.shape.element.parentNode) {
-                action.shape.element.parentNode.removeChild(action.shape.element);
+            if ((action.shape.element || action.shape).parentNode) {
+                (action.shape.element || action.shape).parentNode.removeChild(action.shape.element || action.shape);
+            }
+            // Remove from shapes array
+            const idx = shapes.indexOf(action.shape.element || action.shape);
+            if (idx !== -1) shapes.splice(idx, 1);
+            
+            // Clean up arrow attachments again
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Detach from the deleted text
+                    if (arrow.attachedToStart && arrow.attachedToStart.shape === (action.shape.element || action.shape)) {
+                        arrow.detachFromShape(true);
+                    }
+                    if (arrow.attachedToEnd && arrow.attachedToEnd.shape === (action.shape.element || action.shape)) {
+                        arrow.detachFromShape(false);
+                    }
+                    arrow.draw();
+                });
             }
         }
         else if (action.shape.type === 'image') {
@@ -424,7 +528,7 @@ export function redo() {
             // Handle other shape deletion redo
             const idx = shapes.indexOf(action.shape);
             if (idx !== -1) shapes.splice(idx, 1);
-            if (action.shape.group.parentNode) {
+            if (action.shape.group && action.shape.group.parentNode) {
                 action.shape.group.parentNode.removeChild(action.shape.group);
             }
         }
@@ -432,8 +536,8 @@ export function redo() {
     }
     else if (action.type === 'transform') {
         if (action.shape.type === 'text') {
-            // Handle text transform redo
-            const textElement = action.shape.element.querySelector('text');
+            // Enhanced text transform redo
+            const textElement = (action.shape.element || action.shape).querySelector('text');
             if (textElement && action.newPos.fontSize !== undefined) {
                 textElement.setAttribute('font-size', action.newPos.fontSize + 'px');
             }
@@ -442,15 +546,29 @@ export function redo() {
             const centerX = textElement ? textElement.getBBox().x + textElement.getBBox().width / 2 : 0;
             const centerY = textElement ? textElement.getBBox().y + textElement.getBBox().height / 2 : 0;
             
-            action.shape.element.setAttribute('transform', 
+            (action.shape.element || action.shape).setAttribute('transform', 
                 `translate(${action.newPos.x}, ${action.newPos.y}) rotate(${action.newPos.rotation}, ${centerX}, ${centerY})`
             );
             
-            action.shape.element.setAttribute('data-x', action.newPos.x);
-            action.shape.element.setAttribute('data-y', action.newPos.y);
+            (action.shape.element || action.shape).setAttribute('data-x', action.newPos.x);
+            (action.shape.element || action.shape).setAttribute('data-y', action.newPos.y);
+            
+            // Update attached arrows after text redo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to new state
+                    if (arrowData.newAttachments) {
+                        arrow.restoreAttachmentState(arrowData.newAttachments);
+                    } else {
+                        // If no new attachments stored, recalculate based on current text position
+                        arrow.updateAttachments();
+                    }
+                });
+            }
             
             // Update feedback if selected
-            if (selectedElement === action.shape.element && updateSelectionFeedback) {
+            if (selectedElement === (action.shape.element || action.shape) && updateSelectionFeedback) {
                 setTimeout(updateSelectionFeedback, 0);
             }
         } else if (action.shape.type === 'image') {
@@ -545,7 +663,7 @@ export function redo() {
     } else if (action.type === 'optionsChange') {
         if (action.shape.type === 'text') {
             // Handle text options change redo
-            const textElement = action.shape.element.querySelector('text');
+            const textElement = (action.shape.element || action.shape).querySelector('text');
             if (textElement) {
                 if (action.newOptions.color) textElement.setAttribute('fill', action.newOptions.color);
                 if (action.newOptions.font) textElement.setAttribute('font-family', action.newOptions.font);
@@ -553,7 +671,7 @@ export function redo() {
                 if (action.newOptions.align) textElement.setAttribute('text-anchor', action.newOptions.align);
                 
                 // Update feedback if selected
-                if (selectedElement === action.shape.element && updateSelectionFeedback) {
+                if (selectedElement === (action.shape.element || action.shape) && updateSelectionFeedback) {
                     setTimeout(updateSelectionFeedback, 0);
                 }
             }

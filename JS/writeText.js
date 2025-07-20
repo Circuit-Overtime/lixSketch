@@ -1,11 +1,13 @@
 import {
     pushCreateAction,
     pushDeleteAction,
+    pushDeleteActionWithAttachments,
     pushTransformAction,
     pushOptionsChangeAction,
     setTextReferences,
     updateSelectedElement
 } from './undoAndRedo.js';
+import { cleanupAttachments } from './drawArrow.js';
 
 let textSize = "30px";
 let textFont = "lixFont";
@@ -97,10 +99,20 @@ function addText(event) {
     textElement.setAttribute("data-type", "text");
     gElement.appendChild(textElement);
     svg.appendChild(gElement);
+    
     // Attach ID to both group and text element
     const shapeID = `text-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
     gElement.setAttribute('id', shapeID);
     textElement.setAttribute('id', `${shapeID}-text`);
+    
+    // Add text properties to make it compatible with arrow attachment
+    gElement.type = 'text';
+    gElement.shapeName = 'text';
+    gElement.shapeID = shapeID;
+    
+    // Add to shapes array for arrow attachment
+    shapes.push(gElement);
+    
     pushCreateAction({
         type: 'text',
         element: gElement,
@@ -285,11 +297,21 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     }
 
     if (deleteIfEmpty && text.trim() === "") {
-        pushDeleteAction({
+        // Use enhanced delete action for text with arrow attachments
+        pushDeleteActionWithAttachments({
             type: 'text',
             element: gElement,
             shapeName: 'text'
         });
+
+        // Remove from shapes array
+        const idx = shapes.indexOf(gElement);
+        if (idx !== -1) shapes.splice(idx, 1);
+
+        // Clean up any arrow attachments before deleting
+        if (typeof cleanupAttachments === 'function') {
+            cleanupAttachments(gElement);
+        }
 
         svg.removeChild(gElement);
         if (selectedElement === gElement) {
@@ -316,6 +338,9 @@ function renderText(input, textElement, deleteIfEmpty = false) {
         });
 
         gElement.style.display = 'block';
+
+        // Update attached arrows after text content change
+        updateAttachedArrows(gElement);
 
         if (selectedElement === gElement) {
             setTimeout(updateSelectionFeedback, 0);
@@ -664,6 +689,7 @@ function startResize(event, anchor) {
   svg.addEventListener('mouseup', handleMouseUp);
 }
 
+
 const handleMouseMove = (event) => {
     if (!selectedElement) return;
     event.preventDefault();
@@ -693,6 +719,9 @@ const handleMouseMove = (event) => {
         } else {
             selectedElement.setAttribute('transform', `translate(${newTranslateX}, ${newTranslateY})`);
         }
+
+        // Update attached arrows during dragging
+        updateAttachedArrows(selectedElement);
 
     } else if (isResizing) {
         const textElement = selectedElement.querySelector('text');
@@ -787,6 +816,9 @@ const handleMouseMove = (event) => {
             selectedElement.setAttribute('transform', `translate(${newGroupTx}, ${newGroupTy})`);
         }
 
+        // Update attached arrows during resizing
+        updateAttachedArrows(selectedElement);
+
         clearTimeout(selectedElement.updateFeedbackTimeout);
         selectedElement.updateFeedbackTimeout = setTimeout(() => {
             updateSelectionFeedback();
@@ -819,9 +851,14 @@ const handleMouseMove = (event) => {
         const newTransform = `translate(${rotationStartTransform.e}, ${rotationStartTransform.f}) rotate(${rotationDiff}, ${centerX}, ${centerY})`;
         selectedElement.setAttribute('transform', newTransform);
 
+        // Update attached arrows during rotation
+        updateAttachedArrows(selectedElement);
+
         updateSelectionFeedback();
     }
 };
+
+
 
 const handleMouseUp = (event) => {
     if (event.button !== 0) return;
@@ -1045,38 +1082,20 @@ const handleTextMouseUp = function (e) {
     }
 };
 
-// Remove the original event listener to prevent conflicts
-// The original svg.addEventListener will be removed and handled by eventListeners.js
-
-function handleToolChange(newToolElement) {
-    if (!newToolElement) return;
-
-    selectedTool = newToolElement;
-    isTextToolActive = selectedTool.classList.contains("bx-text");
-    console.log("Tool changed to:", selectedTool.classList);
-
-    const activeEditor = document.querySelector("textarea.svg-text-editor");
-    if (activeEditor) {
-         let textElement = activeEditor.originalTextElement;
-         if (textElement) {
-             renderText(activeEditor, textElement, true);
-         } else if (document.body.contains(activeEditor)) {
-             document.body.removeChild(activeEditor);
-         }
-    }
-
-    if (!selectedTool.classList.contains("bxs-pointer")) {
-        deselectElement();
-    }
-
-    if (isTextToolActive) {
-        svg.style.cursor = 'text';
-    } else if (selectedTool.classList.contains("bxs-pointer")) {
-        svg.style.cursor = 'default';
-    } else {
-        svg.style.cursor = 'crosshair';
-    }
+function updateAttachedArrows(textGroup) {
+    if (!textGroup || textGroup.type !== 'text') return;
+    
+    // Find all arrows attached to this text
+    shapes.forEach(shape => {
+        if (shape && shape.shapeName === 'arrow' && typeof shape.updateAttachments === 'function') {
+            if ((shape.attachedToStart && shape.attachedToStart.shape === textGroup) ||
+                (shape.attachedToEnd && shape.attachedToEnd.shape === textGroup)) {
+                shape.updateAttachments();
+            }
+        }
+    });
 }
+
 
 textColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
