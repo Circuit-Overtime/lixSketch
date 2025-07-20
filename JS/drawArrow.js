@@ -1,21 +1,20 @@
 import { pushCreateAction, pushDeleteAction, pushOptionsChangeAction, pushTransformAction } from './undoAndRedo.js';
 
 let arrowStartX, arrowStartY;
-let currentArrow = null; 
-let isResizing = false;  
-let isDragging = false;  
-let activeAnchor = null; 
-let isDrawingArrow = false; 
+let currentArrow = null;
+let isResizing = false;
+let isDragging = false;
+let activeAnchor = null;
+let isDrawingArrow = false;
 let arrowStrokeColor = "#fff";
 let arrowStrokeThickness = 2;
 let arrowOutlineStyle = "solid";
-let arrowCurved = false;
+let arrowCurved = true;
 let arrowCurveAmount = 20;
 let arrowHeadLength = 10;
 let arrowHeadAngleDeg = 30;
 let arrowHeadStyle = "default";
-let startX, startY; 
-let startViewBoxX, startViewBoxY, dragOffsetX, dragOffsetY; 
+let startX, startY;
 let dragOldPosArrow = null;
 let copiedShapeData = null;
 
@@ -38,14 +37,14 @@ function getSVGCoordsFromMouse(e) {
 
 class Arrow {
     constructor(startPoint, endPoint, options = {}) {
-        this.startPoint = startPoint; 
-        this.endPoint = endPoint;   
+        this.startPoint = startPoint;
+        this.endPoint = endPoint;
         this.options = {
             stroke: options.stroke || arrowStrokeColor,
             strokeWidth: options.strokeWidth || arrowStrokeThickness,
             strokeDasharray: options.arrowOutlineStyle === "dashed" ? "10,10" : (options.arrowOutlineStyle === "dotted" ? "2,8" : ""),
-            fill: 'none', 
-            ...options 
+            fill: 'none',
+            ...options
         };
         this.arrowOutlineStyle = options.arrowOutlineStyle || arrowOutlineStyle;
         this.arrowHeadStyle = options.arrowHeadStyle || arrowHeadStyle;
@@ -59,41 +58,41 @@ class Arrow {
         this.controlPoint2 = options.controlPoint2 || null;
 
         // Attachment properties
-        this.attachedToStart = null; 
-        this.attachedToEnd = null;   
+        this.attachedToStart = null;
+        this.attachedToEnd = null;
 
-        this.element = null; 
+        this.element = null;
         this.group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        this.isSelected = false; 
+        this.isSelected = false;
         this.anchors = [];
         this.shapeName = "arrow";
-        this.shapeID = `arrow-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
+        this.shapeID = `arrow-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
         this.group.setAttribute('id', this.shapeID);
-        
+
         // Initialize control points if curved
         if (this.arrowCurved && !this.controlPoint1 && !this.controlPoint2) {
             this.initializeCurveControlPoints();
         }
 
         svg.appendChild(this.group);
-        this.draw(); 
+        this.draw();
     }
 
     initializeCurveControlPoints() {
         const dx = this.endPoint.x - this.startPoint.x;
         const dy = this.endPoint.y - this.startPoint.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         if (distance === 0 || isNaN(distance)) {
             this.controlPoint1 = { x: this.startPoint.x + 20, y: this.startPoint.y };
             this.controlPoint2 = { x: this.endPoint.x - 20, y: this.endPoint.y };
             return;
         }
-        
+
         const perpX = -dy / distance;
         const perpY = dx / distance;
         const curveOffset = this.arrowCurveAmount;
-        
+
         const t1 = 0.33;
         const point1X = this.startPoint.x + t1 * dx;
         const point1Y = this.startPoint.y + t1 * dy;
@@ -101,7 +100,7 @@ class Arrow {
             x: point1X + perpX * curveOffset,
             y: point1Y + perpY * curveOffset
         };
-        
+
         const t2 = 0.67;
         const point2X = this.startPoint.x + t2 * dx;
         const point2Y = this.startPoint.y + t2 * dy;
@@ -125,6 +124,7 @@ class Arrow {
         this.anchors = [];
         this.isSelected = false;
     }
+
     attachToShape(isStartPoint, shape, attachment) {
         if (isStartPoint) {
             this.attachedToStart = {
@@ -141,44 +141,45 @@ class Arrow {
             };
             this.endPoint = attachment.point;
         }
-        
+
         // Update control points if curved
         if (this.arrowCurved) {
             this.initializeCurveControlPoints();
         }
-        
+
         this.draw();
     }
+
     draw() {
         while (this.group.firstChild) {
             this.group.removeChild(this.group.firstChild);
         }
-        this.anchors = []; 
+        this.anchors = [];
 
         let pathData;
         let arrowEndPoint = this.endPoint;
 
         if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
-            if (isNaN(this.controlPoint1.x) || isNaN(this.controlPoint1.y) || 
+            if (isNaN(this.controlPoint1.x) || isNaN(this.controlPoint1.y) ||
                 isNaN(this.controlPoint2.x) || isNaN(this.controlPoint2.y)) {
                 this.initializeCurveControlPoints();
             }
-            
+
             pathData = `M ${this.startPoint.x} ${this.startPoint.y} ` +
                       `C ${this.controlPoint1.x} ${this.controlPoint1.y}, ` +
                       `${this.controlPoint2.x} ${this.controlPoint2.y}, ` +
                       `${this.endPoint.x} ${this.endPoint.y}`;
-            
+
             const t = 0.95;
             const tangent = this.getCubicBezierTangent(t);
             const angle = Math.atan2(tangent.y, tangent.x);
-            
+
             if (this.arrowHeadStyle === "default") {
                 arrowEndPoint = {
                     x: this.endPoint.x - (this.arrowHeadLength * 0.3) * Math.cos(angle),
                     y: this.endPoint.y - (this.arrowHeadLength * 0.3) * Math.sin(angle)
                 };
-                
+
                 pathData = `M ${this.startPoint.x} ${this.startPoint.y} ` +
                           `C ${this.controlPoint1.x} ${this.controlPoint1.y}, ` +
                           `${this.controlPoint2.x} ${this.controlPoint2.y}, ` +
@@ -198,7 +199,7 @@ class Arrow {
                 const dy = this.endPoint.y - this.startPoint.y;
                 angle = Math.atan2(dy, dx);
             }
-            
+
             const arrowHeadAngleRad = (this.arrowHeadAngleDeg * Math.PI) / 180;
             const x3 = this.endPoint.x - this.arrowHeadLength * Math.cos(angle - arrowHeadAngleRad);
             const y3 = this.endPoint.y - this.arrowHeadLength * Math.sin(angle - arrowHeadAngleRad);
@@ -211,12 +212,12 @@ class Arrow {
         arrowPath.setAttribute("d", pathData);
         arrowPath.setAttribute("stroke", this.options.stroke);
         arrowPath.setAttribute("stroke-width", this.options.strokeWidth);
-        arrowPath.setAttribute("fill", this.options.fill); 
+        arrowPath.setAttribute("fill", this.options.fill);
 
         if (this.options.strokeDasharray) {
              arrowPath.setAttribute("stroke-dasharray", this.options.strokeDasharray);
         } else {
-             arrowPath.removeAttribute("stroke-dasharray"); 
+             arrowPath.removeAttribute("stroke-dasharray");
         }
 
         arrowPath.setAttribute("stroke-linecap", "round");
@@ -224,41 +225,27 @@ class Arrow {
         arrowPath.classList.add("arrow-path");
 
         this.element = arrowPath;
-        this.group.appendChild(this.element); 
+        this.group.appendChild(this.element);
 
         if (this.isSelected) {
             this.addAnchors();
             this.addAttachmentIndicators();
         }
     }
-    static getEllipsePerimeterPoint(circle, angle) {
-        // Calculate point on ellipse perimeter at given angle
-        const cosAngle = Math.cos(angle);
-        const sinAngle = Math.sin(angle);
-        
-        const a = circle.rx;
-        const b = circle.ry;
-        
-        const t = Math.atan2(a * sinAngle, b * cosAngle);
-        
-        return {
-            x: circle.x + a * Math.cos(t),
-            y: circle.y + b * Math.sin(t)
-        };
-    }
+
     getCubicBezierPoint(t) {
         if (!this.controlPoint1 || !this.controlPoint2) return this.startPoint;
-        
+
         const mt = 1 - t;
         const mt2 = mt * mt;
         const mt3 = mt2 * mt;
         const t2 = t * t;
         const t3 = t2 * t;
-        
+
         return {
-            x: mt3 * this.startPoint.x + 3 * mt2 * t * this.controlPoint1.x + 
+            x: mt3 * this.startPoint.x + 3 * mt2 * t * this.controlPoint1.x +
                3 * mt * t2 * this.controlPoint2.x + t3 * this.endPoint.x,
-            y: mt3 * this.startPoint.y + 3 * mt2 * t * this.controlPoint1.y + 
+            y: mt3 * this.startPoint.y + 3 * mt2 * t * this.controlPoint1.y +
                3 * mt * t2 * this.controlPoint2.y + t3 * this.endPoint.y
         };
     }
@@ -267,17 +254,17 @@ class Arrow {
         if (!this.controlPoint1 || !this.controlPoint2) {
             return { x: this.endPoint.x - this.startPoint.x, y: this.endPoint.y - this.startPoint.y };
         }
-        
+
         const mt = 1 - t;
         const mt2 = mt * mt;
         const t2 = t * t;
-        
+
         return {
-            x: 3 * mt2 * (this.controlPoint1.x - this.startPoint.x) + 
-               6 * mt * t * (this.controlPoint2.x - this.controlPoint1.x) + 
+            x: 3 * mt2 * (this.controlPoint1.x - this.startPoint.x) +
+               6 * mt * t * (this.controlPoint2.x - this.controlPoint1.x) +
                3 * t2 * (this.endPoint.x - this.controlPoint2.x),
-            y: 3 * mt2 * (this.controlPoint1.y - this.startPoint.y) + 
-               6 * mt * t * (this.controlPoint2.y - this.controlPoint1.y) + 
+            y: 3 * mt2 * (this.controlPoint1.y - this.startPoint.y) +
+               6 * mt * t * (this.controlPoint2.y - this.controlPoint1.y) +
                3 * t2 * (this.endPoint.y - this.controlPoint2.y)
         };
     }
@@ -285,9 +272,9 @@ class Arrow {
     addAnchors() {
         const anchorSize = 5 / currentZoom;
         const anchorStrokeWidth = 2 / currentZoom;
-        
+
         let anchorPositions = [this.startPoint, this.endPoint];
-        
+
         if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
             anchorPositions.push(this.controlPoint1, this.controlPoint2);
         } else if (!this.arrowCurved) {
@@ -299,13 +286,13 @@ class Arrow {
             };
             anchorPositions[1] = offsetEndAnchor;
         }
-    
+
         anchorPositions.forEach((point, index) => {
             const anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             anchor.setAttribute("cx", point.x);
             anchor.setAttribute("cy", point.y);
-            anchor.setAttribute("r", anchorSize); 
-            
+            anchor.setAttribute("r", anchorSize);
+
             if (this.arrowCurved && index >= 2) {
                 anchor.setAttribute("fill", "#121212");
                 anchor.setAttribute("stroke", "#5B57D1");
@@ -313,16 +300,16 @@ class Arrow {
                 anchor.setAttribute("fill", "#121212");
                 anchor.setAttribute("stroke", "#5B57D1");
             }
-            
-            anchor.setAttribute("stroke-width", anchorStrokeWidth); 
-            anchor.setAttribute("class", "anchor arrow-anchor"); 
-            anchor.setAttribute("data-index", index); 
-            anchor.style.cursor = "grab"; 
-            anchor.style.pointerEvents = "all"; 
+
+            anchor.setAttribute("stroke-width", anchorStrokeWidth);
+            anchor.setAttribute("class", "anchor arrow-anchor");
+            anchor.setAttribute("data-index", index);
+            anchor.style.cursor = "grab";
+            anchor.style.pointerEvents = "all";
             anchor.addEventListener('pointerdown', (e) => this.startAnchorDrag(e, index));
-    
-            this.group.appendChild(anchor); 
-            this.anchors[index] = anchor;   
+
+            this.group.appendChild(anchor);
+            this.anchors[index] = anchor;
         });
     }
 
@@ -400,31 +387,167 @@ class Arrow {
         if (this.arrowCurved) {
             this.initializeCurveControlPoints();
         }
-        
+
         this.draw();
     }
 
+    static getEllipsePerimeterPoint(circle, angle) {
+        // Calculate point on ellipse perimeter at given angle
+        const cosAngle = Math.cos(angle);
+        const sinAngle = Math.sin(angle);
+
+        const a = circle.rx;
+        const b = circle.ry;
+
+        const t = Math.atan2(a * sinAngle, b * cosAngle);
+
+        return {
+            x: circle.x + a * Math.cos(t),
+            y: circle.y + b * Math.sin(t)
+        };
+    }
+
+
     static findNearbyShape(point, tolerance = 20) {
-        for (let shape of shapes) {
-            if (shape.shapeName === 'rectangle') {
-                const attachment = Arrow.getRectangleAttachmentPoint(point, shape, tolerance);
-                if (attachment) {
-                    return { shape, attachment };
-                }
-            } else if (shape.shapeName === 'circle') {
-                const attachment = Arrow.getCircleAttachmentPoint(point, shape, tolerance);
-                if (attachment) {
-                    return { shape, attachment };
-                }
-            } else if (shape.type === 'text') {
-                const attachment = Arrow.getTextAttachmentPoint(point, shape, tolerance);
-                if (attachment) {
-                    return { shape, attachment };
-                }
+    console.log('Finding nearby shape for point:', point, 'with tolerance:', tolerance);
+    for (let shape of shapes) {
+        console.log('Checking shape:', shape);
+        
+        // Check if it's an SVG image element (DOM element)
+        if (shape.tagName === 'image' || (shape.getAttribute && shape.getAttribute('type') === 'image')) {
+            console.log('Checking image shape:', shape);
+            const attachment = Arrow.getImageAttachmentPoint(point, shape, tolerance);
+            if (attachment) {
+                console.log('Found image attachment:', attachment);
+                return { shape, attachment };
             }
         }
+        // Check for rectangle objects
+        else if (shape.shapeName === 'rectangle') {
+            const attachment = Arrow.getRectangleAttachmentPoint(point, shape, tolerance);
+            if (attachment) {
+                return { shape, attachment };
+            }
+        } 
+        // Check for circle objects
+        else if (shape.shapeName === 'circle') {
+            const attachment = Arrow.getCircleAttachmentPoint(point, shape, tolerance);
+            if (attachment) {
+                return { shape, attachment };
+            }
+        } 
+        // Check for text objects (DOM elements with type attribute)
+        else if ((shape.getAttribute && shape.getAttribute('type') === 'text') || shape.type === 'text') {
+            const attachment = Arrow.getTextAttachmentPoint(point, shape, tolerance);
+            if (attachment) {
+                return { shape, attachment };
+            }
+        }
+    }
+    return null;
+}
+
+    static getImageAttachmentPoint(point, imageElement, tolerance = 20) {
+    // Check if it's an SVG image element
+    if (!imageElement || (imageElement.tagName !== 'image' && (!imageElement.getAttribute || imageElement.getAttribute('type') !== 'image'))) {
+        console.warn('Invalid image element for attachment:', imageElement);
         return null;
     }
+
+    // Get image position and dimensions from data attributes
+    const imgX = parseFloat(imageElement.getAttribute('data-shape-x') || imageElement.getAttribute('x'));
+    const imgY = parseFloat(imageElement.getAttribute('data-shape-y') || imageElement.getAttribute('y'));
+    const imgWidth = parseFloat(imageElement.getAttribute('data-shape-width') || imageElement.getAttribute('width'));
+    const imgHeight = parseFloat(imageElement.getAttribute('data-shape-height') || imageElement.getAttribute('height'));
+
+    // Get rotation from data attribute or transform attribute
+    let rotation = 0;
+    const dataRotation = imageElement.getAttribute('data-shape-rotation');
+    if (dataRotation) {
+        rotation = parseFloat(dataRotation) * Math.PI / 180; // Convert to radians
+    } else {
+        const transform = imageElement.getAttribute('transform');
+        if (transform) {
+            const rotateMatch = transform.match(/rotate\(([^,]+)/);
+            if (rotateMatch) {
+                rotation = parseFloat(rotateMatch[1]) * Math.PI / 180; // Convert to radians
+            }
+        }
+    }
+
+    const centerX = imgX + imgWidth / 2;
+    const centerY = imgY + imgHeight / 2;
+
+    // Transform the bounding box corners to world coordinates
+    const corners = [
+        { x: imgX, y: imgY }, // top-left
+        { x: imgX + imgWidth, y: imgY }, // top-right
+        { x: imgX + imgWidth, y: imgY + imgHeight }, // bottom-right
+        { x: imgX, y: imgY + imgHeight } // bottom-left
+    ];
+
+    // Apply rotation to corners
+    const transformedCorners = corners.map(corner => {
+        if (rotation === 0) return corner;
+
+        const dx = corner.x - centerX;
+        const dy = corner.y - centerY;
+
+        return {
+            x: centerX + dx * Math.cos(rotation) - dy * Math.sin(rotation),
+            y: centerY + dx * Math.sin(rotation) + dy * Math.cos(rotation)
+        };
+    });
+
+    // Calculate sides of the transformed rectangle
+    const sides = [
+        { name: 'top', start: transformedCorners[0], end: transformedCorners[1] },
+        { name: 'right', start: transformedCorners[1], end: transformedCorners[2] },
+        { name: 'bottom', start: transformedCorners[2], end: transformedCorners[3] },
+        { name: 'left', start: transformedCorners[3], end: transformedCorners[0] }
+    ];
+
+    let closestSide = null;
+    let minDistance = tolerance;
+    let attachPoint = null;
+
+    sides.forEach(side => {
+        const distance = Arrow.pointToLineSegmentDistance(point, side.start, side.end);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestSide = side.name;
+
+            // Calculate the closest point on the line segment
+            attachPoint = Arrow.closestPointOnLineSegment(point, side.start, side.end);
+        }
+    });
+
+    if (closestSide && attachPoint) {
+        // Calculate offset relative to the original image rectangle
+        // Transform the attach point back to local coordinates
+        let localPoint = attachPoint;
+        if (rotation !== 0) {
+            const dx = attachPoint.x - centerX;
+            const dy = attachPoint.y - centerY;
+
+            localPoint = {
+                x: centerX + dx * Math.cos(-rotation) - dy * Math.sin(-rotation),
+                y: centerY + dx * Math.sin(-rotation) + dy * Math.cos(-rotation)
+            };
+        }
+
+        // Calculate offset relative to the image rectangle
+        const offset = {
+            x: localPoint.x - imgX,
+            y: localPoint.y - imgY,
+            side: closestSide
+        };
+
+        return { side: closestSide, point: attachPoint, offset };
+    }
+
+    return null;
+}
 
     static getRectangleAttachmentPoint(point, rectangle, tolerance = 20) {
         const rect = {
@@ -446,11 +569,11 @@ class Arrow {
 
         for (let side in distances) {
             if (distances[side] < minDistance) {
-                if ((side === 'top' || side === 'bottom') && 
+                if ((side === 'top' || side === 'bottom') &&
                     point.x >= rect.left - tolerance && point.x <= rect.right + tolerance) {
                     closestSide = side;
                     minDistance = distances[side];
-                } else if ((side === 'left' || side === 'right') && 
+                } else if ((side === 'left' || side === 'right') &&
                            point.y >= rect.top - tolerance && point.y <= rect.bottom + tolerance) {
                     closestSide = side;
                     minDistance = distances[side];
@@ -460,7 +583,7 @@ class Arrow {
 
         if (closestSide) {
             let attachPoint, offset;
-            
+
             switch (closestSide) {
                 case 'top':
                     attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.top };
@@ -491,17 +614,17 @@ class Arrow {
         const dx = point.x - circle.x;
         const dy = point.y - circle.y;
         const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
-        
+
         const averageRadius = (circle.rx + circle.ry) / 2;
         const distanceToPerimeter = Math.abs(distanceToCenter - averageRadius);
-        
+
         if (distanceToPerimeter <= tolerance) {
 
             const angle = Math.atan2(dy, dx);
-            
+
 
             const attachPoint = this.getEllipsePerimeterPoint(circle, angle);
-            
+
 
             const offset = {
                 angle: angle,
@@ -509,10 +632,10 @@ class Arrow {
                 radiusRatioY: (attachPoint.y - circle.y) / circle.ry
             };
 
-            return { 
-                side: 'perimeter', 
-                point: attachPoint, 
-                offset: offset 
+            return {
+                side: 'perimeter',
+                point: attachPoint,
+                offset: offset
             };
         }
 
@@ -527,11 +650,11 @@ class Arrow {
 
         // Get the text bounding box
         const bbox = textElement.getBBox();
-        
+
         // Get the group's transform
         const groupTransform = textGroup.transform.baseVal.consolidate();
         const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
-        
+
         // Transform the bounding box corners to world coordinates
         const corners = [
             { x: bbox.x, y: bbox.y }, // top-left
@@ -539,13 +662,13 @@ class Arrow {
             { x: bbox.x + bbox.width, y: bbox.y + bbox.height }, // bottom-right
             { x: bbox.x, y: bbox.y + bbox.height } // bottom-left
         ];
-        
+
         // Transform corners using the group's transform matrix
         const transformedCorners = corners.map(corner => ({
             x: corner.x * matrix.a + corner.y * matrix.c + matrix.e,
             y: corner.x * matrix.b + corner.y * matrix.d + matrix.f
         }));
-        
+
         // Calculate sides of the transformed rectangle
         const sides = [
             { name: 'top', start: transformedCorners[0], end: transformedCorners[1] },
@@ -553,28 +676,28 @@ class Arrow {
             { name: 'bottom', start: transformedCorners[2], end: transformedCorners[3] },
             { name: 'left', start: transformedCorners[3], end: transformedCorners[0] }
         ];
-        
+
         let closestSide = null;
         let minDistance = tolerance;
         let attachPoint = null;
-        
+
         sides.forEach(side => {
             const distance = Arrow.pointToLineSegmentDistance(point, side.start, side.end);
             if (distance < minDistance) {
                 minDistance = distance;
                 closestSide = side.name;
-                
+
                 // Calculate the closest point on the line segment
                 attachPoint = Arrow.closestPointOnLineSegment(point, side.start, side.end);
             }
         });
-        
+
         if (closestSide && attachPoint) {
             // Calculate offset relative to the original bounding box
             // Transform the attach point back to local coordinates
             const det = matrix.a * matrix.d - matrix.b * matrix.c;
             if (det === 0) return null;
-            
+
             const invMatrix = {
                 a: matrix.d / det,
                 b: -matrix.b / det,
@@ -583,22 +706,22 @@ class Arrow {
                 e: (matrix.c * matrix.f - matrix.d * matrix.e) / det,
                 f: (matrix.b * matrix.e - matrix.a * matrix.f) / det
             };
-            
+
             const localPoint = {
                 x: attachPoint.x * invMatrix.a + attachPoint.y * invMatrix.c + invMatrix.e,
                 y: attachPoint.x * invMatrix.b + attachPoint.y * invMatrix.d + invMatrix.f
             };
-            
+
             // Calculate offset relative to the bounding box
             const offset = {
                 x: localPoint.x - bbox.x,
                 y: localPoint.y - bbox.y,
                 side: closestSide
             };
-            
+
             return { side: closestSide, point: attachPoint, offset };
         }
-        
+
         return null;
     }
 
@@ -607,21 +730,21 @@ class Arrow {
         const B = point.y - lineStart.y;
         const C = lineEnd.x - lineStart.x;
         const D = lineEnd.y - lineStart.y;
-        
+
         const dot = A * C + B * D;
         const lenSq = C * C + D * D;
-        
+
         if (lenSq === 0) {
             // Line segment is a point
             return Math.sqrt(A * A + B * B);
         }
-        
+
         let param = dot / lenSq;
         param = Math.max(0, Math.min(1, param)); // Clamp to [0,1]
-        
+
         const xx = lineStart.x + param * C;
         const yy = lineStart.y + param * D;
-        
+
         const dx = point.x - xx;
         const dy = point.y - yy;
         return Math.sqrt(dx * dx + dy * dy);
@@ -632,384 +755,17 @@ class Arrow {
         const B = point.y - lineStart.y;
         const C = lineEnd.x - lineStart.x;
         const D = lineEnd.y - lineStart.y;
-        
+
         const dot = A * C + B * D;
         const lenSq = C * C + D * D;
-        
+
         if (lenSq === 0) {
             return { x: lineStart.x, y: lineStart.y };
         }
-        
+
         let param = dot / lenSq;
         param = Math.max(0, Math.min(1, param));
-        
-        return {
-            x: lineStart.x + param * C,
-            y: lineStart.y + param * D
-        };
-    }
 
-    addAnchors() {
-        const anchorSize = 5 / currentZoom;
-        const anchorStrokeWidth = 2 / currentZoom;
-        
-        let anchorPositions = [this.startPoint, this.endPoint];
-        
-        if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
-            anchorPositions.push(this.controlPoint1, this.controlPoint2);
-        } else if (!this.arrowCurved) {
-            const arrowAngle = Math.atan2(this.endPoint.y - this.startPoint.y, this.endPoint.x - this.startPoint.x);
-            const arrowHeadClearance = this.arrowHeadLength + anchorSize - 10;
-            const offsetEndAnchor = {
-                x: this.endPoint.x + arrowHeadClearance * Math.cos(arrowAngle),
-                y: this.endPoint.y + arrowHeadClearance * Math.sin(arrowAngle)
-            };
-            anchorPositions[1] = offsetEndAnchor;
-        }
-    
-        anchorPositions.forEach((point, index) => {
-            const anchor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            anchor.setAttribute("cx", point.x);
-            anchor.setAttribute("cy", point.y);
-            anchor.setAttribute("r", anchorSize); 
-            
-            if (this.arrowCurved && index >= 2) {
-                anchor.setAttribute("fill", "#121212");
-                anchor.setAttribute("stroke", "#5B57D1");
-            } else {
-                anchor.setAttribute("fill", "#121212");
-                anchor.setAttribute("stroke", "#5B57D1");
-            }
-            
-            anchor.setAttribute("stroke-width", anchorStrokeWidth); 
-            anchor.setAttribute("class", "anchor arrow-anchor"); 
-            anchor.setAttribute("data-index", index); 
-            anchor.style.cursor = "grab"; 
-            anchor.style.pointerEvents = "all"; 
-            anchor.addEventListener('pointerdown', (e) => this.startAnchorDrag(e, index));
-    
-            this.group.appendChild(anchor); 
-            this.anchors[index] = anchor;   
-        });
-    }
-
-    addAttachmentIndicators() {
-        if (this.attachedToStart) {
-            const attachPoint = this.calculateAttachedPoint(this.attachedToStart);
-            const indicator = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            indicator.setAttribute("cx", attachPoint.x);
-            indicator.setAttribute("cy", attachPoint.y);
-            indicator.setAttribute("r", 4);
-            indicator.setAttribute("fill", "#5B57D1");
-            indicator.setAttribute("stroke", "#121212");
-            indicator.setAttribute("stroke-width", 1);
-            indicator.setAttribute("class", "attachment-indicator");
-            this.group.appendChild(indicator);
-        }
-
-        if (this.attachedToEnd) {
-            const attachPoint = this.calculateAttachedPoint(this.attachedToEnd);
-            const indicator = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            indicator.setAttribute("cx", attachPoint.x);
-            indicator.setAttribute("cy", attachPoint.y);
-            indicator.setAttribute("r", 4);
-            indicator.setAttribute("fill", "#5B57D1");
-            indicator.setAttribute("stroke", "#121212");
-            indicator.setAttribute("stroke-width", 1);
-            indicator.setAttribute("class", "attachment-indicator");
-            this.group.appendChild(indicator);
-        }
-    }
-
-    getAttachmentState() {
-        return {
-            attachedToStart: this.attachedToStart ? {
-                shapeId: this.attachedToStart.shape.shapeID,
-                side: this.attachedToStart.side,
-                offset: { ...this.attachedToStart.offset }
-            } : null,
-            attachedToEnd: this.attachedToEnd ? {
-                shapeId: this.attachedToEnd.shape.shapeID,
-                side: this.attachedToEnd.side,
-                offset: { ...this.attachedToEnd.offset }
-            } : null
-        };
-    }
-
-    restoreAttachmentState(attachmentState) {
-        this.attachedToStart = null;
-        this.attachedToEnd = null;
-
-        if (attachmentState.attachedToStart) {
-            const shape = shapes.find(s => s.shapeID === attachmentState.attachedToStart.shapeId);
-            if (shape) {
-                this.attachedToStart = {
-                    shape: shape,
-                    side: attachmentState.attachedToStart.side,
-                    offset: { ...attachmentState.attachedToStart.offset }
-                };
-                this.startPoint = this.calculateAttachedPoint(this.attachedToStart);
-            }
-        }
-
-        if (attachmentState.attachedToEnd) {
-            const shape = shapes.find(s => s.shapeID === attachmentState.attachedToEnd.shapeId);
-            if (shape) {
-                this.attachedToEnd = {
-                    shape: shape,
-                    side: attachmentState.attachedToEnd.side,
-                    offset: { ...attachmentState.attachedToEnd.offset }
-                };
-                this.endPoint = this.calculateAttachedPoint(this.attachedToEnd);
-            }
-        }
-
-        if (this.arrowCurved) {
-            this.initializeCurveControlPoints();
-        }
-        
-        this.draw();
-    }
-
-    static findNearbyShape(point, tolerance = 20) {
-        for (let shape of shapes) {
-            if (shape.shapeName === 'rectangle') {
-                const attachment = Arrow.getRectangleAttachmentPoint(point, shape, tolerance);
-                if (attachment) {
-                    return { shape, attachment };
-                }
-            } else if (shape.shapeName === 'circle') {
-                const attachment = Arrow.getCircleAttachmentPoint(point, shape, tolerance);
-                if (attachment) {
-                    return { shape, attachment };
-                }
-            } else if (shape.type === 'text') {
-                const attachment = Arrow.getTextAttachmentPoint(point, shape, tolerance);
-                if (attachment) {
-                    return { shape, attachment };
-                }
-            }
-        }
-        return null;
-    }
-
-    static getRectangleAttachmentPoint(point, rectangle, tolerance = 20) {
-        const rect = {
-            left: rectangle.x,
-            right: rectangle.x + rectangle.width,
-            top: rectangle.y,
-            bottom: rectangle.y + rectangle.height
-        };
-
-        const distances = {
-            top: Math.abs(point.y - rect.top),
-            bottom: Math.abs(point.y - rect.bottom),
-            left: Math.abs(point.x - rect.left),
-            right: Math.abs(point.x - rect.right)
-        };
-
-        let closestSide = null;
-        let minDistance = tolerance;
-
-        for (let side in distances) {
-            if (distances[side] < minDistance) {
-                if ((side === 'top' || side === 'bottom') && 
-                    point.x >= rect.left - tolerance && point.x <= rect.right + tolerance) {
-                    closestSide = side;
-                    minDistance = distances[side];
-                } else if ((side === 'left' || side === 'right') && 
-                           point.y >= rect.top - tolerance && point.y <= rect.bottom + tolerance) {
-                    closestSide = side;
-                    minDistance = distances[side];
-                }
-            }
-        }
-
-        if (closestSide) {
-            let attachPoint, offset;
-            
-            switch (closestSide) {
-                case 'top':
-                    attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.top };
-                    offset = { x: attachPoint.x - rectangle.x, y: 0 };
-                    break;
-                case 'bottom':
-                    attachPoint = { x: Math.max(rect.left, Math.min(rect.right, point.x)), y: rect.bottom };
-                    offset = { x: attachPoint.x - rectangle.x, y: rectangle.height };
-                    break;
-                case 'left':
-                    attachPoint = { x: rect.left, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
-                    offset = { x: 0, y: attachPoint.y - rectangle.y };
-                    break;
-                case 'right':
-                    attachPoint = { x: rect.right, y: Math.max(rect.top, Math.min(rect.bottom, point.y)) };
-                    offset = { x: rectangle.width, y: attachPoint.y - rectangle.y };
-                    break;
-            }
-
-            return { side: closestSide, point: attachPoint, offset };
-        }
-
-        return null;
-    }
-
-    static getCircleAttachmentPoint(point, circle, tolerance = 20) {
-        // Calculate distance from point to circle center
-        const dx = point.x - circle.x;
-        const dy = point.y - circle.y;
-        const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
-        
-        const averageRadius = (circle.rx + circle.ry) / 2;
-        const distanceToPerimeter = Math.abs(distanceToCenter - averageRadius);
-        
-        if (distanceToPerimeter <= tolerance) {
-
-            const angle = Math.atan2(dy, dx);
-            
-
-            const attachPoint = this.getEllipsePerimeterPoint(circle, angle);
-            
-
-            const offset = {
-                angle: angle,
-                radiusRatioX: (attachPoint.x - circle.x) / circle.rx,
-                radiusRatioY: (attachPoint.y - circle.y) / circle.ry
-            };
-
-            return { 
-                side: 'perimeter', 
-                point: attachPoint, 
-                offset: offset 
-            };
-        }
-
-        return null;
-    }
-
-    static getTextAttachmentPoint(point, textGroup, tolerance = 20) {
-        if (!textGroup || textGroup.type !== 'text') return null;
-
-        const textElement = textGroup.querySelector('text');
-        if (!textElement) return null;
-
-        // Get the text bounding box
-        const bbox = textElement.getBBox();
-        
-        // Get the group's transform
-        const groupTransform = textGroup.transform.baseVal.consolidate();
-        const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
-        
-        // Transform the bounding box corners to world coordinates
-        const corners = [
-            { x: bbox.x, y: bbox.y }, // top-left
-            { x: bbox.x + bbox.width, y: bbox.y }, // top-right
-            { x: bbox.x + bbox.width, y: bbox.y + bbox.height }, // bottom-right
-            { x: bbox.x, y: bbox.y + bbox.height } // bottom-left
-        ];
-        
-        // Transform corners using the group's transform matrix
-        const transformedCorners = corners.map(corner => ({
-            x: corner.x * matrix.a + corner.y * matrix.c + matrix.e,
-            y: corner.x * matrix.b + corner.y * matrix.d + matrix.f
-        }));
-        
-        // Calculate sides of the transformed rectangle
-        const sides = [
-            { name: 'top', start: transformedCorners[0], end: transformedCorners[1] },
-            { name: 'right', start: transformedCorners[1], end: transformedCorners[2] },
-            { name: 'bottom', start: transformedCorners[2], end: transformedCorners[3] },
-            { name: 'left', start: transformedCorners[3], end: transformedCorners[0] }
-        ];
-        
-        let closestSide = null;
-        let minDistance = tolerance;
-        let attachPoint = null;
-        
-        sides.forEach(side => {
-            const distance = Arrow.pointToLineSegmentDistance(point, side.start, side.end);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestSide = side.name;
-                
-                // Calculate the closest point on the line segment
-                attachPoint = Arrow.closestPointOnLineSegment(point, side.start, side.end);
-            }
-        });
-        
-        if (closestSide && attachPoint) {
-            // Calculate offset relative to the original bounding box
-            // Transform the attach point back to local coordinates
-            const det = matrix.a * matrix.d - matrix.b * matrix.c;
-            if (det === 0) return null;
-            
-            const invMatrix = {
-                a: matrix.d / det,
-                b: -matrix.b / det,
-                c: -matrix.c / det,
-                d: matrix.a / det,
-                e: (matrix.c * matrix.f - matrix.d * matrix.e) / det,
-                f: (matrix.b * matrix.e - matrix.a * matrix.f) / det
-            };
-            
-            const localPoint = {
-                x: attachPoint.x * invMatrix.a + attachPoint.y * invMatrix.c + invMatrix.e,
-                y: attachPoint.x * invMatrix.b + attachPoint.y * invMatrix.d + invMatrix.f
-            };
-            
-            // Calculate offset relative to the bounding box
-            const offset = {
-                x: localPoint.x - bbox.x,
-                y: localPoint.y - bbox.y,
-                side: closestSide
-            };
-            
-            return { side: closestSide, point: attachPoint, offset };
-        }
-        
-        return null;
-    }
-
-    static pointToLineSegmentDistance(point, lineStart, lineEnd) {
-        const A = point.x - lineStart.x;
-        const B = point.y - lineStart.y;
-        const C = lineEnd.x - lineStart.x;
-        const D = lineEnd.y - lineStart.y;
-        
-        const dot = A * C + B * D;
-        const lenSq = C * C + D * D;
-        
-        if (lenSq === 0) {
-            // Line segment is a point
-            return Math.sqrt(A * A + B * B);
-        }
-        
-        let param = dot / lenSq;
-        param = Math.max(0, Math.min(1, param)); // Clamp to [0,1]
-        
-        const xx = lineStart.x + param * C;
-        const yy = lineStart.y + param * D;
-        
-        const dx = point.x - xx;
-        const dy = point.y - yy;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    static closestPointOnLineSegment(point, lineStart, lineEnd) {
-        const A = point.x - lineStart.x;
-        const B = point.y - lineStart.y;
-        const C = lineEnd.x - lineStart.x;
-        const D = lineEnd.y - lineStart.y;
-        
-        const dot = A * C + B * D;
-        const lenSq = C * C + D * D;
-        
-        if (lenSq === 0) {
-            return { x: lineStart.x, y: lineStart.y };
-        }
-        
-        let param = dot / lenSq;
-        param = Math.max(0, Math.min(1, param));
-        
         return {
             x: lineStart.x + param * C,
             y: lineStart.y + param * D
@@ -1017,51 +773,93 @@ class Arrow {
     }
 
     calculateAttachedPoint(attachment) {
-        const shape = attachment.shape;
-        const side = attachment.side;
-        const offset = attachment.offset;
+    const shape = attachment.shape;
+    const side = attachment.side;
+    const offset = attachment.offset;
 
-        if (shape.shapeName === 'rectangle') {
-            switch (side) {
-                case 'top':
-                    return { x: shape.x + offset.x, y: shape.y };
-                case 'bottom':
-                    return { x: shape.x + offset.x, y: shape.y + shape.height };
-                case 'left':
-                    return { x: shape.x, y: shape.y + offset.y };
-                case 'right':
-                    return { x: shape.x + shape.width, y: shape.y + offset.y };
-                default:
-                    return { x: shape.x + offset.x, y: shape.y + offset.y };
+    if (shape.shapeName === 'rectangle') {
+        switch (side) {
+            case 'top':
+                return { x: shape.x + offset.x, y: shape.y };
+            case 'bottom':
+                return { x: shape.x + offset.x, y: shape.y + shape.height };
+            case 'left':
+                return { x: shape.x, y: shape.y + offset.y };
+            case 'right':
+                return { x: shape.x + shape.width, y: shape.y + offset.y };
+            default:
+                return { x: shape.x + offset.x, y: shape.y + offset.y };
+        }
+    } else if (shape.shapeName === 'circle') {
+        if (side === 'perimeter') {
+            // Recalculate point on ellipse perimeter using stored angle
+            return Arrow.getEllipsePerimeterPoint(shape, offset.angle);
+        }
+    } else if ((shape.getAttribute && shape.getAttribute('type') === 'text') || shape.type === 'text') {
+        const textElement = shape.querySelector('text');
+        if (!textElement) return { x: 0, y: 0 };
+
+        const bbox = textElement.getBBox();
+        const groupTransform = shape.transform.baseVal.consolidate();
+        const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
+
+        // Calculate the point on the text box using the stored offset
+        let localPoint = {
+            x: bbox.x + offset.x,
+            y: bbox.y + offset.y
+        };
+
+        // Transform to world coordinates
+        return {
+            x: localPoint.x * matrix.a + localPoint.y * matrix.c + matrix.e,
+            y: localPoint.x * matrix.b + localPoint.y * matrix.d + matrix.f
+        };
+    } else if (shape.tagName === 'image' || (shape.getAttribute && shape.getAttribute('type') === 'image')) {
+        // Get image position and dimensions from data attributes
+        const imgX = parseFloat(shape.getAttribute('data-shape-x') || shape.getAttribute('x'));
+        const imgY = parseFloat(shape.getAttribute('data-shape-y') || shape.getAttribute('y'));
+        const imgWidth = parseFloat(shape.getAttribute('data-shape-width') || shape.getAttribute('width'));
+        const imgHeight = parseFloat(shape.getAttribute('data-shape-height') || shape.getAttribute('height'));
+
+        // Get rotation from data attribute or transform attribute
+        let rotation = 0;
+        const dataRotation = shape.getAttribute('data-shape-rotation');
+        if (dataRotation) {
+            rotation = parseFloat(dataRotation) * Math.PI / 180; // Convert to radians
+        } else {
+            const transform = shape.getAttribute('transform');
+            if (transform) {
+                const rotateMatch = transform.match(/rotate\(([^,]+)/);
+                if (rotateMatch) {
+                    rotation = parseFloat(rotateMatch[1]) * Math.PI / 180; // Convert to radians
+                }
             }
-        } else if (shape.shapeName === 'circle') {
-            if (side === 'perimeter') {
-                // Recalculate point on ellipse perimeter using stored angle
-                return Arrow.getEllipsePerimeterPoint(shape, offset.angle);
-            }
-        } else if (shape.type === 'text') {
-            const textElement = shape.querySelector('text');
-            if (!textElement) return { x: 0, y: 0 };
-            
-            const bbox = textElement.getBBox();
-            const groupTransform = shape.transform.baseVal.consolidate();
-            const matrix = groupTransform ? groupTransform.matrix : { e: 0, f: 0, a: 1, b: 0, c: 0, d: 1 };
-            
-            // Calculate the point on the text box using the stored offset
-            let localPoint = {
-                x: bbox.x + offset.x,
-                y: bbox.y + offset.y
-            };
-            
-            // Transform to world coordinates
-            return {
-                x: localPoint.x * matrix.a + localPoint.y * matrix.c + matrix.e,
-                y: localPoint.x * matrix.b + localPoint.y * matrix.d + matrix.f
+        }
+
+        // Calculate the point on the image using the stored offset
+        let localPoint = {
+            x: imgX + offset.x,
+            y: imgY + offset.y
+        };
+
+        // Apply rotation if necessary
+        if (rotation !== 0) {
+            const centerX = imgX + imgWidth / 2;
+            const centerY = imgY + imgHeight / 2;
+            const dx = localPoint.x - centerX;
+            const dy = localPoint.y - centerY;
+
+            localPoint = {
+                x: centerX + dx * Math.cos(rotation) - dy * Math.sin(rotation),
+                y: centerY + dx * Math.sin(rotation) + dy * Math.cos(rotation)
             };
         }
 
-        return { x: shape.x, y: shape.y };
+        return localPoint;
     }
+
+    return { x: shape.x || 0, y: shape.y || 0 };
+}
 
     detachFromShape(isStartPoint) {
         if (isStartPoint) {
@@ -1107,7 +905,7 @@ class Arrow {
             this.endPoint.x += dx;
             this.endPoint.y += dy;
         }
-        
+
         if (this.controlPoint1 && (!this.attachedToStart && !this.attachedToEnd)) {
             this.controlPoint1.x += dx;
             this.controlPoint1.y += dy;
@@ -1120,7 +918,7 @@ class Arrow {
 
     isNearAnchor(x, y) {
         const anchorSize = 10 / currentZoom;
-        
+
         for (let i = 0; i < this.anchors.length; i++) {
             const anchor = this.anchors[i];
             if (anchor) {
@@ -1132,14 +930,14 @@ class Arrow {
                 }
             }
         }
-        
+
         return null;
     }
 
     startAnchorDrag(e, index) {
         e.stopPropagation();
         e.preventDefault();
-        
+
         // Store initial state including attachments
         dragOldPosArrow = {
             startPoint: { x: this.startPoint.x, y: this.startPoint.y },
@@ -1151,7 +949,7 @@ class Arrow {
 
         const onPointerMove = (event) => {
             const { x, y } = getSVGCoordsFromMouse(event);
-            
+
             // Check for potential attachment when dragging start or end anchors
             if (index === 0 || index === 1) {
                 const nearbyShape = Arrow.findNearbyShape({ x, y });
@@ -1159,7 +957,7 @@ class Arrow {
                     // Show preview while dragging
                     const existingPreview = svg.querySelector('.attachment-preview');
                     if (existingPreview) existingPreview.remove();
-                    
+
                     const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     preview.setAttribute("cx", nearbyShape.attachment.point.x);
                     preview.setAttribute("cy", nearbyShape.attachment.point.y);
@@ -1170,31 +968,31 @@ class Arrow {
                     preview.setAttribute("class", "attachment-preview");
                     preview.setAttribute("opacity", "0.7");
                     svg.appendChild(preview);
-                    
+
                     // Snap to attachment point
                     this.updatePosition(index, nearbyShape.attachment.point.x, nearbyShape.attachment.point.y);
                 } else {
-                    
+
                     const existingPreview = svg.querySelector('.attachment-preview');
                     if (existingPreview) existingPreview.remove();
-                    
+
                     this.updatePosition(index, x, y);
                 }
             } else {
                 this.updatePosition(index, x, y);
             }
         };
-        
+
         const onPointerUp = () => {
-            
+
             const existingPreview = svg.querySelector('.attachment-preview');
             if (existingPreview) existingPreview.remove();
-            
+
             if (index === 0) {
                 // Check for start point attachment
                 const startAttachment = Arrow.findNearbyShape(this.startPoint);
                 if (startAttachment) {
-                    
+
                     if (this.attachedToStart && this.attachedToStart.shape !== startAttachment.shape) {
                         this.detachFromShape(true);
                     }
@@ -1225,7 +1023,7 @@ class Arrow {
                     }
                 }
             }
-            
+
             if (dragOldPosArrow) {
                 const newPos = {
                     startPoint: { x: this.startPoint.x, y: this.startPoint.y },
@@ -1234,34 +1032,34 @@ class Arrow {
                     controlPoint2: this.controlPoint2 ? { x: this.controlPoint2.x, y: this.controlPoint2.y } : null,
                     attachments: this.getAttachmentState()
                 };
-                
+
                 // Check if anything actually changed (position or attachments)
-                const stateChanged = 
-                    dragOldPosArrow.startPoint.x !== newPos.startPoint.x || 
+                const stateChanged =
+                    dragOldPosArrow.startPoint.x !== newPos.startPoint.x ||
                     dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
-                    dragOldPosArrow.endPoint.x !== newPos.endPoint.x || 
+                    dragOldPosArrow.endPoint.x !== newPos.endPoint.x ||
                     dragOldPosArrow.endPoint.y !== newPos.endPoint.y ||
                     JSON.stringify(dragOldPosArrow.attachments) !== JSON.stringify(newPos.attachments);
-                
+
                 if (stateChanged) {
                     pushTransformAction(this, dragOldPosArrow, newPos);
                 }
                 dragOldPosArrow = null;
             }
-            
+
             svg.removeEventListener('pointermove', onPointerMove);
             svg.removeEventListener('pointerup', onPointerUp);
         };
-        
+
         svg.addEventListener('pointermove', onPointerMove);
         svg.addEventListener('pointerup', onPointerUp);
     }
 
     updatePosition(anchorIndex, newViewBoxX, newViewBoxY) {
-        if (anchorIndex === 0) { 
+        if (anchorIndex === 0) {
             this.startPoint.x = newViewBoxX;
             this.startPoint.y = newViewBoxY;
-        } else if (anchorIndex === 1) { 
+        } else if (anchorIndex === 1) {
             this.endPoint.x = newViewBoxX;
             this.endPoint.y = newViewBoxY;
         } else if (anchorIndex === 2 && this.controlPoint1) {
@@ -1276,7 +1074,7 @@ class Arrow {
 
     contains(viewBoxX, viewBoxY) {
         const tolerance = Math.max(5, this.options.strokeWidth * 2) / currentZoom;
-        
+
         if (this.arrowCurved && this.controlPoint1 && this.controlPoint2) {
             return this.pointToCubicBezierDistance(viewBoxX, viewBoxY) <= tolerance;
         } else {
@@ -1288,14 +1086,14 @@ class Arrow {
     pointToCubicBezierDistance(x, y) {
         let minDistance = Infinity;
         const steps = 100;
-        
+
         for (let i = 0; i <= steps; i++) {
             const t = i / steps;
             const point = this.getCubicBezierPoint(t);
             const distance = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2));
             minDistance = Math.min(minDistance, distance);
         }
-        
+
         return minDistance;
     }
 
@@ -1304,17 +1102,17 @@ class Arrow {
         const B = y - y1;
         const C = x2 - x1;
         const D = y2 - y1;
-        
+
         const dot = A * C + B * D;
         const lenSq = C * C + D * D;
         let param = -1;
-        
+
         if (lenSq !== 0) {
             param = dot / lenSq;
         }
-        
+
         let xx, yy;
-        
+
         if (param < 0) {
             xx = x1;
             yy = y1;
@@ -1325,7 +1123,7 @@ class Arrow {
             xx = x1 + param * C;
             yy = y1 + param * D;
         }
-        
+
         const dx = x - xx;
         const dy = y - yy;
         return Math.sqrt(dx * dx + dy * dy);
@@ -1333,7 +1131,7 @@ class Arrow {
 
     updateStyle(newOptions) {
         if (newOptions.arrowOutlineStyle !== undefined) {
-            this.arrowOutlineStyle = newOptions.arrowOutlineStyle; 
+            this.arrowOutlineStyle = newOptions.arrowOutlineStyle;
             const style = this.arrowOutlineStyle;
             this.options.strokeDasharray = style === "dashed" ? "10,10" : (style === "dotted" ? "2,8" : "");
         }
@@ -1343,7 +1141,7 @@ class Arrow {
         if (newOptions.arrowCurved !== undefined) {
             const wasCurved = this.arrowCurved;
             this.arrowCurved = newOptions.arrowCurved;
-            
+
             if (this.arrowCurved && !wasCurved) {
                 this.initializeCurveControlPoints();
             } else if (!this.arrowCurved && wasCurved) {
@@ -1355,7 +1153,7 @@ class Arrow {
             this.options.stroke = newOptions.stroke;
         }
         if (newOptions.strokeWidth !== undefined) {
-            this.options.strokeWidth = parseFloat(newOptions.strokeWidth); 
+            this.options.strokeWidth = parseFloat(newOptions.strokeWidth);
         }
         if (newOptions.arrowCurveAmount !== undefined) {
             this.arrowCurveAmount = newOptions.arrowCurveAmount;
@@ -1371,7 +1169,7 @@ class Arrow {
              delete this.options.strokeDasharray;
         }
 
-        this.draw(); 
+        this.draw();
     }
 
     destroy() {
@@ -1418,7 +1216,7 @@ const handleMouseDown = (e) => {
         currentArrow = new Arrow({ x, y }, { x, y }, {
             stroke: arrowStrokeColor,
             strokeWidth: arrowStrokeThickness,
-            arrowOutlineStyle: arrowOutlineStyle, 
+            arrowOutlineStyle: arrowOutlineStyle,
             arrowHeadStyle: arrowHeadStyle,
             arrowCurved: arrowCurved,
             arrowCurveAmount: arrowCurveAmount
@@ -1428,7 +1226,7 @@ const handleMouseDown = (e) => {
     } else if (isSelectionToolActive) {
         let clickedOnShape = false;
         let clickedOnAnchor = false;
-        
+
         if (currentShape && currentShape.shapeName === 'arrow' && currentShape.isSelected) {
             const anchorInfo = currentShape.isNearAnchor(x, y);
             if (anchorInfo && anchorInfo.type === 'anchor') {
@@ -1450,7 +1248,7 @@ const handleMouseDown = (e) => {
 
         if (!clickedOnShape) {
             let shapeToSelect = null;
-            
+
             for (let i = shapes.length - 1; i >= 0; i--) {
                 const shape = shapes[i];
                 if (shape instanceof Arrow && shape.contains(x, y)) {
@@ -1467,7 +1265,7 @@ const handleMouseDown = (e) => {
             if (shapeToSelect) {
                 currentShape = shapeToSelect;
                 currentShape.selectArrow();
-                
+
                 const anchorInfo = currentShape.isNearAnchor(x, y);
                 if (anchorInfo && anchorInfo.type === 'anchor') {
                     clickedOnAnchor = true;
@@ -1496,21 +1294,21 @@ const handleMouseDown = (e) => {
 // Enhanced mouse move with better cursor feedback
 const handleMouseMove = (e) => {
     const { x, y } = getSVGCoordsFromMouse(e);
-    
+
     if (isDrawingArrow && currentArrow) {
         currentArrow.endPoint = { x, y };
-        
+
         // Check for potential attachment and show preview
         const nearbyShape = Arrow.findNearbyShape({ x, y });
         if (nearbyShape) {
             // Snap to attachment point
             currentArrow.endPoint = nearbyShape.attachment.point;
             svg.style.cursor = 'crosshair';
-            
-            
+
+
             const existingPreview = svg.querySelector('.attachment-preview');
             if (existingPreview) existingPreview.remove();
-            
+
             const preview = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             preview.setAttribute("cx", nearbyShape.attachment.point.x);
             preview.setAttribute("cy", nearbyShape.attachment.point.y);
@@ -1526,14 +1324,14 @@ const handleMouseMove = (e) => {
             const existingPreview = svg.querySelector('.attachment-preview');
             if (existingPreview) existingPreview.remove();
         }
-        
+
         // Update control points for curved arrows during drawing
         if (currentArrow.arrowCurved) {
             currentArrow.initializeCurveControlPoints();
         }
         currentArrow.draw();
     }
-    
+
     else if (isDragging && currentShape && currentShape.isSelected) {
         const dx = x - startX;
         const dy = y - startY;
@@ -1571,12 +1369,12 @@ const handleMouseUp = (e) => {
         // Remove any attachment preview that might still be visible
         const existingPreview = svg.querySelector('.attachment-preview');
         if (existingPreview) existingPreview.remove();
-        
+
         // Check if arrow is too small
         const dx = currentArrow.endPoint.x - currentArrow.startPoint.x;
         const dy = currentArrow.endPoint.y - currentArrow.startPoint.y;
         const lengthSq = dx * dx + dy * dy;
-        
+
         if (lengthSq < (5 / currentZoom) ** 2) {
             shapes.pop();
             if (currentArrow.group.parentNode) {
@@ -1585,7 +1383,7 @@ const handleMouseUp = (e) => {
             currentArrow = null;
             currentShape = null;
         } else {
-            
+
             const startAttachment = Arrow.findNearbyShape(currentArrow.startPoint);
             const endAttachment = Arrow.findNearbyShape(currentArrow.endPoint);
 
@@ -1602,20 +1400,20 @@ const handleMouseUp = (e) => {
             // Push create action for undo/redo
             pushCreateAction(currentArrow);
         }
-        
+
         currentArrow = null;
     }
-    
+
     if (isDragging && dragOldPosArrow && currentShape) {
         const newPos = {
             startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
             endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y }
         };
-        const stateChanged = dragOldPosArrow.startPoint.x !== newPos.startPoint.x || 
+        const stateChanged = dragOldPosArrow.startPoint.x !== newPos.startPoint.x ||
                            dragOldPosArrow.startPoint.y !== newPos.startPoint.y ||
-                           dragOldPosArrow.endPoint.x !== newPos.endPoint.x || 
+                           dragOldPosArrow.endPoint.x !== newPos.endPoint.x ||
                            dragOldPosArrow.endPoint.y !== newPos.endPoint.y;
-        
+
         if (stateChanged) {
             pushTransformAction(currentShape, dragOldPosArrow, newPos);
         }
@@ -1639,8 +1437,8 @@ svg.removeEventListener('mouseup', handleMouseUp);
 const updateSelectedArrowStyle = (styleChanges) => {
     if (currentShape instanceof Arrow && currentShape.isSelected) {
         const oldOptions = {
-            ...currentShape.options, 
-            arrowOutlineStyle: currentShape.arrowOutlineStyle, 
+            ...currentShape.options,
+            arrowOutlineStyle: currentShape.arrowOutlineStyle,
             arrowHeadStyle: currentShape.arrowHeadStyle,
             arrowCurved: currentShape.arrowCurved,
             arrowCurveAmount: currentShape.arrowCurveAmount
@@ -1663,7 +1461,7 @@ arrowStrokeColorOptions.forEach((span) => {
         arrowStrokeColorOptions.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         const newColor = span.getAttribute("data-id");
-        updateSelectedArrowStyle({ stroke: newColor }); 
+        updateSelectedArrowStyle({ stroke: newColor });
     });
 });
 
@@ -1683,7 +1481,7 @@ arrowOutlineStyleValue.forEach((span) => {
         arrowOutlineStyleValue.forEach((el) => el.classList.remove("selected"));
         span.classList.add("selected");
         const newStyle = span.getAttribute("data-id");
-        updateSelectedArrowStyle({ arrowOutlineStyle: newStyle }); 
+        updateSelectedArrowStyle({ arrowOutlineStyle: newStyle });
     });
 });
 
@@ -1738,7 +1536,7 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
         if (copiedShapeData) {
             e.preventDefault();
-            
+
             shapes.forEach(shape => {
                 if (shape.isSelected && shape.removeSelection) {
                     shape.removeSelection();
@@ -1747,7 +1545,7 @@ document.addEventListener('keydown', (e) => {
 
             currentShape = null;
             disableAllSideBars();
-            
+
             const offset = 20;
             const newArrow = new Arrow(
                 { x: copiedShapeData.startPoint.x + offset, y: copiedShapeData.startPoint.y + offset },
@@ -1758,13 +1556,13 @@ document.addEventListener('keydown', (e) => {
                     arrowHeadStyle: copiedShapeData.arrowHeadStyle,
                     arrowCurved: copiedShapeData.arrowCurved,
                     arrowCurveAmount: copiedShapeData.arrowCurveAmount,
-                    controlPoint1: copiedShapeData.controlPoint1 ? 
+                    controlPoint1: copiedShapeData.controlPoint1 ?
                         { x: copiedShapeData.controlPoint1.x + offset, y: copiedShapeData.controlPoint1.y + offset } : null,
-                    controlPoint2: copiedShapeData.controlPoint2 ? 
+                    controlPoint2: copiedShapeData.controlPoint2 ?
                         { x: copiedShapeData.controlPoint2.x + offset, y: copiedShapeData.controlPoint2.y + offset } : null
                 }
             );
-            
+
             shapes.push(newArrow);
             newArrow.selectArrow();
             currentShape = newArrow;
@@ -1793,9 +1591,33 @@ function detachSelectedArrow() {
     }
 }
 
-// Function to clean up attachments when shapes are deleted
+
+function updateAttachedArrows(shape) {
+    if (!shape) return;
+
+    // Find all arrows attached to this shape
+    shapes.forEach(arrowShape => {
+        if (arrowShape instanceof Arrow) {
+            let needsUpdate = false;
+            if (arrowShape.attachedToStart && arrowShape.attachedToStart.shape === shape) {
+                needsUpdate = true;
+            }
+            if (arrowShape.attachedToEnd && arrowShape.attachedToEnd.shape === shape) {
+                needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+                arrowShape.updateAttachments();
+            }
+        }
+    });
+}
+
+
 function cleanupAttachments(deletedShape) {
-    if (deletedShape.shapeName === 'rectangle' || deletedShape.shapeName === 'circle' || deletedShape.type === 'text') {
+    if (deletedShape.shapeName === 'rectangle' || deletedShape.shapeName === 'circle' ||
+        (deletedShape.getAttribute && deletedShape.getAttribute('type') === 'text') || deletedShape.type === 'text' ||
+        deletedShape.tagName === 'image' || (deletedShape.getAttribute && deletedShape.getAttribute('type') === 'image')) {
         // Remove attachments to this shape
         shapes.forEach(shape => {
             if (shape instanceof Arrow) {
@@ -1820,9 +1642,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Export the cleanup function
-export { 
-    handleMouseDown as handleMouseDownArrow, 
-    handleMouseMove as handleMouseMoveArrow, 
+export {
+    handleMouseDown as handleMouseDownArrow,
+    handleMouseMove as handleMouseMoveArrow,
     handleMouseUp as handleMouseUpArrow,
-    cleanupAttachments
+    cleanupAttachments,
+    updateAttachedArrows
 };

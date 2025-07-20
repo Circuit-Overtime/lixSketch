@@ -105,7 +105,7 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 }))
         });
     } else if (shape.type === 'image') {
-        // Handle image transforms
+        // Enhanced image handling - also update attached arrows
         undoStack.push({
             type: 'transform',
             shape: shape,
@@ -122,7 +122,18 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 width: newPos.width,
                 height: newPos.height,
                 rotation: newPos.rotation
-            }
+            },
+            // Store affected arrows with their attachment states
+            affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
+                (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+                .map(arrow => ({
+                    arrow: arrow,
+                    oldAttachments: arrow.getAttachmentState(),
+                    oldPoints: {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    }
+                }))
         });
     } else if (shape.shapeName === 'circle') {
         // Enhanced circle handling - also update attached arrows
@@ -347,8 +358,24 @@ export function undo() {
                 setTimeout(updateSelectionFeedback, 0);
             }
         } else if (action.shape.type === 'image') {
-            // Handle image transform undo
+            // Enhanced image transform undo
             action.shape.restore(action.oldPos);
+            
+            // Update attached arrows after image undo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to old state
+                    arrow.restoreAttachmentState(arrowData.oldAttachments);
+                    
+                    // Store current state for redo
+                    arrowData.newPoints = {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    };
+                    arrowData.newAttachments = arrow.getAttachmentState();
+                });
+            }
         } else if (action.shape.shapeName === 'circle') {
             // Enhanced circle transform undo
             action.shape.x = action.oldPos.x;
@@ -572,8 +599,22 @@ export function redo() {
                 setTimeout(updateSelectionFeedback, 0);
             }
         } else if (action.shape.type === 'image') {
-            // Handle image transform redo
+            // Enhanced image transform redo
             action.shape.restore(action.newPos);
+            
+            // Update attached arrows after image redo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to new state
+                    if (arrowData.newAttachments) {
+                        arrow.restoreAttachmentState(arrowData.newAttachments);
+                    } else {
+                        // If no new attachments stored, recalculate based on current image position
+                        arrow.updateAttachments();
+                    }
+                });
+            }
         } else if (action.shape.shapeName === 'circle') {
             // Enhanced circle transform redo
             action.shape.x = action.newPos.x;

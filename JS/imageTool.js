@@ -1,5 +1,5 @@
 import { pushCreateAction, pushDeleteAction, pushTransformAction } from './undoAndRedo.js';
-
+import { updateAttachedArrows } from './drawArrow.js';
 let isDraggingImage = false;
 let imageToPlace = null;
 let imageX = 0;
@@ -17,7 +17,7 @@ let startRotationMouseAngle = null;
 let startImageRotation = null;
 let imageRotation = 0;
 let aspect_ratio_lock = true;
-const minImageSize = 20; // Renamed from MIN_IMAGE_SIZE
+const minImageSize = 20; 
 
 document.getElementById("importImage").addEventListener('click', () => {
     console.log('Import image clicked');
@@ -165,8 +165,25 @@ const handleMouseDownImage = async (e) => {
         finalImage.setAttribute('data-y', placedY - placedImageHeight / 2);
         finalImage.setAttribute('data-width', placedImageWidth);
         finalImage.setAttribute('data-height', placedImageHeight);
+        
+        // Add arrow attachment support data attributes
+        finalImage.setAttribute('type', 'image');
+        finalImage.setAttribute('data-shape-x', placedX - placedImageWidth / 2);
+        finalImage.setAttribute('data-shape-y', placedY - placedImageHeight / 2);
+        finalImage.setAttribute('data-shape-width', placedImageWidth);
+        finalImage.setAttribute('data-shape-height', placedImageHeight);
+        finalImage.setAttribute('data-shape-rotation', 0);
+        finalImage.shapeID = `image-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
 
         svg.appendChild(finalImage);
+
+        // Add to shapes array for arrow attachment - check if shapes exists
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            shapes.push(finalImage);
+            console.log('Image added to shapes array for arrow attachment');
+        } else {
+            console.warn('shapes array not found - arrows may not attach to images');
+        }
 
         // Add to undo stack for image creation
         pushCreateAction({
@@ -176,9 +193,24 @@ const handleMouseDownImage = async (e) => {
                 if (finalImage.parentNode) {
                     finalImage.parentNode.removeChild(finalImage);
                 }
+                // Remove from shapes array
+                if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+                    const idx = shapes.indexOf(finalImage);
+                    if (idx !== -1) shapes.splice(idx, 1);
+                }
+                // Clean up arrow attachments when image is removed
+                if (typeof cleanupAttachments === 'function') {
+                    cleanupAttachments(finalImage);
+                }
             },
             restore: () => {
                 svg.appendChild(finalImage);
+                // Add back to shapes array
+                if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+                    if (shapes.indexOf(finalImage) === -1) {
+                        shapes.push(finalImage);
+                    }
+                }
             }
         });
 
@@ -197,6 +229,7 @@ const handleMouseDownImage = async (e) => {
         isImageToolActive = false; // Important: Reset the tool state.
     }
 };
+
 
 const handleMouseUpImage = (e) => {
     // Handle image deselection when clicking outside
@@ -464,7 +497,7 @@ function resizeImage(event) {
     // Get the current image center for rotation calculations
     const imgX = parseFloat(selectedImage.getAttribute('x'));
     const imgY = parseFloat(selectedImage.getAttribute('y'));
-    const imgWidth = parseFloat(selectedImage.getAttribute('width'));
+    const imgWidth = parseFloat(selectedImage.getAttribute("width"));
     const imgHeight = parseFloat(selectedImage.getAttribute('height'));
     const centerX = imgX + imgWidth / 2;
     const centerY = imgY + imgHeight / 2;
@@ -551,31 +584,104 @@ function resizeImage(event) {
     selectedImage.setAttribute('x', newX);
     selectedImage.setAttribute('y', newY);
 
+    // Update data attributes for arrow attachment
+    selectedImage.setAttribute('data-shape-x', newX);
+    selectedImage.setAttribute('data-shape-y', newY);
+    selectedImage.setAttribute('data-shape-width', newWidth);
+    selectedImage.setAttribute('data-shape-height', newHeight);
+
     // Reapply the rotation transform with the new center
     const newCenterX = newX + newWidth / 2;
     const newCenterY = newY + newHeight / 2;
     selectedImage.setAttribute('transform', `rotate(${imageRotation}, ${newCenterX}, ${newCenterY})`);
+
+    // Update attached arrows during resize
+    if (typeof updateAttachedArrows === 'function') {
+        updateAttachedArrows(selectedImage);
+    }
+
+    // Update the selection outline and anchors
+    removeSelectionOutline();
+    addSelectionOutline();
+}
+function stopRotation(event) {
+    
+    if (!isRotatingImage) return;
+    stopInteracting();
+    isRotatingImage = false;
+    startRotationMouseAngle = null;
+    startImageRotation = null;
+    svg.removeEventListener('mousemove', rotateImage);
+    document.removeEventListener('mouseup', stopRotation);
+    svg.style.cursor = 'default';
+    
+}
+
+function startDrag(event) {
+    if (!isSelectionToolActive || !selectedImage) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    isDragging = true;
+    
+    // Store original values at the start of drag
+    originalX = parseFloat(selectedImage.getAttribute('x'));
+    originalY = parseFloat(selectedImage.getAttribute('y'));
+    originalWidth = parseFloat(selectedImage.getAttribute('width'));
+    originalHeight = parseFloat(selectedImage.getAttribute('height'));
+    
+    // Store original rotation
+    const transform = selectedImage.getAttribute('transform');
+    if (transform) {
+        const rotateMatch = transform.match(/rotate\(([^,]+)/);
+        if (rotateMatch) {
+            imageRotation = parseFloat(rotateMatch[1]);
+        }
+    }
+
+    const rect = svg.getBoundingClientRect();
+    dragOffsetX = event.clientX - rect.left - parseFloat(selectedImage.getAttribute('x'));
+    dragOffsetY = event.clientY - rect.top - parseFloat(selectedImage.getAttribute('y'));
+
+    svg.addEventListener('mousemove', dragImage);
+    document.addEventListener('mouseup', stopDrag);
+}
+
+function dragImage(event) {
+    if (!isDragging || !selectedImage) return;
+
+    const rect = svg.getBoundingClientRect();
+    let x = event.clientX - rect.left - dragOffsetX;
+    let y = event.clientY - rect.top - dragOffsetY;
+
+    selectedImage.setAttribute('x', x);
+    selectedImage.setAttribute('y', y);
+
+    // Update data attributes for arrow attachment
+    selectedImage.setAttribute('data-shape-x', x);
+    selectedImage.setAttribute('data-shape-y', y);
+
+    // Reapply the rotation transform with the new position
+    const newCenterX = x + parseFloat(selectedImage.getAttribute('width')) / 2;
+    const newCenterY = y + parseFloat(selectedImage.getAttribute('height')) / 2;
+    selectedImage.setAttribute('transform', `rotate(${imageRotation}, ${newCenterX}, ${newCenterY})`);
+
+    // Update attached arrows during drag
+    if (typeof updateAttachedArrows === 'function') {
+        updateAttachedArrows(selectedImage);
+    }
 
     // Update the selection outline and anchors
     removeSelectionOutline();
     addSelectionOutline();
 }
 
-
-
-
-
-function globalToLocalPoint(svg, element, x, y) {
-    const ctm = element.getCTM();
-    if (!ctm) return { x, y }; // fallback
-
-    const inverseMatrix = ctm.inverse();
-    const point = svg.createSVGPoint();
-    point.x = x;
-    point.y = y;
-    const transformed = point.matrixTransform(inverseMatrix);
-    return { x: transformed.x, y: transformed.y };
+function stopDrag(event) {
+    stopInteracting(); // Call the combined stop function
+    document.removeEventListener('mouseup', stopDrag); // Remove the global mouseup listener
 }
+
 
 
 function startRotation(event) {
@@ -635,88 +741,19 @@ function rotateImage(event) {
 
     // Apply rotation transform
     selectedImage.setAttribute('transform', `rotate(${imageRotation}, ${centerX}, ${centerY})`);
-
-    // Update the selection outline and anchors
-    removeSelectionOutline();
-    addSelectionOutline();
-}
-
-function stopRotation(event) {
     
-    if (!isRotatingImage) return;
-    stopInteracting();
-    isRotatingImage = false;
-    startRotationMouseAngle = null;
-    startImageRotation = null;
-    svg.removeEventListener('mousemove', rotateImage);
-    document.removeEventListener('mouseup', stopRotation);
-    svg.style.cursor = 'default';
-    
-}
+    // Update data attribute for arrow attachment
+    selectedImage.setAttribute('data-shape-rotation', imageRotation);
 
-function startDrag(event) {
-    if (!isSelectionToolActive || !selectedImage) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    isDragging = true;
-    
-    // Store original values at the start of drag
-    originalX = parseFloat(selectedImage.getAttribute('x'));
-    originalY = parseFloat(selectedImage.getAttribute('y'));
-    originalWidth = parseFloat(selectedImage.getAttribute('width'));
-    originalHeight = parseFloat(selectedImage.getAttribute('height'));
-    
-    // Store original rotation
-    const transform = selectedImage.getAttribute('transform');
-    if (transform) {
-        const rotateMatch = transform.match(/rotate\(([^,]+)/);
-        if (rotateMatch) {
-            imageRotation = parseFloat(rotateMatch[1]);
-        }
+    // Update attached arrows during rotation
+    if (typeof updateAttachedArrows === 'function') {
+        updateAttachedArrows(selectedImage);
     }
 
-    const rect = svg.getBoundingClientRect();
-    dragOffsetX = event.clientX - rect.left - parseFloat(selectedImage.getAttribute('x'));
-    dragOffsetY = event.clientY - rect.top - parseFloat(selectedImage.getAttribute('y'));
-
-    svg.addEventListener('mousemove', dragImage);
-    document.addEventListener('mouseup', stopDrag);
-}
-
-function dragImage(event) {
-    if (!isDragging || !selectedImage) return;
-
-    const rect = svg.getBoundingClientRect();
-    let x = event.clientX - rect.left - dragOffsetX;
-    let y = event.clientY - rect.top - dragOffsetY;
-
-    selectedImage.setAttribute('x', x);
-    selectedImage.setAttribute('y', y);
-
-    // Reapply the rotation transform with the new position
-    const newCenterX = x + parseFloat(selectedImage.getAttribute('width')) / 2;
-    const newCenterY = y + parseFloat(selectedImage.getAttribute('height')) / 2;
-    selectedImage.setAttribute('transform', `rotate(${imageRotation}, ${newCenterX}, ${newCenterY})`);
-
-    // // Update original values for consistent behavior
-    // originalX = x;
-    // originalY = y;
-    // originalWidth = parseFloat(selectedImage.getAttribute('width'));
-    // originalHeight = parseFloat(selectedImage.getAttribute('height'));
-
     // Update the selection outline and anchors
     removeSelectionOutline();
     addSelectionOutline();
 }
-
-
-function stopDrag(event) {
-    stopInteracting(); // Call the combined stop function
-    document.removeEventListener('mouseup', stopDrag); // Remove the global mouseup listener
-}
-
 
 function stopInteracting() {
     // Store transform data before stopping interaction
@@ -767,6 +804,19 @@ function stopInteracting() {
                         removeSelectionOutline();
                         addSelectionOutline();
                     }
+                    
+                    // Update data attributes for arrow attachment consistency
+                    selectedImage.setAttribute('data-shape-x', pos.x);
+                    selectedImage.setAttribute('data-shape-y', pos.y);
+                    selectedImage.setAttribute('data-shape-width', pos.width);
+                    selectedImage.setAttribute('data-shape-height', pos.height);
+                    selectedImage.setAttribute('data-shape-rotation', pos.rotation);
+                    
+                    // Update attached arrows
+                    if (typeof updateAttachedArrows === 'function') {
+                        updateAttachedArrows(selectedImage);
+                    }
+                    
                     console.log("Pushed the transform")
                 }
             }, oldPos, newPos);
@@ -797,6 +847,18 @@ function stopInteracting() {
             if (rotateMatch) {
                 imageRotation = parseFloat(rotateMatch[1]);
             }
+        }
+        
+        // Update data attributes for arrow attachment consistency
+        selectedImage.setAttribute('data-shape-x', originalX);
+        selectedImage.setAttribute('data-shape-y', originalY);
+        selectedImage.setAttribute('data-shape-width', originalWidth);
+        selectedImage.setAttribute('data-shape-height', originalHeight);
+        selectedImage.setAttribute('data-shape-rotation', imageRotation);
+        
+        // Update attached arrows after interaction ends
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(selectedImage);
         }
     }
 }
