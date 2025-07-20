@@ -4,6 +4,7 @@ import {
     pushDeleteActionWithAttachments,
     pushTransformAction,
     pushOptionsChangeAction,
+    pushFrameAttachmentAction,
     setTextReferences,
     updateSelectedElement
 } from './undoAndRedo.js';
@@ -36,7 +37,213 @@ let initialHandlePosRelGroup = null;
 let initialGroupTx = 0;
 let initialGroupTy = 0;
 
+// Frame attachment variables
+let draggedShapeInitialFrameText = null;
+let hoveredFrameText = null;
+
 setTextReferences(selectedElement, updateSelectionFeedback, svg);
+
+// Text class to make it consistent with other shapes for frame functionality
+class TextShape {
+    constructor(groupElement) {
+        this.group = groupElement;
+        this.shapeName = 'text';
+        this.shapeID = groupElement.getAttribute('id') || `text-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
+        
+        // Frame attachment properties
+        this.parentFrame = null;
+        
+        // Update group attributes
+        this.group.setAttribute('type', 'text');
+        this.group.shapeName = 'text';
+        this.group.shapeID = this.shapeID;
+    }
+    
+    // Position and dimension properties for frame compatibility
+    get x() {
+        const transform = this.group.transform.baseVal.consolidate();
+        return transform ? transform.matrix.e : parseFloat(this.group.getAttribute('data-x')) || 0;
+    }
+    
+    set x(value) {
+        const transform = this.group.transform.baseVal.consolidate();
+        const currentY = transform ? transform.matrix.f : parseFloat(this.group.getAttribute('data-y')) || 0;
+        const rotation = extractRotationFromTransform(this.group) || 0;
+        const textElement = this.group.querySelector('text');
+        if (textElement) {
+            const bbox = textElement.getBBox();
+            const centerX = bbox.x + bbox.width / 2;
+            const centerY = bbox.y + bbox.height / 2;
+            this.group.setAttribute('transform', `translate(${value}, ${currentY}) rotate(${rotation}, ${centerX}, ${centerY})`);
+        } else {
+            this.group.setAttribute('transform', `translate(${value}, ${currentY})`);
+        }
+        this.group.setAttribute('data-x', value);
+    }
+    
+    get y() {
+        const transform = this.group.transform.baseVal.consolidate();
+        return transform ? transform.matrix.f : parseFloat(this.group.getAttribute('data-y')) || 0;
+    }
+    
+    set y(value) {
+        const transform = this.group.transform.baseVal.consolidate();
+        const currentX = transform ? transform.matrix.e : parseFloat(this.group.getAttribute('data-x')) || 0;
+        const rotation = extractRotationFromTransform(this.group) || 0;
+        const textElement = this.group.querySelector('text');
+        if (textElement) {
+            const bbox = textElement.getBBox();
+            const centerX = bbox.x + bbox.width / 2;
+            const centerY = bbox.y + bbox.height / 2;
+            this.group.setAttribute('transform', `translate(${currentX}, ${value}) rotate(${rotation}, ${centerX}, ${centerY})`);
+        } else {
+            this.group.setAttribute('transform', `translate(${currentX}, ${value})`);
+        }
+        this.group.setAttribute('data-y', value);
+    }
+    
+    get width() {
+        const textElement = this.group.querySelector('text');
+        if (textElement) {
+            return textElement.getBBox().width;
+        }
+        return 0;
+    }
+    
+    set width(value) {
+        // Text width is determined by content and font size, not directly settable
+        // This is here for frame compatibility but doesn't change the text
+    }
+    
+    get height() {
+        const textElement = this.group.querySelector('text');
+        if (textElement) {
+            return textElement.getBBox().height;
+        }
+        return 0;
+    }
+    
+    set height(value) {
+        // Text height is determined by content and font size, not directly settable
+        // This is here for frame compatibility but doesn't change the text
+    }
+    
+    get rotation() {
+        return extractRotationFromTransform(this.group) || 0;
+    }
+    
+    set rotation(value) {
+        const currentTransform = this.group.transform.baseVal.consolidate();
+        const currentX = currentTransform ? currentTransform.matrix.e : 0;
+        const currentY = currentTransform ? currentTransform.matrix.f : 0;
+        const textElement = this.group.querySelector('text');
+        if (textElement) {
+            const bbox = textElement.getBBox();
+            const centerX = bbox.x + bbox.width / 2;
+            const centerY = bbox.y + bbox.height / 2;
+            this.group.setAttribute('transform', `translate(${currentX}, ${currentY}) rotate(${value}, ${centerX}, ${centerY})`);
+        }
+    }
+
+    move(dx, dy) {
+        const currentTransform = this.group.transform.baseVal.consolidate();
+        const currentX = currentTransform ? currentTransform.matrix.e : 0;
+        const currentY = currentTransform ? currentTransform.matrix.f : 0;
+        
+        this.x = currentX + dx;
+        this.y = currentY + dy;
+        
+        // Only update frame containment if we're actively dragging the shape itself
+        // and not being moved by a parent frame
+        if (isDragging && !this.isBeingMovedByFrame) {
+            this.updateFrameContainment();
+        }
+        
+        // Update attached arrows
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(this.group);
+        }
+    }
+
+    updateFrameContainment() {
+        // Don't update if we're being moved by a frame
+        if (this.isBeingMovedByFrame) return;
+        
+        let targetFrame = null;
+        
+        // Find which frame this shape is over
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            shapes.forEach(shape => {
+                if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
+                    targetFrame = shape;
+                }
+            });
+        }
+        
+        // If we have a parent frame and we're being dragged, temporarily remove clipping
+        if (this.parentFrame && isDragging) {
+            this.parentFrame.temporarilyRemoveFromFrame(this);
+        }
+        
+        // Update frame highlighting
+        if (hoveredFrameText && hoveredFrameText !== targetFrame) {
+            hoveredFrameText.removeHighlight();
+        }
+        
+        if (targetFrame && targetFrame !== hoveredFrameText) {
+            targetFrame.highlightFrame();
+        }
+        
+        hoveredFrameText = targetFrame;
+    }
+
+    contains(x, y) {
+        const textElement = this.group.querySelector('text');
+        if (!textElement) return false;
+        
+        const bbox = textElement.getBBox();
+        const padding = 8; // Selection padding
+        
+        const CTM = this.group.getCTM();
+        if (!CTM) return false;
+        
+        const inverseCTM = CTM.inverse();
+        const svgPoint = svg.createSVGPoint();
+        svgPoint.x = x;
+        svgPoint.y = y;
+        const transformedPoint = svgPoint.matrixTransform(inverseCTM);
+        
+        return transformedPoint.x >= bbox.x - padding && 
+               transformedPoint.x <= bbox.x + bbox.width + padding &&
+               transformedPoint.y >= bbox.y - padding && 
+               transformedPoint.y <= bbox.y + bbox.height + padding;
+    }
+
+    // Add draw method for consistency with other shapes
+    draw() {
+        // Text doesn't need redrawing like other shapes, but we need this method for consistency
+        if (selectedElement === this.group) {
+            updateSelectionFeedback();
+        }
+    }
+
+    // Add methods for frame compatibility
+    removeSelection() {
+        if (selectedElement === this.group) {
+            deselectElement();
+        }
+    }
+
+    selectShape() {
+        selectElement(this.group);
+    }
+}
+
+// Convert group element to our TextShape class
+function wrapTextElement(groupElement) {
+    const textShape = new TextShape(groupElement);
+    return textShape;
+}
 
 function getSVGCoordinates(event, element = svg) {
     if (!svg || !svg.createSVGPoint) {
@@ -105,17 +312,17 @@ function addText(event) {
     gElement.setAttribute('id', shapeID);
     textElement.setAttribute('id', `${shapeID}-text`);
     
-    // Add text properties to make it compatible with arrow attachment
-    gElement.type = 'text';
-    gElement.shapeName = 'text';
-    gElement.shapeID = shapeID;
+    // Create TextShape wrapper for frame functionality
+    const textShape = wrapTextElement(gElement);
     
-    // Add to shapes array for arrow attachment
-    shapes.push(gElement);
+    // Add to shapes array for arrow attachment and frame functionality
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        shapes.push(textShape);
+    }
     
     pushCreateAction({
         type: 'text',
-        element: gElement,
+        element: textShape,
         shapeName: 'text'
     });
 
@@ -297,16 +504,22 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     }
 
     if (deleteIfEmpty && text.trim() === "") {
+        // Find the TextShape wrapper
+        let textShape = null;
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === gElement);
+            if (textShape) {
+                const idx = shapes.indexOf(textShape);
+                if (idx !== -1) shapes.splice(idx, 1);
+            }
+        }
+
         // Use enhanced delete action for text with arrow attachments
         pushDeleteActionWithAttachments({
             type: 'text',
-            element: gElement,
+            element: textShape || gElement,
             shapeName: 'text'
         });
-
-        // Remove from shapes array
-        const idx = shapes.indexOf(gElement);
-        if (idx !== -1) shapes.splice(idx, 1);
 
         // Clean up any arrow attachments before deleting
         if (typeof cleanupAttachments === 'function') {
@@ -639,6 +852,22 @@ function startDrag(event) {
     dragOffsetX = startPoint.x - initialTranslateX;
     dragOffsetY = startPoint.y - initialTranslateY;
 
+    // Find the TextShape wrapper for frame functionality
+    let textShape = null;
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === selectedElement);
+    }
+
+    if (textShape) {
+        // Store initial frame state
+        draggedShapeInitialFrameText = textShape.parentFrame || null;
+        
+        // Temporarily remove from frame clipping if dragging
+        if (textShape.parentFrame) {
+            textShape.parentFrame.temporarilyRemoveFromFrame(textShape);
+        }
+    }
+
     svg.style.cursor = 'grabbing';
 
     svg.addEventListener('mousemove', handleMouseMove);
@@ -694,6 +923,13 @@ const handleMouseMove = (event) => {
     if (!selectedElement) return;
     event.preventDefault();
 
+    // Keep lastMousePos in screen coordinates for other functions
+    const svgRect = svg.getBoundingClientRect();
+    lastMousePos = {
+        x: event.clientX - svgRect.left, 
+        y: event.clientY - svgRect.top
+    };
+
     if (isDragging) {
         const currentPoint = getSVGCoordinates(event);
         const newTranslateX = currentPoint.x - dragOffsetX;
@@ -718,6 +954,14 @@ const handleMouseMove = (event) => {
             }
         } else {
             selectedElement.setAttribute('transform', `translate(${newTranslateX}, ${newTranslateY})`);
+        }
+
+        // Update frame containment for TextShape wrapper
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            const textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === selectedElement);
+            if (textShape) {
+                textShape.updateFrameContainment();
+            }
         }
 
         // Update attached arrows during dragging
@@ -872,30 +1116,74 @@ const handleMouseUp = (event) => {
             const initialX = parseFloat(selectedElement.getAttribute("data-x")) || 0;
             const initialY = parseFloat(selectedElement.getAttribute("data-y")) || 0;
 
-            if (initialX !== finalTranslateX || initialY !== finalTranslateY) {
+            // Find the TextShape wrapper for frame tracking
+            let textShape = null;
+            if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+                textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === selectedElement);
+            }
+
+            // Add frame information for undo tracking
+            const oldPosWithFrame = {
+                x: initialX,
+                y: initialY,
+                rotation: extractRotationFromTransform(selectedElement) || 0,
+                parentFrame: draggedShapeInitialFrameText
+            };
+            const newPosWithFrame = {
+                x: finalTranslateX,
+                y: finalTranslateY,
+                rotation: extractRotationFromTransform(selectedElement) || 0,
+                parentFrame: textShape ? textShape.parentFrame : null
+            };
+
+            const stateChanged = initialX !== finalTranslateX || initialY !== finalTranslateY;
+            const frameChanged = oldPosWithFrame.parentFrame !== newPosWithFrame.parentFrame;
+
+            if (stateChanged || frameChanged) {
                 pushTransformAction(
                     {
                         type: 'text',
                         element: selectedElement,
                         shapeName: 'text'
                     },
-                    {
-                        x: initialX,
-                        y: initialY,
-                        rotation: extractRotationFromTransform(selectedElement) || 0
-                    },
-                    {
-                        x: finalTranslateX,
-                        y: finalTranslateY,
-                        rotation: extractRotationFromTransform(selectedElement) || 0
-                    }
+                    oldPosWithFrame,
+                    newPosWithFrame
                 );
+            }
+
+            // Handle frame containment changes after drag
+            if (textShape) {
+                const finalFrame = hoveredFrameText;
+                
+                // If shape moved to a different frame
+                if (draggedShapeInitialFrameText !== finalFrame) {
+                    // Remove from initial frame
+                    if (draggedShapeInitialFrameText) {
+                        draggedShapeInitialFrameText.removeShapeFromFrame(textShape);
+                    }
+                    
+                    // Add to new frame
+                    if (finalFrame) {
+                        finalFrame.addShapeToFrame(textShape);
+                    }
+                    
+                    // Track the frame change for undo
+                    if (frameChanged) {
+                        pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameText, textShape, 
+                            finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameText);
+                    }
+                } else if (draggedShapeInitialFrameText) {
+                    // Shape stayed in same frame, restore clipping
+                    draggedShapeInitialFrameText.restoreToFrame(textShape);
+                }
             }
 
             selectedElement.setAttribute("data-x", finalTranslateX);
             selectedElement.setAttribute("data-y", finalTranslateY);
             console.log("Drag End - Final Pos:", finalTranslateX, finalTranslateY);
         }
+
+        draggedShapeInitialFrameText = null;
 
     } else if (isResizing && selectedElement) {
         const textElement = selectedElement.querySelector('text');
@@ -965,6 +1253,12 @@ const handleMouseUp = (event) => {
             console.log("Rotation End");
         }
         updateSelectionFeedback();
+    }
+
+    // Clear frame highlighting
+    if (hoveredFrameText) {
+        hoveredFrameText.removeHighlight();
+        hoveredFrameText = null;
     }
 
     isDragging = false;
@@ -1055,6 +1349,13 @@ const handleTextMouseDown = function (e) {
 };
 
 const handleTextMouseMove = function (e) {
+    // Keep lastMousePos in screen coordinates for other functions
+    const svgRect = svg.getBoundingClientRect();
+    lastMousePos = {
+        x: e.clientX - svgRect.left, 
+        y: e.clientY - svgRect.top
+    };
+
     // Handle cursor changes for text tool
     if (isTextToolActive) {
         svg.style.cursor = 'text';
@@ -1064,6 +1365,34 @@ const handleTextMouseMove = function (e) {
             svg.style.cursor = 'move';
         } else {
             svg.style.cursor = 'default';
+        }
+    }
+
+    // Check for frame containment while creating text
+    if (isTextToolActive && !isDragging && !isResizing && !isRotating) {
+        // Get current mouse position for frame highlighting preview
+        const { x, y } = getSVGCoordinates(e);
+        
+        // Create temporary text bounds for frame checking
+        const tempTextBounds = {
+            x: x - 50,
+            y: y - 20,
+            width: 100,
+            height: 40
+        };
+        
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            shapes.forEach(frame => {
+                if (frame.shapeName === 'frame') {
+                    if (frame.isShapeInFrame(tempTextBounds)) {
+                        frame.highlightFrame();
+                        hoveredFrameText = frame;
+                    } else if (hoveredFrameText === frame) {
+                        frame.removeHighlight();
+                        hoveredFrameText = null;
+                    }
+                }
+            });
         }
     }
 };
@@ -1079,6 +1408,12 @@ const handleTextMouseUp = function (e) {
         if (!targetGroup && !isResizeHandle && !isRotateAnchor && selectedElement) {
             deselectElement();
         }
+    }
+
+    // Clear frame highlighting when done with text tool operations
+    if (hoveredFrameText) {
+        hoveredFrameText.removeHighlight();
+        hoveredFrameText = null;
     }
 };
 
@@ -1279,5 +1614,5 @@ textAlignOptions.forEach((span) => {
     });
 });
 
-// Export the event handlers
+
 export { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp };
