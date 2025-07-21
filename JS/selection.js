@@ -1184,6 +1184,7 @@ function moveSelectedShapes(dx, dy) {
 function handleMultiSelectionMouseDown(e) {
     const { x, y } = getSVGCoordsFromMouse(e);
 
+    // Only handle multi-selection operations if we have multiple shapes selected
     if (multiSelection.selectedShapes.size > 1) {
         const anchor = e.target.closest('.multi-selection-anchor');
         if (anchor) {
@@ -1203,13 +1204,33 @@ function handleMultiSelectionMouseDown(e) {
         }
     }
 
-    multiSelectionStart = { x, y };
-    isMultiSelecting = true;
-    createMultiSelectionRect(x, y);
+    if (e.target.closest('.anchor') || e.target.closest('.rotate-anchor')) {
+        return false; 
+    }
 
-    clearAllSelections();
 
-    return true;
+    let clickedOnShape = false;
+    if (typeof shapes !== 'undefined') {
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            const shape = shapes[i];
+            if (shape.contains && shape.contains(x, y)) {
+                clickedOnShape = true;
+                break;
+            }
+        }
+    }
+
+    
+    if (!clickedOnShape) {
+        multiSelectionStart = { x, y };
+        isMultiSelecting = true;
+        createMultiSelectionRect(x, y);
+        clearAllSelections();
+        return true;
+    }
+
+
+    return false;
 }
 
 function handleMultiSelectionMouseMove(e) {
