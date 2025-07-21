@@ -63,7 +63,7 @@ let isFrameToolActive = false;
 let isIconToolActive = true;
 
 
-const paintBrushSideBar = document.getElementById("paintBrushSideBar");
+const paintBrushSideBar = document.getElementById("paintBrushToolBar");
 const lineSideBar = document.getElementById("lineSideBar");
 const squareSideBar = document.getElementById("squareSideBar");
 const circleSideBar = document.getElementById("circleSideBar");

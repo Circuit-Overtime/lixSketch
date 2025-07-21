@@ -5,7 +5,8 @@
     right: 2%;
     height: 80%;
     width: 250px;
-    background: #232329;
+    background: #232329bd;
+    backdrop-filter: blur(10px);
     border-radius: 15px;
     align-items: center;
     justify-content: center;
