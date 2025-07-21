@@ -345,7 +345,47 @@ export function pushTransformAction(shape, oldPos, newPos) {
                 attachments: newPos.attachments || shape.getAttachmentState()
             }
         });
-    } else if (shape.shapeName === 'freehandStroke') {
+    } 
+    else if (shape.type === 'icon') {
+    // Enhanced icon handling - also track frame attachment changes
+    const currentFrame = shape.parentFrame || null;
+    
+    undoStack.push({
+        type: 'transform',
+        shape: shape,
+        oldPos: {
+            x: oldPos.x,
+            y: oldPos.y,
+            width: oldPos.width,
+            height: oldPos.height,
+            rotation: oldPos.rotation
+        },
+        newPos: {
+            x: newPos.x,
+            y: newPos.y,
+            width: newPos.width,
+            height: newPos.height,
+            rotation: newPos.rotation
+        },
+        // Track frame attachment state
+        frameAttachment: {
+            oldFrame: oldPos.parentFrame || null,
+            newFrame: currentFrame
+        },
+        // Store affected arrows with their attachment states
+        affectedArrows: shapes.filter(s => s.shapeName === 'arrow' && 
+            (s.attachedToStart?.shape === shape || s.attachedToEnd?.shape === shape))
+            .map(arrow => ({
+                arrow: arrow,
+                oldAttachments: arrow.getAttachmentState(),
+                oldPoints: {
+                    startPoint: { ...arrow.startPoint },
+                    endPoint: { ...arrow.endPoint }
+                }
+            }))
+    });
+}
+    else if (shape.shapeName === 'freehandStroke') {
         // Handle freehand stroke transform
         undoStack.push({
             type: 'transform',
@@ -470,42 +510,44 @@ export function undo() {
     }
 
     if (action.type === 'create') {
-        if (action.shape.type === 'text') {
-            // Handle text creation undo
-            if (action.shape.element && action.shape.element.parentNode) {
-                action.shape.element.parentNode.removeChild(action.shape.element);
-            } else if (action.shape.parentNode) {
-                action.shape.parentNode.removeChild(action.shape);
-            }
-            
-            // Remove from shapes array
-            const idx = shapes.indexOf(action.shape.element || action.shape);
-            if (idx !== -1) shapes.splice(idx, 1);
-            
-            // Clean up any arrow attachments to this text
-            if (typeof cleanupAttachments === 'function') {
-                cleanupAttachments(action.shape.element || action.shape);
-            }
+    if (action.shape.type === 'text') {
+        // Handle text creation undo
+        if (action.shape.element && action.shape.element.parentNode) {
+            action.shape.element.parentNode.removeChild(action.shape.element);
+        } else if (action.shape.parentNode) {
+            action.shape.parentNode.removeChild(action.shape);
         }
-        else if (action.shape.type === 'image') {
-            // Handle image creation undo
-            action.shape.remove();
-        } else {
-            // Handle other shape creation undo
-            const idx = shapes.indexOf(action.shape);
-            if (idx !== -1) shapes.splice(idx, 1);
-            if (action.shape.group && action.shape.group.parentNode) {
-                action.shape.group.parentNode.removeChild(action.shape.group);
-            }
-            
-            // Handle frame cleanup
-            if (action.shape.shapeName === 'frame') {
-                action.shape.destroy();
-            }
+        
+        // Remove from shapes array
+        const idx = shapes.indexOf(action.shape.element || action.shape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        
+        // Clean up any arrow attachments to this text
+        if (typeof cleanupAttachments === 'function') {
+            cleanupAttachments(action.shape.element || action.shape);
         }
-        redoStack.push(action);
-        return;
+    } else if (action.shape.type === 'image') {
+        // Handle image creation undo
+        action.shape.remove();
+    } else if (action.shape.type === 'icon') {
+        // Handle icon creation undo - call the remove method
+        action.shape.remove();
+    } else {
+        // Handle other shape creation undo
+        const idx = shapes.indexOf(action.shape);
+        if (idx !== -1) shapes.splice(idx, 1);
+        if (action.shape.group && action.shape.group.parentNode) {
+            action.shape.group.parentNode.removeChild(action.shape.group);
+        }
+        
+        // Handle frame cleanup
+        if (action.shape.shapeName === 'frame') {
+            action.shape.destroy();
+        }
     }
+    redoStack.push(action);
+    return;
+}
     
     if (action.type === 'delete') {
         if (action.shape.type === 'text') {
@@ -717,7 +759,30 @@ export function undo() {
             action.shape.draw();
             
             console.log("Arrow undo: restored position and attachments");
-        } else if (action.shape.shapeName === 'freehandStroke') {
+
+            
+        } 
+        else if (action.shape.type === 'icon') {
+            
+            action.shape.restore(action.oldPos);
+            
+            // Update attached arrows after icon undo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to old state
+                    arrow.restoreAttachmentState(arrowData.oldAttachments);
+                    
+                    // Store current state for redo
+                    arrowData.newPoints = {
+                        startPoint: { ...arrow.startPoint },
+                        endPoint: { ...arrow.endPoint }
+                    };
+                    arrowData.newAttachments = arrow.getAttachmentState();
+                });
+            }
+        }
+        else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform undo
             action.shape.points = JSON.parse(JSON.stringify(action.oldPos.points));
             action.shape.rotation = action.oldPos.rotation;
@@ -819,6 +884,7 @@ export function redo() {
         undoStack.push(action);
         return;
     }
+
     
     if (action.type === 'frameAttachment') {
         // Handle frame attachment/detachment redo WITHOUT calling the methods that track undo
@@ -869,27 +935,36 @@ export function redo() {
     }
 
     if (action.type === 'create') {
-        if (action.shape.type === 'text') {
-            // Handle text creation redo
-            if (svg) {
-                svg.appendChild(action.shape.element || action.shape);
-                // Add back to shapes array
-                shapes.push(action.shape.element || action.shape);
-            }
+    if (action.shape.type === 'text') {
+        // Handle text creation redo
+        if (svg) {
+            svg.appendChild(action.shape.element || action.shape);
+            // Add back to shapes array
+            shapes.push(action.shape.element || action.shape);
         }
-        else if (action.shape.type === 'image') {
-            // Handle image creation redo
-            action.shape.restore();
-        } else {
-            // Handle other shape creation redo
-            shapes.push(action.shape);
-            if (svg) {
-                svg.appendChild(action.shape.group);
-            }
-        }
-        undoStack.push(action);
-        return;
     }
+    else if (action.shape.type === 'image') {
+        // Handle image creation redo
+        action.shape.restore();
+    } else if (action.shape.type === 'icon') {
+        // Handle icon creation redo - append the group, not the shape object
+        if (svg && action.shape.group) {
+            svg.appendChild(action.shape.group);
+        }
+        // Add back to shapes array
+        if (shapes.indexOf(action.shape) === -1) {
+            shapes.push(action.shape);
+        }
+    } else {
+        // Handle other shape creation redo
+        shapes.push(action.shape);
+        if (svg) {
+            svg.appendChild(action.shape.group);
+        }
+    }
+    undoStack.push(action);
+    return;
+}
     
     if (action.type === 'delete') {
         if (action.shape.type === 'text') {
@@ -1109,7 +1184,25 @@ export function redo() {
             action.shape.draw();
             
             console.log("Arrow redo: restored position and attachments");
-        } else if (action.shape.shapeName === 'freehandStroke') {
+        } 
+        else if (action.shape.type === 'icon') {
+            action.shape.restore(action.newPos);
+            
+            // Update attached arrows after icon redo
+            if (action.affectedArrows) {
+                action.affectedArrows.forEach(arrowData => {
+                    const arrow = arrowData.arrow;
+                    // Restore arrow attachments to new state
+                    if (arrowData.newAttachments) {
+                        arrow.restoreAttachmentState(arrowData.newAttachments);
+                    } else {
+                        // If no new attachments stored, recalculate based on current icon position
+                        arrow.updateAttachments();
+                    }
+                });
+            }
+        }
+        else if (action.shape.shapeName === 'freehandStroke') {
             // Handle freehand stroke transform redo
             action.shape.points = JSON.parse(JSON.stringify(action.newPos.points));
             action.shape.rotation = action.newPos.rotation;

@@ -35,7 +35,7 @@ class IconShape {
         this.element = element;
         this.shapeName = 'icon';
         this.shapeID = element.shapeID || `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
-        
+        this.type = 'icon'; 
         // Frame attachment properties
         this.parentFrame = null;
         
@@ -185,6 +185,71 @@ class IconShape {
 
     selectShape() {
         selectIcon({ target: this.element, stopPropagation: () => {} });
+    }
+
+    remove() {
+        // Remove from shapes array
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            const idx = shapes.indexOf(this);
+            if (idx !== -1) shapes.splice(idx, 1);
+        }
+        
+        // Clean up arrow attachments
+        if (typeof cleanupAttachments === 'function') {
+            cleanupAttachments(this.element);
+        }
+        
+        // Remove from parent frame if attached
+        if (this.parentFrame) {
+            this.parentFrame.removeShapeFromFrame(this);
+        }
+        
+        // Remove the group (which contains the icon element)
+        if (this.group && this.group.parentNode) {
+            this.group.parentNode.removeChild(this.group);
+        }
+    }
+
+    restore(pos) {
+        const svg = getSVGElement();
+        
+        // Add back to DOM if not present
+        if (!this.group.parentNode && svg) {
+            svg.appendChild(this.group);
+        }
+        
+        // Add back to shapes array if not present
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            if (shapes.indexOf(this) === -1) {
+                shapes.push(this);
+            }
+        }
+        
+        // Restore position and dimensions
+        this.x = pos.x;
+        this.y = pos.y;
+        this.width = pos.width;
+        this.height = pos.height;
+        this.rotation = pos.rotation;
+        
+        // Update the transform
+        const scale = pos.width / 24;
+        const localCenterX = pos.width / 2 / scale;
+        const localCenterY = pos.height / 2 / scale;
+        
+        this.element.setAttribute('transform', `translate(${pos.x}, ${pos.y}) scale(${scale}) rotate(${pos.rotation}, ${localCenterX}, ${localCenterY})`);
+        
+        // Update data attributes for arrow attachment
+        this.element.setAttribute('data-shape-x', pos.x);
+        this.element.setAttribute('data-shape-y', pos.y);
+        this.element.setAttribute('data-shape-width', pos.width);
+        this.element.setAttribute('data-shape-height', pos.height);
+        this.element.setAttribute('data-shape-rotation', pos.rotation);
+        
+        // Update attached arrows
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(this.element);
+        }
     }
 }
 
@@ -824,6 +889,7 @@ function startDrag(event) {
         iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
     }
 
+
     if (iconShape) {
         // Store initial frame state
         draggedShapeInitialFrameIcon = iconShape.parentFrame || null;
@@ -1025,38 +1091,8 @@ function stopInteracting() {
                            newPos.rotation !== oldPos.rotation;
         const frameChanged = oldPosWithFrame.parentFrame !== newPosWithFrame.parentFrame;
 
-        if (stateChanged || frameChanged) {
-            pushTransformAction({
-                type: 'icon',
-                element: selectedIcon,
-                restore: (pos) => {
-                    selectedIcon.setAttribute('x', pos.x);
-                    selectedIcon.setAttribute('y', pos.y);
-                    selectedIcon.setAttribute('width', pos.width);
-                    selectedIcon.setAttribute('height', pos.height);
-                    const scale = pos.width / 24;
-                    selectedIcon.setAttribute('transform', `translate(${pos.x}, ${pos.y}) scale(${scale}) rotate(${pos.rotation})`);
-                    iconRotation = pos.rotation;
-                    
-                    // Update selection outline if icon is selected
-                    if (selectedIcon) {
-                        removeSelectionOutline();
-                        addSelectionOutline();
-                    }
-                    
-                    // Update data attributes for arrow attachment consistency
-                    selectedIcon.setAttribute('data-shape-x', pos.x);
-                    selectedIcon.setAttribute('data-shape-y', pos.y);
-                    selectedIcon.setAttribute('data-shape-width', pos.width);
-                    selectedIcon.setAttribute('data-shape-height', pos.height);
-                    selectedIcon.setAttribute('data-shape-rotation', pos.rotation);
-                    
-                    // Update attached arrows
-                    if (typeof updateAttachedArrows === 'function') {
-                        updateAttachedArrows(selectedIcon);
-                    }
-                }
-            }, oldPosWithFrame, newPosWithFrame);
+        if (stateChanged || frameChanged && iconShape) {
+            pushTransformAction(iconShape, oldPosWithFrame, newPosWithFrame);
         }
 
         // Handle frame containment changes after drag
@@ -1129,7 +1165,6 @@ function stopInteracting() {
         }
     }
 }
-
 // Add delete functionality for icons
 function deleteCurrentIcon() {
     if (selectedIcon) {
