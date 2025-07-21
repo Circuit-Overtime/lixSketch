@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bxs-pointer");
+let selectedTool = document.querySelector(".bx-wink-smile");
 let history = [];
 let redoStack = [];
 let shapes = [];
@@ -60,6 +60,7 @@ let isLineToolActive = false;
 let isSelectionToolActive = false;
 let isPanningToolActive = false;
 let isFrameToolActive = false;
+let isIconToolActive = true;
 
 
 const paintBrushSideBar = document.getElementById("paintBrushSideBar");
@@ -201,6 +202,15 @@ function toolExtraPopup() {
         disableAllSideBars();
         svg.style.cursor = "crosshair"
     }
+    else if(selectedTool.classList.contains("bx-wink-smile"))
+    {
+        disableAllTools();
+        disSelectAllTools();
+        isIconToolActive = true;
+        document.querySelector(".bx-wink-smile").classList.add("selected");
+        disableAllSideBars();
+        svg.style.cursor = "crosshair"
+    }
     else {
         disableAllTools();
         disSelectAllTools();
@@ -240,6 +250,7 @@ function disableAllTools()
   isImageToolActive = false;
   isPanningToolActive = false;
   isFrameToolActive = false;
+  isIconToolActive = false;
 }
 
 
