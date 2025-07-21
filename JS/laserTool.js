@@ -1,27 +1,29 @@
 let isDrawing = false;
-let lasers = []; // Stores active lasers
-let fadingLasers = []; // Stores lasers currently in fade-out animation
+let lasers = []; 
+let fadingLasers = []; 
 
-const fadeOutDuration = 1200; // Total duration for a point to fade out
+const fadeOutDuration = 1200; 
 const baseLaserOpacity = 0.7;
 const baseLaserWidth = 5;
-const minStrokeWidth  = 0.8;
+const minStrokeWidth = 0.8;
 const minDistanceThreshold = 0.5;
 
 let drawingAnimationId = null;
-let fadingAnimationId = null; // Separate animation ID for fading lasers
+let fadingAnimationId = null; 
 let lastMovePoint = null;
 let hasMoved = false;
 
-// Catmull-Rom Spline to Cubic Bezier conversion for a single segment
-// This function calculates control points for the segment between p1 and p2,
-// using p0 and p3 as surrounding points for continuity.
+
+function getZoomAdjustedWidth(baseWidth) {
+    return baseWidth / currentZoom;
+}
+
 function getCatmullRomSegmentBezier(p0, p1, p2, p3) {
-    // Clamp points for edges (if p0 or p3 don't exist, use p1 or p2 respectively)
+    
     p0 = p0 || p1;
     p3 = p3 || p2;
 
-    // Calculate control points for cubic Bezier segment (from p1 to p2)
+    
     const cp1x = p1.x + (p2.x - p0.x) / 6;
     const cp1y = p1.y + (p2.y - p0.y) / 6;
     const cp2x = p2.x - (p3.x - p1.x) / 6;
@@ -75,7 +77,9 @@ function updateLaserAppearance(laser, isFinalFade = false) {
         return;
     }
 
-
+    // Get zoom-adjusted base width
+    const adjustedBaseWidth = getZoomAdjustedWidth(baseLaserWidth);
+    const adjustedMinWidth = getZoomAdjustedWidth(minStrokeWidth);
 
     for (let i = 0; i < points.length - 1; i++) {
         const p0 = points[i === 0 ? 0 : i - 1];
@@ -92,13 +96,13 @@ function updateLaserAppearance(laser, isFinalFade = false) {
         );
         path.setAttribute("fill", "none");
 
-        // --- Time-based fade only ---
+
         const avgAge = ((currentTime - p1.timestamp) + (currentTime - p2.timestamp)) / 2;
         const ageProgress = Math.min(1, avgAge / fadeOutDuration);
-        const easedFade = 1 - Math.pow(ageProgress, 3); // smoother fade
+        const easedFade = 1 - Math.pow(ageProgress, 3); 
 
         let opacity = baseLaserOpacity * easedFade;
-        let width = baseLaserWidth * easedFade;
+        let width = adjustedBaseWidth * easedFade; 
 
         if (isFinalFade) {
             opacity *= laser.fadeProgress;
@@ -106,7 +110,7 @@ function updateLaserAppearance(laser, isFinalFade = false) {
         }
 
         path.setAttribute("stroke", `hsla(120, 100%, 50%, ${Math.max(0.05, opacity)})`);
-        path.setAttribute("stroke-width", Math.max(1.5, width));
+        path.setAttribute("stroke-width", Math.max(adjustedMinWidth, width)); // Use zoom-adjusted min width
         laserGroup.appendChild(path);
     }
 }
@@ -118,7 +122,7 @@ function distance(p1, p2) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Main drawing loop - only for the actively drawn laser
+
 function drawingLoop() {
     if (!isDrawing) {
         drawingAnimationId = null;
@@ -133,21 +137,21 @@ function drawingLoop() {
 
             if (svgPoint) {
                 const lastLaserPoint = currentLaser.points[currentLaser.points.length - 1];
-                if (!lastLaserPoint || distance(svgPoint, lastLaserPoint) >= minDistanceThreshold) {
+                
+                const adjustedThreshold = minDistanceThreshold / currentZoom;
+                if (!lastLaserPoint || distance(svgPoint, lastLaserPoint) >= adjustedThreshold) {
                     currentLaser.points.push({ x: svgPoint.x, y: svgPoint.y, timestamp: performance.now() });
                 }
             }
-            hasMoved = false; // Reset hasMoved after processing
+            hasMoved = false; 
         }
         
-        // Always update the appearance of the active laser.
-        // updateLaserAppearance will handle filtering out faded points.
-        updateLaserAppearance(currentLaser, false); // Not a final fade
+        updateLaserAppearance(currentLaser, false); 
     }
     drawingAnimationId = requestAnimationFrame(drawingLoop);
 }
 
-// Separate loop for fading out completed lasers
+
 function fadingLasersLoop() {
     if (fadingLasers.length === 0) {
         fadingAnimationId = null;
