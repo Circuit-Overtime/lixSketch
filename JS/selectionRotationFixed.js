@@ -829,8 +829,17 @@ class MultiSelection {
                 
                 // For simplicity, let's derive new x, y, width, height from the transformed BBox
                 const bbox = element.getBBox();
-                const transformedP1 = finalMatrix.transformPoint(svg.createSVGPoint(bbox.x, bbox.y));
-                const transformedP2 = finalMatrix.transformPoint(svg.createSVGPoint(bbox.x + bbox.width, bbox.y + bbox.height));
+                
+                // Create SVG points and transform them manually
+                const point1 = svg.createSVGPoint();
+                point1.x = bbox.x;
+                point1.y = bbox.y;
+                const transformedP1 = point1.matrixTransform(finalMatrix);
+                
+                const point2 = svg.createSVGPoint();
+                point2.x = bbox.x + bbox.width;
+                point2.y = bbox.y + bbox.height;
+                const transformedP2 = point2.matrixTransform(finalMatrix);
 
                 const newX = transformedP1.x;
                 const newY = transformedP1.y;
@@ -864,11 +873,15 @@ class MultiSelection {
                         // For lines/arrows, transforming the individual start/end points is better.
                         // Since they were already moved with the group, their relative positions are maintained.
                         // We need to calculate new absolute positions based on the group's transform.
-                        const startPoint = svg.createSVGPoint(shape.startPoint.x, shape.startPoint.y);
-                        const endPoint = svg.createSVGPoint(shape.endPoint.x, shape.endPoint.y);
+                        const startPoint = svg.createSVGPoint();
+                        startPoint.x = shape.startPoint.x;
+                        startPoint.y = shape.startPoint.y;
+                        const newStart = startPoint.matrixTransform(groupTransformMatrix);
                         
-                        const newStart = groupTransformMatrix.transformPoint(startPoint);
-                        const newEnd = groupTransformMatrix.transformPoint(endPoint);
+                        const endPoint = svg.createSVGPoint();
+                        endPoint.x = shape.endPoint.x;
+                        endPoint.y = shape.endPoint.y;
+                        const newEnd = endPoint.matrixTransform(groupTransformMatrix);
 
                         shape.startPoint.x = newStart.x;
                         shape.startPoint.y = newStart.y;
@@ -876,8 +889,10 @@ class MultiSelection {
                         shape.endPoint.y = newEnd.y;
                         
                         if (shape.controlPoint) {
-                            const controlPoint = svg.createSVGPoint(shape.controlPoint.x, shape.controlPoint.y);
-                            const newControl = groupTransformMatrix.transformPoint(controlPoint);
+                            const controlPoint = svg.createSVGPoint();
+                            controlPoint.x = shape.controlPoint.x;
+                            controlPoint.y = shape.controlPoint.y;
+                            const newControl = controlPoint.matrixTransform(groupTransformMatrix);
                             shape.controlPoint.x = newControl.x;
                             shape.controlPoint.y = newControl.y;
                         }
@@ -885,8 +900,10 @@ class MultiSelection {
                     case 'freehandStroke':
                         // Transform each point in the polyline
                         shape.points = shape.points.map(p => {
-                            const point = svg.createSVGPoint(p.x, p.y);
-                            const newPoint = groupTransformMatrix.transformPoint(point);
+                            const point = svg.createSVGPoint();
+                            point.x = p.x;
+                            point.y = p.y;
+                            const newPoint = point.matrixTransform(groupTransformMatrix);
                             return { x: newPoint.x, y: newPoint.y };
                         });
                         if (typeof shape.updateBoundingBox === 'function') {

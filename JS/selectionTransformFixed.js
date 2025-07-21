@@ -1,10 +1,9 @@
-let multiSelectionStart = { x: 0, y: 0 };
+// Multi-selection variables
 let isMultiSelecting = false;
+let multiSelectionStart = { x: 0, y: 0 };
 let multiSelectionRect = null;
 let isDraggingMultiSelection = false;
-
 function getSVGCoordsFromMouse(e) {
-    // Use the SVG's current viewBox to map mouse to SVG coordinates
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -14,7 +13,7 @@ function getSVGCoordsFromMouse(e) {
     return { x: svgX, y: svgY };
 }
 
-
+// Create multi-selection rectangle for visual feedback
 function createMultiSelectionRect(startX, startY) {
     multiSelectionRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     multiSelectionRect.setAttribute('x', startX);
@@ -52,6 +51,7 @@ function removeMultiSelectionRect() {
     multiSelectionRect = null;
 }
 
+// Check if a shape intersects with selection rectangle
 function isShapeInSelectionRect(shape, selectionBounds) {
     let shapeBounds;
     
@@ -158,7 +158,6 @@ class MultiSelection {
     constructor() {
         this.selectedShapes = new Set();
         this.group = null;
-        this.tempGroup = null; // Add tempGroup for transformations
         this.anchors = [];
         this.outline = null;
         this.rotationAnchor = null;
@@ -176,7 +175,6 @@ class MultiSelection {
         this.rotationCenter = { x: 0, y: 0 };
         this.startRotationMouseAngle = 0;
         this.initialRotation = 0;
-        this.initialTempGroupTransform = null; // Add for temp group transform tracking
     }
 
     addShape(shape) {
@@ -204,7 +202,6 @@ class MultiSelection {
         });
         this.selectedShapes.clear();
         this.removeControls();
-        this.removeTempGroup(); // Add temp group removal
         if (typeof currentShape !== 'undefined') {
             currentShape = null;
         }
@@ -325,66 +322,12 @@ class MultiSelection {
 
     updateControls() {
         this.removeControls();
-        this.removeTempGroup(); // Remove existing temp group
-
         if (this.selectedShapes.size === 0) return;
 
         this.bounds = this.getBounds();
         if (!this.bounds) return;
 
-        this.createTempGroup(); // Create temp group
         this.createControls();
-    }
-
-    createTempGroup() {
-        if (!this.tempGroup) {
-            this.tempGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            this.tempGroup.setAttribute('id', 'multi-selection-temp-group');
-            this.tempGroup.setAttribute('transform', `translate(0,0) rotate(0,${this.bounds.x + this.bounds.width/2},${this.bounds.y + this.bounds.height/2})`);
-            svg.appendChild(this.tempGroup);
-        }
-        isMultiSelecting = true;
-        // Append actual SVG elements of selected shapes to the temp group
-        this.selectedShapes.forEach(shape => {
-            let elementToAppend = null;
-            if (shape.group) {
-                elementToAppend = shape.group;
-            } else if (shape.element) {
-                elementToAppend = shape.element;
-            } else if (shape.polyline) {
-                elementToAppend = shape.polyline;
-            }
-
-            if (elementToAppend && elementToAppend.parentNode) {
-                // Temporarily remove from original parent to append to tempGroup
-                elementToAppend.parentNode.removeChild(elementToAppend);
-                this.tempGroup.appendChild(elementToAppend);
-            }
-        });
-    }
-
-    removeTempGroup() {
-        if (this.tempGroup && this.tempGroup.parentNode) {
-            // Re-append shapes to their original parent (svg or canvasGroup)
-            this.selectedShapes.forEach(shape => {
-                let elementToReAppend = null;
-                if (shape.group) {
-                    elementToReAppend = shape.group;
-                } else if (shape.element) {
-                    elementToReAppend = shape.element;
-                } else if (shape.polyline) {
-                    elementToReAppend = shape.polyline;
-                }
-
-                if (elementToReAppend && elementToReAppend.parentNode === this.tempGroup) {
-                    // Assuming they should go back to the main svg or a dedicated layer
-                    svg.appendChild(elementToReAppend);
-                }
-            });
-            this.tempGroup.parentNode.removeChild(this.tempGroup);
-            isMultiSelecting = false;
-        }
-        this.tempGroup = null;
     }
 
     createControls() {
@@ -549,7 +492,6 @@ class MultiSelection {
         e.preventDefault();
 
         this.isRotating = true;
-        
         this.rotationCenter = {
             x: this.bounds.x + this.bounds.width / 2,
             y: this.bounds.y + this.bounds.height / 2
@@ -558,213 +500,216 @@ class MultiSelection {
         const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
         this.startRotationMouseAngle = Math.atan2(mouseY - this.rotationCenter.y, mouseX - this.rotationCenter.x) * 180 / Math.PI;
 
-        // Store initial transform of the temp group
-        const currentTransform = this.tempGroup.transform.baseVal.consolidate();
-        this.initialTempGroupTransform = currentTransform ? currentTransform.matrix : svg.createSVGMatrix();
+        // Store initial positions for all shapes
+        this.storeInitialPositions();
+
+        const onMouseMove = (event) => {
+            if (this.isRotating) {
+                this.handleRotation(event);
+            }
+        };
+
+        const onMouseUp = () => {
+            this.isRotating = false;
+            this.initialPositions.clear();
+            if (typeof svg !== 'undefined') {
+                svg.removeEventListener('mousemove', onMouseMove);
+                svg.removeEventListener('mouseup', onMouseUp);
+                svg.style.cursor = 'default';
+            }
+        };
 
         if (typeof svg !== 'undefined') {
-            svg.addEventListener('mousemove', this.handleRotationWrapper);
-            svg.addEventListener('mouseup', this.endRotationWrapper);
+            svg.addEventListener('mousemove', onMouseMove);
+            svg.addEventListener('mouseup', onMouseUp);
             svg.style.cursor = 'grabbing';
         }
     }
 
-    handleRotationWrapper = (e) => {
-        if (this.isRotating) {
-            this.handleRotation(e);
-        }
-    }
-
-    endRotationWrapper = () => {
-        if (this.isRotating) {
-            this.isRotating = false;
-            this.initialTempGroupTransform = null;
-            if (typeof svg !== 'undefined') {
-                svg.removeEventListener('mousemove', this.handleRotationWrapper);
-                svg.removeEventListener('mouseup', this.endRotationWrapper);
-                svg.style.cursor = 'default';
+    storeInitialPositions() {
+        this.initialPositions.clear();
+        
+        // Store initial bounds for locked rotation
+        const initialBounds = this.getBounds();
+        this.initialPositions.set('initialBounds', initialBounds);
+        
+        this.selectedShapes.forEach(shape => {
+            let shapeData;
+            switch (shape.shapeName) {
+                case 'rectangle':
+                case 'circle':
+                case 'frame':
+                    shapeData = {
+                        x: shape.x,
+                        y: shape.y,
+                        width: shape.width || 0,
+                        height: shape.height || 0,
+                        rx: shape.rx || 0,
+                        ry: shape.ry || 0,
+                        rotation: shape.rotation || 0,
+                        relativeX: shape.x - this.rotationCenter.x,
+                        relativeY: shape.y - this.rotationCenter.y
+                    };
+                    break;
+                case 'line':
+                case 'arrow':
+                    shapeData = {
+                        startPoint: { ...shape.startPoint },
+                        endPoint: { ...shape.endPoint },
+                        relativeStartX: shape.startPoint.x - this.rotationCenter.x,
+                        relativeStartY: shape.startPoint.y - this.rotationCenter.y,
+                        relativeEndX: shape.endPoint.x - this.rotationCenter.x,
+                        relativeEndY: shape.endPoint.y - this.rotationCenter.y
+                    };
+                    break;
+                case 'freehandStroke':
+                    shapeData = {
+                        x: shape.boundingBox.x,
+                        y: shape.boundingBox.y,
+                        width: shape.boundingBox.width,
+                        height: shape.boundingBox.height,
+                        points: [...shape.points],
+                        relativePoints: shape.points.map(point => ({
+                            x: point.x - this.rotationCenter.x,
+                            y: point.y - this.rotationCenter.y
+                        }))
+                    };
+                    break;
+                default:
+                    shapeData = {
+                        x: shape.x || 0,
+                        y: shape.y || 0,
+                        width: shape.width || 0,
+                        height: shape.height || 0,
+                        rotation: shape.rotation || 0,
+                        relativeX: (shape.x || 0) - this.rotationCenter.x,
+                        relativeY: (shape.y || 0) - this.rotationCenter.y
+                    };
             }
-            
-            // Remove individual shape anchors/selections
-            this.selectedShapes.forEach(shape => {
-                if (typeof shape.removeSelection === 'function') {
-                    shape.removeSelection();
-                }
-            });
-            
-            this.applyTempGroupTransformToShapes();
-            this.removeTempGroup(); // Remove temp group after applying transforms
-            this.updateControls(); // Re-render controls after applying transforms
-        }
+            this.initialPositions.set(shape, shapeData);
+        });
     }
-
+    
     handleRotation(e) {
-        if (!this.tempGroup) return;
-
         const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(e);
         const currentMouseAngle = Math.atan2(mouseY - this.rotationCenter.y, mouseX - this.rotationCenter.x) * 180 / Math.PI;
         const angleDiff = currentMouseAngle - this.startRotationMouseAngle;
-        
-        const initialTranslateX = this.initialTempGroupTransform.e;
-        const initialTranslateY = this.initialTempGroupTransform.f;
-
-        let transform = this.tempGroup.transform.baseVal.consolidate();
-        if (!transform) {
-            transform = svg.createSVGTransform();
-            this.tempGroup.transform.baseVal.appendItem(transform);
-        }
-
-        // Apply rotation around the bounds center
-        const rotateTransform = svg.createSVGTransform();
-        rotateTransform.setRotate(angleDiff, this.rotationCenter.x, this.rotationCenter.y);
-
-        // Combine initial translation with new rotation
-        const newMatrix = svg.createSVGMatrix()
-                            .translate(initialTranslateX, initialTranslateY)
-                            .multiply(rotateTransform.matrix);
-        
-        transform.setMatrix(newMatrix);
-    }
-
-
-    applyTempGroupTransformToShapes() {
-        if (!this.tempGroup) return;
     
-        // Get the group's transform matrix
-        const groupTransform = this.tempGroup.transform.baseVal.consolidate();
-        if (!groupTransform) return;
-        
-        const groupMatrix = groupTransform.matrix;
-        
+        const angleRad = angleDiff * Math.PI / 180;
+        const cosAngle = Math.cos(angleRad);
+        const sinAngle = Math.sin(angleRad);
+    
         this.selectedShapes.forEach(shape => {
-            let element = null;
-            if (shape.group) {
-                element = shape.group;
-            } else if (shape.element) {
-                element = shape.element;
-            } else if (shape.polyline) {
-                element = shape.polyline;
-            }
+            const initialData = this.initialPositions.get(shape);
+            if (!initialData) return;
+            shape.removeSelection();
     
-            if (element && element.parentNode === this.tempGroup) {
-                // Update shape properties based on transformation
-                switch (shape.shapeName) {
-                    case 'rectangle':
-                    case 'frame':
-                        // Calculate transformed position using the center point
-                        const centerX = shape.x + shape.width / 2;
-                        const centerY = shape.y + shape.height / 2;
-                        
-                        // Transform the center point
-                        const transformedCenterX = groupMatrix.a * centerX + groupMatrix.c * centerY + groupMatrix.e;
-                        const transformedCenterY = groupMatrix.b * centerX + groupMatrix.d * centerY + groupMatrix.f;
-                        
-                        // Update shape position
-                        shape.x = transformedCenterX - shape.width / 2;
-                        shape.y = transformedCenterY - shape.height / 2;
-                        break;
-                        
-                    case 'circle':
-                        // Transform the circle center
-                        const transformedCircleX = groupMatrix.a * shape.x + groupMatrix.c * shape.y + groupMatrix.e;
-                        const transformedCircleY = groupMatrix.b * shape.x + groupMatrix.d * shape.y + groupMatrix.f;
-                        
-                        shape.x = transformedCircleX;
-                        shape.y = transformedCircleY;
-                        break;
-                        
-                    case 'line':
-                    case 'arrow':
-                        // Transform start point
-                        const transformedStartX = groupMatrix.a * shape.startPoint.x + groupMatrix.c * shape.startPoint.y + groupMatrix.e;
-                        const transformedStartY = groupMatrix.b * shape.startPoint.x + groupMatrix.d * shape.startPoint.y + groupMatrix.f;
-                        
-                        // Transform end point
-                        const transformedEndX = groupMatrix.a * shape.endPoint.x + groupMatrix.c * shape.endPoint.y + groupMatrix.e;
-                        const transformedEndY = groupMatrix.b * shape.endPoint.x + groupMatrix.d * shape.endPoint.y + groupMatrix.f;
-                        
-                        shape.startPoint.x = transformedStartX;
-                        shape.startPoint.y = transformedStartY;
-                        shape.endPoint.x = transformedEndX;
-                        shape.endPoint.y = transformedEndY;
-                        
-                        if (shape.controlPoint) {
-                            const transformedControlX = groupMatrix.a * shape.controlPoint.x + groupMatrix.c * shape.controlPoint.y + groupMatrix.e;
-                            const transformedControlY = groupMatrix.b * shape.controlPoint.x + groupMatrix.d * shape.controlPoint.y + groupMatrix.f;
-                            
-                            shape.controlPoint.x = transformedControlX;
-                            shape.controlPoint.y = transformedControlY;
-                        }
-                        break;
-                        
-                    case 'freehandStroke':
-                        // Transform each point in the polyline
-                        shape.points = shape.points.map(p => {
-                            const transformedX = groupMatrix.a * p.x + groupMatrix.c * p.y + groupMatrix.e;
-                            const transformedY = groupMatrix.b * p.x + groupMatrix.d * p.y + groupMatrix.f;
-                            return { x: transformedX, y: transformedY };
-                        });
-                        if (typeof shape.updateBoundingBox === 'function') {
-                            shape.updateBoundingBox();
-                        }
-                        break;
-                        
-                    case 'text':
-                        const transformedTextX = groupMatrix.a * shape.x + groupMatrix.c * shape.y + groupMatrix.e;
-                        const transformedTextY = groupMatrix.b * shape.x + groupMatrix.d * shape.y + groupMatrix.f;
-                        
-                        shape.x = transformedTextX;
-                        shape.y = transformedTextY;
-                        break;
-                        
-                    case 'image':
-                        const imgCenterX = shape.x + shape.width / 2;
-                        const imgCenterY = shape.y + shape.height / 2;
-                        
-                        const transformedImgCenterX = groupMatrix.a * imgCenterX + groupMatrix.c * imgCenterY + groupMatrix.e;
-                        const transformedImgCenterY = groupMatrix.b * imgCenterX + groupMatrix.d * imgCenterY + groupMatrix.f;
-                        
-                        shape.x = transformedImgCenterX - shape.width / 2;
-                        shape.y = transformedImgCenterY - shape.height / 2;
-                        break;
-                }
-                
-                // Clear any existing transform on the element
-                if (element.transform && element.transform.baseVal) {
-                    element.transform.baseVal.clear();
-                }
-            }
-        });
+            switch (shape.shapeName) {
+                case 'rectangle':
+                case 'circle':
+                case 'frame':
+                case 'text':
+                case 'image':
+                    const newX = this.rotationCenter.x + (initialData.relativeX * cosAngle - initialData.relativeY * sinAngle);
+                    const newY = this.rotationCenter.y + (initialData.relativeX * sinAngle + initialData.relativeY * cosAngle);
+                    shape.x = newX;
+                    shape.y = newY;
+                    shape.rotation = (initialData.rotation || 0) + angleDiff;
+                    if (typeof shape.rotate === 'function') {
+                        shape.rotate(shape.rotation);
+                    }
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
     
-        // Clear the transform on the temporary group itself
-        if (this.tempGroup.transform && this.tempGroup.transform.baseVal) {
-            this.tempGroup.transform.baseVal.clear();
-        }
-        
-        // Move elements back to main SVG before redrawing
-        this.selectedShapes.forEach(shape => {
-            let element = null;
-            if (shape.group) {
-                element = shape.group;
-            } else if (shape.element) {
-                element = shape.element;
-            } else if (shape.polyline) {
-                element = shape.polyline;
-            }
-            
-            if (element && element.parentNode === this.tempGroup) {
-                svg.appendChild(element);
-            }
-            
-            // Redraw the shape with new coordinates
-            if (typeof shape.draw === 'function') {
-                shape.draw();
+                case 'line':
+                case 'arrow':
+                    const newStartX = this.rotationCenter.x + (initialData.relativeStartX * cosAngle - initialData.relativeStartY * sinAngle);
+                    const newStartY = this.rotationCenter.y + (initialData.relativeStartX * sinAngle + initialData.relativeStartY * cosAngle);
+                    const newEndX = this.rotationCenter.x + (initialData.relativeEndX * cosAngle - initialData.relativeEndY * sinAngle);
+                    const newEndY = this.rotationCenter.y + (initialData.relativeEndX * sinAngle + initialData.relativeEndY * cosAngle);
+    
+                    shape.startPoint.x = newStartX;
+                    shape.startPoint.y = newStartY;
+                    shape.endPoint.x = newEndX;
+                    shape.endPoint.y = newEndY;
+    
+                    if (shape.shapeName === 'arrow' && shape.arrowCurved && typeof shape.initializeCurveControlPoints === 'function') {
+                        shape.initializeCurveControlPoints();
+                    }
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
+    
+                case 'freehandStroke':
+                    shape.points = initialData.relativePoints.map(relPoint => ({
+                        x: this.rotationCenter.x + (relPoint.x * cosAngle - relPoint.y * sinAngle),
+                        y: this.rotationCenter.y + (relPoint.x * sinAngle + relPoint.y * cosAngle)
+                    }));
+                    if (typeof shape.updateBoundingBox === 'function') {
+                        shape.updateBoundingBox();
+                    }
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
             }
     
             if (typeof shape.updateAttachedArrows === 'function') {
                 shape.updateAttachedArrows();
             }
         });
+    
+        // Update controls with locked aspect ratio - use initial bounds rotated around center
+        this.updateControlsWithLockedRotation(angleDiff);
+    }
+    
+    updateControlsWithLockedRotation(angleDiff) {
+        this.removeControls();
+        if (this.selectedShapes.size === 0) return;
+    
+        // Get the initial bounds when rotation started
+        const initialBounds = this.initialPositions.get('initialBounds');
+        if (!initialBounds) {
+            // Fallback to regular update if no initial bounds stored
+            this.updateControls();
+            return;
+        }
+    
+        // Calculate rotated bounds corners
+        const angleRad = angleDiff * Math.PI / 180;
+        const cosAngle = Math.cos(angleRad);
+        const sinAngle = Math.sin(angleRad);
+    
+        // Calculate the four corners of the original bounds relative to rotation center
+        const corners = [
+            { x: initialBounds.x - this.rotationCenter.x, y: initialBounds.y - this.rotationCenter.y },
+            { x: initialBounds.x + initialBounds.width - this.rotationCenter.x, y: initialBounds.y - this.rotationCenter.y },
+            { x: initialBounds.x + initialBounds.width - this.rotationCenter.x, y: initialBounds.y + initialBounds.height - this.rotationCenter.y },
+            { x: initialBounds.x - this.rotationCenter.x, y: initialBounds.y + initialBounds.height - this.rotationCenter.y }
+        ];
+    
+        // Rotate corners and find new bounding box
+        const rotatedCorners = corners.map(corner => ({
+            x: this.rotationCenter.x + (corner.x * cosAngle - corner.y * sinAngle),
+            y: this.rotationCenter.y + (corner.x * sinAngle + corner.y * cosAngle)
+        }));
+    
+        const minX = Math.min(...rotatedCorners.map(c => c.x));
+        const minY = Math.min(...rotatedCorners.map(c => c.y));
+        const maxX = Math.max(...rotatedCorners.map(c => c.x));
+        const maxY = Math.max(...rotatedCorners.map(c => c.y));
+    
+        this.bounds = {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+        };
+    
+        this.createControls();
     }
 
     startResize(e, anchorIndex) {
@@ -780,18 +725,15 @@ class MultiSelection {
         
         this.selectedShapes.forEach(shape => {
             let shapeData;
-            if (typeof shape.removeSelection === 'function') {
-                shape.removeSelection();
-            }
+            shape.removeSelection();
             switch (shape.shapeName) {
                 case 'rectangle':
-                case 'frame':
                     shapeData = {
                         x: shape.x,
                         y: shape.y,
                         width: shape.width,
                         height: shape.height,
-                        rotation: shape.rotation || 0
+                        rotation: shape.rotation
                     };
                     break;
                 case 'circle':
@@ -800,7 +742,7 @@ class MultiSelection {
                         y: shape.y,
                         rx: shape.rx,
                         ry: shape.ry,
-                        rotation: shape.rotation || 0
+                        rotation: shape.rotation
                     };
                     break;
                 case 'line':
@@ -808,24 +750,6 @@ class MultiSelection {
                     shapeData = {
                         startPoint: { ...shape.startPoint },
                         endPoint: { ...shape.endPoint }
-                    };
-                    if (shape.controlPoint) {
-                        shapeData.controlPoint = { ...shape.controlPoint };
-                    }
-                    break;
-                case 'freehandStroke':
-                    shapeData = {
-                        points: shape.points.map(p => ({ ...p })),
-                        boundingBox: { ...shape.boundingBox }
-                    };
-                    break;
-                case 'text':
-                case 'image':
-                    shapeData = {
-                        x: shape.x,
-                        y: shape.y,
-                        width: shape.width || 0,
-                        height: shape.height || 0
                     };
                     break;
                 default:
@@ -851,21 +775,11 @@ class MultiSelection {
             this.isResizing = false;
             this.resizingAnchorIndex = null;
             this.initialPositions.clear();
-            
-            // Remove individual shape selections after resize
-            this.selectedShapes.forEach(shape => {
-                if (typeof shape.removeSelection === 'function') {
-                    shape.removeSelection();
-                }
-            });
-            
             if (typeof svg !== 'undefined') {
                 svg.removeEventListener('mousemove', onMouseMove);
                 svg.removeEventListener('mouseup', onMouseUp);
                 svg.style.cursor = 'default';
             }
-            
-            this.updateControls(); // Update controls after resize
         };
         
         if (typeof svg !== 'undefined') {
@@ -940,7 +854,7 @@ class MultiSelection {
         this.selectedShapes.forEach(shape => {
             const initialData = this.initialPositions.get(shape);
             if (!initialData) return;
-            shape.removeSelection();
+            
             switch (shape.shapeName) {
                 case 'rectangle':
                     const relX = (initialData.x - initialBounds.x) / initialBounds.width;
@@ -1233,5 +1147,7 @@ export {
     isPointInMultiSelection,
     moveSelectedShapes,
     multiSelection,
+    isDraggingMultiSelection,
     isMultiSelecting
+    
 };

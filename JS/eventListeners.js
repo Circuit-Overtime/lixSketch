@@ -12,7 +12,7 @@ import {
     handleMultiSelectionMouseUp,
     multiSelection,
     isMultiSelecting
-} from './selection.js';
+} from './selectionTransformFixed.js';
 
 const handleMainMouseDown = (e) => {
     if (isSquareToolActive) {
