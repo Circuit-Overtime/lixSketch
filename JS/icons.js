@@ -97,43 +97,57 @@ class IconShape {
     }
     
     get rotation() {
-        const transform = this.element.getAttribute('transform');
-        if (transform) {
-            const rotateMatch = transform.match(/rotate\(([^,]+)/);
-            if (rotateMatch) {
-                return parseFloat(rotateMatch[1]);
-            }
-        }
-        return 0;
+    const dataRotation = this.element.getAttribute('data-shape-rotation');
+    if (dataRotation) {
+        return parseFloat(dataRotation);
     }
     
-    set rotation(value) {
-        const centerX = this.x + this.width / 2;
-        const centerY = this.y + this.height / 2;
-        this.element.setAttribute('transform', `rotate(${value}, ${centerX}, ${centerY})`);
-        this.element.setAttribute('data-shape-rotation', value);
+    const transform = this.element.getAttribute('transform');
+    if (transform) {
+        const rotateMatch = transform.match(/rotate\(([^,\s]+)/);
+        if (rotateMatch) {
+            return parseFloat(rotateMatch[1]);
+        }
     }
+    return 0;
+}
 
-    move(dx, dy) {
-        this.x += dx;
-        this.y += dy;
-        
-        // Update transform for rotation
-        const centerX = this.x + this.width / 2;
-        const centerY = this.y + this.height / 2;
-        this.element.setAttribute('transform', `rotate(${this.rotation}, ${centerX}, ${centerY})`);
-        
-        // Only update frame containment if we're actively dragging the shape itself
-        // and not being moved by a parent frame
-        if (isDragging && !this.isBeingMovedByFrame) {
-            this.updateFrameContainment();
-        }
-        
-        // Update attached arrows
-        if (typeof updateAttachedArrows === 'function') {
-            updateAttachedArrows(this.element);
-        }
+set rotation(value) {
+    // Update the data attribute for consistency
+    this.element.setAttribute('data-shape-rotation', value);
+    
+    // Update the full transform
+    const scale = this.width / 24;
+    const localCenterX = this.width / 2 / scale;
+    const localCenterY = this.height / 2 / scale;
+    
+    this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${value}, ${localCenterX}, ${localCenterY})`);
+}
+    
+
+move(dx, dy) {
+    this.x += dx;
+    this.y += dy;
+    
+    // Update the transform for the icon - this is the key fix
+    const scale = this.width / 24;
+    const localCenterX = this.width / 2 / scale;
+    const localCenterY = this.height / 2 / scale;
+    
+    // Use the correct transform format with translate, scale, and rotate
+    this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${this.rotation}, ${localCenterX}, ${localCenterY})`);
+    
+    // Only update frame containment if we're actively dragging the shape itself
+    // and not being moved by a parent frame
+    if (isDragging && !this.isBeingMovedByFrame) {
+        this.updateFrameContainment();
     }
+    
+    // Update attached arrows
+    if (typeof updateAttachedArrows === 'function') {
+        updateAttachedArrows(this.element);
+    }
+}
 
     updateFrameContainment() {
         // Don't update if we're being moved by a frame
@@ -176,11 +190,29 @@ class IconShape {
         return x >= iconX && x <= iconX + iconWidth && y >= iconY && y <= iconY + iconHeight;
     }
 
-    draw() {
+draw() {
+        // Update the transform based on current properties
+        const scale = this.width / 24;
+        const localCenterX = this.width / 2 / scale;
+        const localCenterY = this.height / 2 / scale;
+        
+        this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${this.rotation}, ${localCenterX}, ${localCenterY})`);
+        
+        // Update data attributes for arrow attachment
+        this.element.setAttribute('data-shape-x', this.x);
+        this.element.setAttribute('data-shape-y', this.y);
+        this.element.setAttribute('data-shape-width', this.width);
+        this.element.setAttribute('data-shape-height', this.height);
+        this.element.setAttribute('data-shape-rotation', this.rotation);
+        
+        // Update attached arrows
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(this.element);
+        }
     }
 
-    removeSelection() {
-        removeSelectionOutline();
+    removeSelection(params) {
+        removeSelection();
     }
 
     selectShape() {
@@ -252,6 +284,32 @@ class IconShape {
         }
     }
 }
+
+
+function removeSelection() {
+        const svg = getSVGElement();
+    if (!svg) return;
+
+    // Remove the selection outline
+    const outline = svg.querySelector(".selection-outline");
+    if (outline) {
+        svg.removeChild(outline);
+    }
+
+    // Remove resize anchors
+    removeResizeAnchors();
+    
+    // Remove rotation anchor
+    removeRotationAnchor();
+
+    // Remove drag event listeners
+    if (selectedIcon) {
+        selectedIcon.removeEventListener('mousedown', startDrag);
+        selectedIcon.removeEventListener('mouseup', stopDrag);
+        selectedIcon.removeEventListener('mouseleave', stopDrag);
+    }
+    }
+
 
 function wrapIconElement(element) {
     const iconShape = new IconShape(element);
@@ -543,7 +601,7 @@ const handleMouseUpIcon = (e) => {
         
         // If we didn't click on an icon or its controls, deselect
         if (!isIconElement && !isAnchorElement && selectedIcon) {
-            removeSelectionOutline();
+            removeSelection();
             selectedIcon = null;
         }
     }
@@ -561,7 +619,7 @@ function selectIcon(event) {
     event.stopPropagation(); // Prevent click from propagating to the SVG
 
     if (selectedIcon) {
-        removeSelectionOutline();
+        removeSelection();
     }
 
     selectedIcon = event.target.closest('[type="icon"]');
@@ -640,29 +698,7 @@ function addSelectionOutline() {
     addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY);
 }
 
-function removeSelectionOutline() {
-    const svg = getSVGElement();
-    if (!svg) return;
 
-    // Remove the selection outline
-    const outline = svg.querySelector(".selection-outline");
-    if (outline) {
-        svg.removeChild(outline);
-    }
-
-    // Remove resize anchors
-    removeResizeAnchors();
-    
-    // Remove rotation anchor
-    removeRotationAnchor();
-
-    // Remove drag event listeners
-    if (selectedIcon) {
-        selectedIcon.removeEventListener('mousedown', startDrag);
-        selectedIcon.removeEventListener('mouseup', stopDrag);
-        selectedIcon.removeEventListener('mouseleave', stopDrag);
-    }
-}
 
 function addResizeAnchors(x, y, width, height, centerX, centerY) {
     const svg = getSVGElement();
@@ -865,7 +901,7 @@ function resizeIcon(event) {
     }
 
     // Update the selection outline and anchors
-    removeSelectionOutline();
+    removeSelection();
     addSelectionOutline();
 }
 
@@ -944,7 +980,7 @@ function dragIcon(event) {
     }
 
     // Update the selection outline and anchors
-    removeSelectionOutline();
+    removeSelection();
     addSelectionOutline();
 }
 
@@ -1026,7 +1062,7 @@ function rotateIcon(event) {
     }
 
     // Update the selection outline and anchors
-    removeSelectionOutline();
+    removeSelection();
     addSelectionOutline();
 }
 function stopRotation(event) {
@@ -1199,7 +1235,7 @@ function deleteCurrentIcon() {
         }
         
         // Clean up selection
-        removeSelectionOutline();
+        removeSelection();
         selectedIcon = null;
     }
 }

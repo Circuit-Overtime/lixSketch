@@ -132,6 +132,14 @@ function isShapeInSelectionRect(shape, selectionBounds) {
                 height: shape.height
             };
             break;
+        case 'icon':
+            shapeBounds = {
+                x: shape.x,
+                y: shape.y,
+                width: shape.width,
+                height: shape.height
+            };
+            break;
         default:
             shapeBounds = {
                 x: shape.x || 0,
@@ -302,6 +310,13 @@ class MultiSelection {
                     };
                 }
                 return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+            case 'icon':
+            return {
+                x: shape.x,
+                y: shape.y,
+                width: shape.width,
+                height: shape.height
+            };
             default:
                 return {
                     x: shape.x || 0,
@@ -431,40 +446,40 @@ class MultiSelection {
     }
 
     move(dx, dy) {
-        this.selectedShapes.forEach(shape => {
-            switch (shape.shapeName) {
-                case 'rectangle':
-                case 'circle':
-                case 'freehandStroke':
-                case 'frame':
-                    if (typeof shape.move === 'function') {
-                        shape.move(dx, dy);
-                        shape.draw();
-                    }
-                    break;
-                case 'line':
-                case 'arrow':
-                    if (typeof shape.move === 'function') {
-                        shape.move(dx, dy);
-                        shape.draw();
-                    }
-                    break;
-                case 'text':
-                case 'image':
-                    if (typeof shape.move === 'function') {
-                        shape.move(dx, dy);
-                    }
-                    break;
-            }
+    this.selectedShapes.forEach(shape => {
+        switch (shape.shapeName) {
+            case 'rectangle':
+            case 'circle':
+            case 'freehandStroke':
+            case 'frame':
+                if (typeof shape.move === 'function') {
+                    shape.move(dx, dy);
+                    shape.draw();
+                }
+                break;
+            case 'line':
+            case 'arrow':
+                if (typeof shape.move === 'function') {
+                    shape.move(dx, dy);
+                    shape.draw();
+                }
+                break;
+            case 'text':
+            case 'image':
+            case 'icon':
+                if (typeof shape.move === 'function') {
+                    shape.move(dx, dy);
+                }
+                break;
+        }
 
-            if (typeof shape.updateAttachedArrows === 'function') {
-                shape.updateAttachedArrows();
-            }
-        });
+        if (typeof shape.updateAttachedArrows === 'function') {
+            shape.updateAttachedArrows();
+        }
+    });
 
-        this.updateControls();
-    }
-
+    this.updateControls();
+}
 
     startRotation(e) {
         e.stopPropagation();
@@ -539,6 +554,21 @@ class MultiSelection {
                         relativeY: shapeCenterY - this.rotationCenter.y
                     };
                     break;
+                case 'icon':
+                shapeCenterX = shape.x + shape.width / 2;
+                shapeCenterY = shape.y + shape.height / 2;
+                shapeData = {
+                    x: shape.x,
+                    y: shape.y,
+                    width: shape.width || 0,
+                    height: shape.height || 0,
+                    rotation: shape.rotation || 0,
+                    centerX: shapeCenterX,
+                    centerY: shapeCenterY,
+                    relativeX: shapeCenterX - this.rotationCenter.x,
+                    relativeY: shapeCenterY - this.rotationCenter.y
+                };
+                break;
 
                 case 'circle':
                     shapeCenterX = shape.x;
@@ -692,6 +722,7 @@ class MultiSelection {
                 case 'rectangle':
                 case 'frame':
                 case 'image':
+                case 'icon':
                     const newCenterX = this.rotationCenter.x + (initialData.relativeX * cosAngle - initialData.relativeY * sinAngle);
                     const newCenterY = this.rotationCenter.y + (initialData.relativeX * sinAngle + initialData.relativeY * cosAngle);
 
@@ -882,6 +913,7 @@ createRotatedControls(angleDiff = 0) {
             shape.removeSelection();
             switch (shape.shapeName) {
                 case 'rectangle':
+                case 'icon': 
                     shapeData = {
                         x: shape.x,
                         y: shape.y,
@@ -1008,6 +1040,7 @@ createRotatedControls(angleDiff = 0) {
 
             switch (shape.shapeName) {
                 case 'rectangle':
+                case 'icon':
                     const relX = (initialData.x - initialBounds.x) / initialBounds.width;
                     const relY = (initialData.y - initialBounds.y) / initialBounds.height;
                     const relW = initialData.width / initialBounds.width;
@@ -1087,6 +1120,7 @@ createRotatedControls(angleDiff = 0) {
             shape.removeSelection();
             switch (shape.shapeName) {
                 case 'rectangle':
+                case 'icon':
                     shapeData = {
                         x: shape.x,
                         y: shape.y,
