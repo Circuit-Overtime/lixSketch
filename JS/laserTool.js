@@ -75,17 +75,7 @@ function updateLaserAppearance(laser, isFinalFade = false) {
         return;
     }
 
-    if (points.length < 3) {
-        const point = points[points.length - 1];
-        const fallbackDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        fallbackDot.setAttribute("cx", point.x);
-        fallbackDot.setAttribute("cy", point.y);
-        fallbackDot.setAttribute("r", baseLaserWidth * 0.6);
-        const opacity = (isFinalFade ? laser.fadeProgress : 1) * baseLaserOpacity;
-        fallbackDot.setAttribute("fill", `hsla(120, 100%, 50%, ${opacity})`);
-        laserGroup.appendChild(fallbackDot);
-        return;
-    }
+
 
     for (let i = 0; i < points.length - 1; i++) {
         const p0 = points[i === 0 ? 0 : i - 1];
@@ -101,8 +91,6 @@ function updateLaserAppearance(laser, isFinalFade = false) {
             `M ${p1.x} ${p1.y} C ${cp.cp1x} ${cp.cp1y}, ${cp.cp2x} ${cp.cp2y}, ${p2.x} ${p2.y}`
         );
         path.setAttribute("fill", "none");
-        path.setAttribute("stroke-linecap", "round");
-        path.setAttribute("stroke-linejoin", "round");
 
         // --- Time-based fade only ---
         const avgAge = ((currentTime - p1.timestamp) + (currentTime - p2.timestamp)) / 2;
