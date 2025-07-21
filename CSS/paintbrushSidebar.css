@@ -16,6 +16,7 @@
     transition: 0.25s;
     border-left: 1px solid #000;
     z-index: 900;
+    display: none;
 }
 .paintBrushSideBar.hidden 
 {
@@ -141,3 +142,6 @@
 {
     font-weight: 700;
 }
+
+
+
