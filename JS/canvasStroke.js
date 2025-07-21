@@ -417,191 +417,266 @@ class FreehandStroke {
                rotatedY <= this.boundingBox.y + this.boundingBox.height;
     }
 
-    isNearAnchor(x, y) {
-        const anchorSize = 10 / currentZoom;
-        
-        // Check resize anchors
-        for (let i = 0; i < this.anchors.length; i++) {
-            const anchor = this.anchors[i];
-            if (anchor) {
-                const anchorX = parseFloat(anchor.getAttribute('x')) + anchorSize / 2;
-                const anchorY = parseFloat(anchor.getAttribute('y')) + anchorSize / 2;
-                const distance = Math.sqrt(Math.pow(x - anchorX, 2) + Math.pow(y - anchorY, 2));
-                if (distance <= anchorSize / 2) {
-                    return { type: 'resize', index: i };
-                }
-            }
-        }
-        
-        // Check rotation anchor
-        if (this.rotationAnchor) {
-            const rotationX = parseFloat(this.rotationAnchor.getAttribute('cx'));
-            const rotationY = parseFloat(this.rotationAnchor.getAttribute('cy'));
-            const distance = Math.sqrt(Math.pow(x - rotationX, 2) + Math.pow(y - rotationY, 2));
-            if (distance <= anchorSize / 2) {
-                return { type: 'rotate' };
-            }
-        }
-        
-        return null;
-    }
+  isNearAnchor(x, y) {
+    if (!this.isSelected) return null;
+    const buffer = 10;
+    const anchorSize = 10 / currentZoom;
 
-    rotate(angle) {
-        this.rotation = angle;
+    // Transform the input coordinates to account for rotation
+    const centerX = this.boundingBox.x + this.boundingBox.width / 2;
+    const centerY = this.boundingBox.y + this.boundingBox.height / 2;
+    
+    // Rotate the mouse coordinates to the shape's local coordinate system
+    const angleRad = -this.rotation * Math.PI / 180;
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const localX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
+    const localY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
+
+    // Check resize anchors in local space
+    const expandedX = this.boundingBox.x - this.selectionPadding;
+    const expandedY = this.boundingBox.y - this.selectionPadding;
+    const expandedWidth = this.boundingBox.width + 2 * this.selectionPadding;
+    const expandedHeight = this.boundingBox.height + 2 * this.selectionPadding;
+    
+    const anchorPositions = [
+        { x: expandedX, y: expandedY }, // top-left
+        { x: expandedX + expandedWidth, y: expandedY }, // top-right
+        { x: expandedX, y: expandedY + expandedHeight }, // bottom-left
+        { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, // bottom-right
+        { x: expandedX + expandedWidth / 2, y: expandedY }, // top-center
+        { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, // bottom-center
+        { x: expandedX, y: expandedY + expandedHeight / 2 }, // left-center
+        { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 } // right-center
+    ];
+
+    for (let i = 0; i < anchorPositions.length; i++) {
+        const anchor = anchorPositions[i];
+        const distance = Math.sqrt(Math.pow(localX - anchor.x, 2) + Math.pow(localY - anchor.y, 2));
+        if (distance <= anchorSize / 2 + buffer) {
+            return { type: 'resize', index: i };
+        }
     }
+    
+    // Check rotation anchor (this one stays in world coordinates)
+    if (this.rotationAnchor) {
+        const rotationX = parseFloat(this.rotationAnchor.getAttribute('cx'));
+        const rotationY = parseFloat(this.rotationAnchor.getAttribute('cy'));
+        const distance = Math.sqrt(Math.pow(x - rotationX, 2) + Math.pow(y - rotationY, 2));
+        if (distance <= anchorSize / 2 + buffer) {
+            return { type: 'rotate' };
+        }
+    }
+    
+    return null;
+}
+
+   rotate(angle) {
+    this.rotation = angle;
+    // If anchors exist, update their cursors for the new rotation
+    if (this.isSelected && this.anchors.length > 0) {
+        const cursors = ['nw-resize', 'ne-resize', 'sw-resize', 'se-resize', 'n-resize', 's-resize', 'w-resize', 'e-resize'];
+        this.anchors.forEach((anchor, i) => {
+            if (anchor) {
+                const originalCursor = cursors[i];
+                const rotatedCursor = this.getRotatedCursor(originalCursor, this.rotation);
+                anchor.style.cursor = rotatedCursor;
+            }
+        });
+    }
+}
 
     addAnchors() {
-        const anchorSize = 10 / currentZoom;
-        const anchorStrokeWidth = 2 / currentZoom;
+    const anchorSize = 10 / currentZoom;
+    const anchorStrokeWidth = 2 / currentZoom;
+    
+    const expandedX = this.boundingBox.x - this.selectionPadding;
+    const expandedY = this.boundingBox.y - this.selectionPadding;
+    const expandedWidth = this.boundingBox.width + 2 * this.selectionPadding;
+    const expandedHeight = this.boundingBox.height + 2 * this.selectionPadding;
+    
+    const positions = [
+        { x: expandedX, y: expandedY, cursor: 'nw-resize' }, // top-left
+        { x: expandedX + expandedWidth, y: expandedY, cursor: 'ne-resize' }, // top-right
+        { x: expandedX, y: expandedY + expandedHeight, cursor: 'sw-resize' }, // bottom-left
+        { x: expandedX + expandedWidth, y: expandedY + expandedHeight, cursor: 'se-resize' }, // bottom-right
+        { x: expandedX + expandedWidth / 2, y: expandedY, cursor: 'n-resize' }, // top-center
+        { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight, cursor: 's-resize' }, // bottom-center
+        { x: expandedX, y: expandedY + expandedHeight / 2, cursor: 'w-resize' }, // left-center
+        { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2, cursor: 'e-resize' } // right-center
+    ];
+    
+    // Create resize anchors
+    positions.forEach((pos, i) => {
+        const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        anchor.setAttribute('x', pos.x - anchorSize / 2);
+        anchor.setAttribute('y', pos.y - anchorSize / 2);
+        anchor.setAttribute('width', anchorSize);
+        anchor.setAttribute('height', anchorSize);
+        anchor.setAttribute('class', 'anchor');
+        anchor.setAttribute('data-index', i);
+        anchor.setAttribute('fill', '#121212');
+        anchor.setAttribute('stroke', '#5B57D1');
+        anchor.setAttribute('stroke-width', anchorStrokeWidth);
         
-        const expandedX = this.boundingBox.x - this.selectionPadding;
-        const expandedY = this.boundingBox.y - this.selectionPadding;
-        const expandedWidth = this.boundingBox.width + 2 * this.selectionPadding;
-        const expandedHeight = this.boundingBox.height + 2 * this.selectionPadding;
+        // Set proper cursor for each anchor direction, accounting for rotation
+        const rotatedCursor = this.getRotatedCursor(pos.cursor, this.rotation);
+        anchor.style.cursor = rotatedCursor;
+        anchor.style.pointerEvents = 'all';
         
-        const positions = [
-            { x: expandedX, y: expandedY }, // top-left
-            { x: expandedX + expandedWidth, y: expandedY }, // top-right
-            { x: expandedX, y: expandedY + expandedHeight }, // bottom-left
-            { x: expandedX + expandedWidth, y: expandedY + expandedHeight }, // bottom-right
-            { x: expandedX + expandedWidth / 2, y: expandedY }, // top-center
-            { x: expandedX + expandedWidth / 2, y: expandedY + expandedHeight }, // bottom-center
-            { x: expandedX, y: expandedY + expandedHeight / 2 }, // left-center
-            { x: expandedX + expandedWidth, y: expandedY + expandedHeight / 2 } // right-center
-        ];
-        
-        // Create resize anchors
-        positions.forEach((pos, i) => {
-            const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            anchor.setAttribute('x', pos.x - anchorSize / 2);
-            anchor.setAttribute('y', pos.y - anchorSize / 2);
-            anchor.setAttribute('width', anchorSize);
-            anchor.setAttribute('height', anchorSize);
-            anchor.setAttribute('class', 'anchor');
-            anchor.setAttribute('data-index', i);
-            anchor.setAttribute('fill', '#121212');
-            anchor.setAttribute('stroke', '#5B57D1');
-            anchor.setAttribute('stroke-width', anchorStrokeWidth);
-            anchor.style.cursor = 'grab';
-            anchor.style.pointerEvents = 'all';
-            
-            this.group.appendChild(anchor);
-            this.anchors[i] = anchor;
-        });
+        this.group.appendChild(anchor);
+        this.anchors[i] = anchor;
+    });
 
-        // Create rotation anchor
-        const rotationAnchorDistance = 30 / currentZoom;
-        const rotationX = expandedX + expandedWidth / 2;
-        const rotationY = expandedY - rotationAnchorDistance;
-        
-        const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        rotationAnchor.setAttribute('cx', rotationX);
-        rotationAnchor.setAttribute('cy', rotationY);
-        rotationAnchor.setAttribute('r', anchorSize / 2);
-        rotationAnchor.setAttribute('fill', '#121212');
-        rotationAnchor.setAttribute('stroke', '#5B57D1');
-        rotationAnchor.setAttribute('stroke-width', anchorStrokeWidth);
-        rotationAnchor.setAttribute('class', 'rotation-anchor');
-        rotationAnchor.style.cursor = 'grab';
-        rotationAnchor.style.pointerEvents = 'all';
-        
-        this.group.appendChild(rotationAnchor);
-        this.rotationAnchor = rotationAnchor;
+    // Create rotation anchor
+    const rotationAnchorDistance = 30 / currentZoom;
+    const rotationX = expandedX + expandedWidth / 2;
+    const rotationY = expandedY - rotationAnchorDistance;
+    
+    const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    rotationAnchor.setAttribute('cx', rotationX);
+    rotationAnchor.setAttribute('cy', rotationY);
+    rotationAnchor.setAttribute('r', anchorSize / 2);
+    rotationAnchor.setAttribute('fill', '#121212');
+    rotationAnchor.setAttribute('stroke', '#5B57D1');
+    rotationAnchor.setAttribute('stroke-width', anchorStrokeWidth);
+    rotationAnchor.setAttribute('class', 'rotation-anchor');
+    rotationAnchor.style.cursor = 'grab';
+    rotationAnchor.style.pointerEvents = 'all';
+    
+    this.group.appendChild(rotationAnchor);
+    this.rotationAnchor = rotationAnchor;
 
-        // Create selection outline
-        const outlinePoints = [
-            [expandedX, expandedY],
-            [expandedX + expandedWidth, expandedY],
-            [expandedX + expandedWidth, expandedY + expandedHeight],
-            [expandedX, expandedY + expandedHeight],
-            [expandedX, expandedY]
-        ];
-        
-        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-        outline.setAttribute('points', outlinePoints.map(p => p.join(',')).join(' '));
-        outline.setAttribute('fill', 'none');
-        outline.setAttribute('stroke', '#5B57D1');
-        outline.setAttribute('stroke-width', 1.5);
-        outline.setAttribute('stroke-dasharray', '4 2');
-        outline.setAttribute('style', 'pointer-events: none;');
-        this.group.appendChild(outline);
-        this.selectionOutline = outline;
+    // Create selection outline
+    const outlinePoints = [
+        [expandedX, expandedY],
+        [expandedX + expandedWidth, expandedY],
+        [expandedX + expandedWidth, expandedY + expandedHeight],
+        [expandedX, expandedY + expandedHeight],
+        [expandedX, expandedY]
+    ];
+    
+    const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    outline.setAttribute('points', outlinePoints.map(p => p.join(',')).join(' '));
+    outline.setAttribute('fill', 'none');
+    outline.setAttribute('stroke', '#5B57D1');
+    outline.setAttribute('stroke-width', 1.5);
+    outline.setAttribute('stroke-dasharray', '4 2');
+    outline.setAttribute('style', 'pointer-events: none;');
+    this.group.appendChild(outline);
+    this.selectionOutline = outline;
 
-        // Add line from rotation anchor to shape
-        const rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        rotationLine.setAttribute('x1', rotationX);
-        rotationLine.setAttribute('y1', rotationY);
-        rotationLine.setAttribute('x2', expandedX + expandedWidth / 2);
-        rotationLine.setAttribute('y2', expandedY);
-        rotationLine.setAttribute('stroke', '#5B57D1');
-        rotationLine.setAttribute('stroke-width', 1);
-        rotationLine.setAttribute('stroke-dasharray', '2 2');
-        rotationLine.setAttribute('style', 'pointer-events: none;');
-        this.group.appendChild(rotationLine);
+    // Add line from rotation anchor to shape
+    const rotationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    rotationLine.setAttribute('x1', rotationX);
+    rotationLine.setAttribute('y1', rotationY);
+    rotationLine.setAttribute('x2', expandedX + expandedWidth / 2);
+    rotationLine.setAttribute('y2', expandedY);
+    rotationLine.setAttribute('stroke', '#5B57D1');
+    rotationLine.setAttribute('stroke-width', 1);
+    rotationLine.setAttribute('stroke-dasharray', '2 2');
+    rotationLine.setAttribute('style', 'pointer-events: none;');
+    this.group.appendChild(rotationLine);
 
-        // Show sidebar when anchors are added (when shape is selected)
-        disableAllSideBars();
-        paintBrushSideBar.classList.remove("hidden");
-        this.updateSidebar();
-    }
+    // Show sidebar when anchors are added (when shape is selected)
+    disableAllSideBars();
+    paintBrushSideBar.classList.remove("hidden");
+    this.updateSidebar();
+}
+
+getRotatedCursor(direction, angle) {
+    // Normalize angle to 0-360
+    const normalizedAngle = ((angle % 360) + 360) % 360;
+    
+    // Map of cursor directions
+    const cursors = ['n-resize', 'ne-resize', 'e-resize', 'se-resize', 's-resize', 'sw-resize', 'w-resize', 'nw-resize'];
+    const directionMap = {
+        'n-resize': 0,
+        'ne-resize': 1,
+        'e-resize': 2,
+        'se-resize': 3,
+        's-resize': 4,
+        'sw-resize': 5,
+        'w-resize': 6,
+        'nw-resize': 7
+    };
+    
+    if (!(direction in directionMap)) return direction;
+    
+    // Calculate how many 45-degree increments to rotate
+    const rotationSteps = Math.round(normalizedAngle / 45);
+    const currentIndex = directionMap[direction];
+    const newIndex = (currentIndex + rotationSteps) % 8;
+    
+    return cursors[newIndex];
+}
 
     updatePosition(anchorIndex, newX, newY) {
-        const centerX = this.boundingBox.x + this.boundingBox.width / 2;
-        const centerY = this.boundingBox.y + this.boundingBox.height / 2;
-        const angleRad = -this.rotation * Math.PI / 180;
-        
-        // Convert new coordinates to unrotated space
-        const dx = newX - centerX;
-        const dy = newY - centerY;
-        const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
-        const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
-        
-        // Calculate scale factors based on anchor movement
-        let scaleX = 1, scaleY = 1;
-        switch(anchorIndex) {
-            case 0: // top-left
-                scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
-                scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
-                break;
-            case 1: // top-right
-                scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
-                scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
-                break;
-            case 2: // bottom-left
-                scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
-                scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
-                break;
-            case 3: // bottom-right
-                scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
-                scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
-                break;
-            case 4: // top-center
-                scaleY = (centerY - rotatedY) / (centerY - this.boundingBox.y);
-                break;
-            case 5: // bottom-center
-                scaleY = (rotatedY - centerY) / (this.boundingBox.y + this.boundingBox.height - centerY);
-                break;
-            case 6: // left-center
-                scaleX = (centerX - rotatedX) / (centerX - this.boundingBox.x);
-                break;
-            case 7: // right-center
-                scaleX = (rotatedX - centerX) / (this.boundingBox.x + this.boundingBox.width - centerX);
-                break;
-        }
-        
-        // Apply scaling to all points
-        this.points = this.points.map(point => {
-            const relX = point[0] - centerX;
-            const relY = point[1] - centerY;
-            return [
-                centerX + relX * scaleX,
-                centerY + relY * scaleY,
-                point[2] || 0.5
-            ];
-        });
-        
-        this.draw();
+    const centerX = this.boundingBox.x + this.boundingBox.width / 2;
+    const centerY = this.boundingBox.y + this.boundingBox.height / 2;
+    
+    // Transform new coordinates to local space (accounting for rotation)
+    const angleRad = -this.rotation * Math.PI / 180;
+    const dx = newX - centerX;
+    const dy = newY - centerY;
+    const localX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
+    const localY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
+    
+    // Calculate scale factors based on anchor movement in local space
+    const expandedX = this.boundingBox.x - this.selectionPadding;
+    const expandedY = this.boundingBox.y - this.selectionPadding;
+    const expandedWidth = this.boundingBox.width + 2 * this.selectionPadding;
+    const expandedHeight = this.boundingBox.height + 2 * this.selectionPadding;
+    
+    let scaleX = 1, scaleY = 1;
+    switch(anchorIndex) {
+        case 0: // top-left
+            scaleX = (centerX - localX) / (centerX - expandedX);
+            scaleY = (centerY - localY) / (centerY - expandedY);
+            break;
+        case 1: // top-right
+            scaleX = (localX - centerX) / (expandedX + expandedWidth - centerX);
+            scaleY = (centerY - localY) / (centerY - expandedY);
+            break;
+        case 2: // bottom-left
+            scaleX = (centerX - localX) / (centerX - expandedX);
+            scaleY = (localY - centerY) / (expandedY + expandedHeight - centerY);
+            break;
+        case 3: // bottom-right
+            scaleX = (localX - centerX) / (expandedX + expandedWidth - centerX);
+            scaleY = (localY - centerY) / (expandedY + expandedHeight - centerY);
+            break;
+        case 4: // top-center
+            scaleY = (centerY - localY) / (centerY - expandedY);
+            break;
+        case 5: // bottom-center
+            scaleY = (localY - centerY) / (expandedY + expandedHeight - centerY);
+            break;
+        case 6: // left-center
+            scaleX = (centerX - localX) / (centerX - expandedX);
+            break;
+        case 7: // right-center
+            scaleX = (localX - centerX) / (expandedX + expandedWidth - centerX);
+            break;
     }
+    
+    // Prevent negative scaling
+    scaleX = Math.max(0.1, Math.abs(scaleX));
+    scaleY = Math.max(0.1, Math.abs(scaleY));
+    
+    // Apply scaling to all points relative to center
+    this.points = this.points.map(point => {
+        const relX = point[0] - centerX;
+        const relY = point[1] - centerY;
+        return [
+            centerX + relX * scaleX,
+            centerY + relY * scaleY,
+            point[2] || 0.5
+        ];
+    });
+    
+    this.draw();
+}
 }
 
 // Delete functionality

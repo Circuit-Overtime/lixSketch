@@ -52,6 +52,10 @@ class Line {
         this.shapeID = `line-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`; 
         this.group.setAttribute('id', this.shapeID);
         
+        // Curve properties
+        this.isCurved = false;
+        this.controlPoint = null;
+        
         // Frame attachment properties
         this.parentFrame = null;
         
@@ -69,6 +73,9 @@ class Line {
         const dx = value - currentX;
         this.startPoint.x += dx;
         this.endPoint.x += dx;
+        if (this.controlPoint) {
+            this.controlPoint.x += dx;
+        }
     }
     
     get y() {
@@ -80,6 +87,9 @@ class Line {
         const dy = value - currentY;
         this.startPoint.y += dy;
         this.endPoint.y += dy;
+        if (this.controlPoint) {
+            this.controlPoint.y += dy;
+        }
     }
     
     get width() {
@@ -102,19 +112,63 @@ class Line {
         this.endPoint.y = centerY + value / 2;
     }
 
+    initializeCurveControlPoint() {
+        const midX = (this.startPoint.x + this.endPoint.x) / 2;
+        const midY = (this.startPoint.y + this.endPoint.y) / 2;
+        
+        // Calculate perpendicular offset for curve
+        const dx = this.endPoint.x - this.startPoint.x;
+        const dy = this.endPoint.y - this.startPoint.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        
+        if (length === 0) {
+            this.controlPoint = { x: midX, y: midY - 20 };
+            return;
+        }
+        
+        // Perpendicular vector
+        const perpX = -dy / length;
+        const perpY = dx / length;
+        const curveOffset = 30; // Default curve amount
+        
+        this.controlPoint = {
+            x: midX + perpX * curveOffset,
+            y: midY + perpY * curveOffset
+        };
+    }
+
     draw() {
+        // Clear existing elements but preserve structure to avoid jitter
         while (this.group.firstChild) {
             this.group.removeChild(this.group.firstChild);
         }
 
         const rc = rough.svg(svg);
-        const line = rc.line(
-            this.startPoint.x, this.startPoint.y,
-            this.endPoint.x, this.endPoint.y,
-            this.options
-        );
-        this.element = line;
-        this.group.appendChild(line);
+        let lineElement;
+        
+        if (this.isCurved && this.controlPoint) {
+            // Draw curved line using quadratic bezier
+            const pathData = `M ${this.startPoint.x} ${this.startPoint.y} Q ${this.controlPoint.x} ${this.controlPoint.y} ${this.endPoint.x} ${this.endPoint.y}`;
+            lineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            lineElement.setAttribute('d', pathData);
+            lineElement.setAttribute('stroke', this.options.stroke || lineColor);
+            lineElement.setAttribute('stroke-width', this.options.strokeWidth || lineStrokeWidth);
+            lineElement.setAttribute('fill', 'none');
+            lineElement.setAttribute('stroke-linecap', 'round');
+            if (this.options.strokeDasharray) {
+                lineElement.setAttribute('stroke-dasharray', this.options.strokeDasharray);
+            }
+        } else {
+            // Draw straight line
+            lineElement = rc.line(
+                this.startPoint.x, this.startPoint.y,
+                this.endPoint.x, this.endPoint.y,
+                this.options
+            );
+        }
+        
+        this.element = lineElement;
+        this.group.appendChild(lineElement);
 
         if (this.isSelected) {
             this.addAnchors();
@@ -122,92 +176,188 @@ class Line {
     }
 
     selectLine() {
-        this.isSelected = true;
-        this.draw();
-    }
+    this.isSelected = true;
+    this.addAnchors();
+    // Show line sidebar when selected
+    disableAllSideBars();
+    lineSideBar.classList.remove("hidden");
+    this.updateSidebar();
+}
 
-    deselectLine() {
-        this.isSelected = false;
-        this.anchors = [];
-        this.draw();
-    }
+deselectLine() {
+    this.isSelected = false;
+    this.removeSelection();
+}
 
-    // Add removeSelection method like in Circle class
-    removeSelection() {
-        this.anchors.forEach(anchor => {
-            if (anchor.parentNode === this.group) {
-                this.group.removeChild(anchor);
-            }
-        });
-        this.anchors = [];
-        this.isSelected = false;
-    }
+// Update the complete removeSelection method
+removeSelection() {
+    // Remove anchors
+    this.anchors.forEach(anchor => {
+        if (anchor && anchor.parentNode === this.group) {
+            this.group.removeChild(anchor);
+        }
+    });
+    this.anchors = [];
+    this.isSelected = false; // Only set to false when actually deselecting
+}
 
     addAnchors() {
-        const anchorSize = 10 / currentZoom;
-        const anchorStrokeWidth = 2 / currentZoom;
-        [this.startPoint, this.endPoint].forEach((point, index) => {
-            const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            anchor.setAttribute('cx', point.x);
-            anchor.setAttribute('cy', point.y);
-            anchor.setAttribute('r', anchorSize);
-            anchor.setAttribute('fill', '#121212');
-            anchor.setAttribute('stroke', '#5B57D1');
-            anchor.setAttribute('stroke-width', anchorStrokeWidth);
-            anchor.setAttribute('class', 'anchor line-anchor');
-            anchor.style.cursor = 'grab';
-            anchor.style.pointerEvents = 'all';
-            anchor.dataset.index = index;
-            anchor.addEventListener('pointerdown', (e) => this.startAnchorDrag(e, index));
-            this.group.appendChild(anchor);
-            this.anchors[index] = anchor;
-        });
+    // Only remove existing anchors if they exist, don't call full removeSelection
+    this.anchors.forEach(anchor => {
+        if (anchor && anchor.parentNode === this.group) {
+            this.group.removeChild(anchor);
+        }
+    });
+    this.anchors = [];
+    
+    const anchorSize = 10 / (currentZoom || 1);
+    const anchorStrokeWidth = 2 / (currentZoom || 1);
+    
+    // Start point anchor
+    const startAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    startAnchor.setAttribute('cx', this.startPoint.x);
+    startAnchor.setAttribute('cy', this.startPoint.y);
+    startAnchor.setAttribute('r', anchorSize / 2);
+    startAnchor.setAttribute('fill', '#121212');
+    startAnchor.setAttribute('stroke', '#5B57D1');
+    startAnchor.setAttribute('stroke-width', anchorStrokeWidth);
+    startAnchor.setAttribute('class', 'anchor line-anchor');
+    startAnchor.style.cursor = 'grab';
+    startAnchor.style.pointerEvents = 'all';
+    startAnchor.dataset.index = 0;
+    this.group.appendChild(startAnchor);
+    this.anchors[0] = startAnchor;
+
+    // End point anchor
+    const endAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    endAnchor.setAttribute('cx', this.endPoint.x);
+    endAnchor.setAttribute('cy', this.endPoint.y);
+    endAnchor.setAttribute('r', anchorSize / 2);
+    endAnchor.setAttribute('fill', '#121212');
+    endAnchor.setAttribute('stroke', '#5B57D1');
+    endAnchor.setAttribute('stroke-width', anchorStrokeWidth);
+    endAnchor.setAttribute('class', 'anchor line-anchor');
+    endAnchor.style.cursor = 'grab';
+    endAnchor.style.pointerEvents = 'all';
+    endAnchor.dataset.index = 1;
+    this.group.appendChild(endAnchor);
+    this.anchors[1] = endAnchor;
+
+    // Middle anchor for curving
+    const midX = (this.startPoint.x + this.endPoint.x) / 2;
+    const midY = (this.startPoint.y + this.endPoint.y) / 2;
+    
+    const middleAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    middleAnchor.setAttribute('cx', this.isCurved && this.controlPoint ? this.controlPoint.x : midX);
+    middleAnchor.setAttribute('cy', this.isCurved && this.controlPoint ? this.controlPoint.y : midY);
+    middleAnchor.setAttribute('r', anchorSize / 2);
+    middleAnchor.setAttribute('fill', this.isCurved ? '#5B57D1' : '#121212');
+    middleAnchor.setAttribute('stroke', '#5B57D1');
+    middleAnchor.setAttribute('stroke-width', anchorStrokeWidth);
+    middleAnchor.setAttribute('class', 'anchor line-middle-anchor');
+    middleAnchor.style.cursor = 'grab';
+    middleAnchor.style.pointerEvents = 'all';
+    middleAnchor.dataset.index = 2;
+    this.group.appendChild(middleAnchor);
+    this.anchors[2] = middleAnchor;
     }
 
-    startAnchorDrag(e, index) {
-        e.stopPropagation();
-        
-        // Store old position for undo
-        dragOldPosLine = {
-            startPoint: { x: this.startPoint.x, y: this.startPoint.y },
-            endPoint: { x: this.endPoint.x, y: this.endPoint.y },
-            parentFrame: this.parentFrame
-        };
+    isNearAnchor(x, y) {
+        if (!this.isSelected) return null;
+        const buffer = 15; // Increased buffer for easier selection
+        const anchorSize = 10 / (currentZoom || 1);
 
-        const onPointerMove = (event) => {
-            const { x, y } = getSVGCoordsFromMouse(event);
-            this.updatePosition(index, x, y);
-        };
-        const onPointerUp = () => {
-            console.log(dragOldPosLine);
-            if (dragOldPosLine) {
-                const newPos = {
-                    startPoint: { x: this.startPoint.x, y: this.startPoint.y },
-                    endPoint: { x: this.endPoint.x, y: this.endPoint.y },
-                    parentFrame: this.parentFrame
-                };
-                console.log(newPos);
-                pushTransformAction(this, dragOldPosLine, newPos);
-                dragOldPosLine = null;
+        // Check anchors
+        for (let i = 0; i < this.anchors.length; i++) {
+            const anchor = this.anchors[i];
+            if (anchor) {
+                const anchorX = parseFloat(anchor.getAttribute('cx'));
+                const anchorY = parseFloat(anchor.getAttribute('cy'));
+                const distance = Math.sqrt(Math.pow(x - anchorX, 2) + Math.pow(y - anchorY, 2));
+                if (distance <= anchorSize / 2 + buffer) {
+                    return { type: 'anchor', index: i };
+                }
             }
-            
-            svg.removeEventListener('pointermove', onPointerMove);
-            svg.removeEventListener('pointerup', onPointerUp);
-        };
+        }
         
-        svg.addEventListener('pointermove', onPointerMove);
-        svg.addEventListener('pointerup', onPointerUp);
+        return null;
     }
 
     updatePosition(anchorIndex, newX, newY) {
         if (anchorIndex === 0) {
+            // Start point
             this.startPoint.x = newX;
             this.startPoint.y = newY;
-        } else {
+            // Don't auto-update control point to prevent jitter
+        } else if (anchorIndex === 1) {
+            // End point
             this.endPoint.x = newX;
             this.endPoint.y = newY;
+            // Don't auto-update control point to prevent jitter
+        } else if (anchorIndex === 2) {
+            // Middle anchor - curve control
+            if (!this.isCurved) {
+                // First time dragging middle anchor - enable curve
+                this.isCurved = true;
+                this.initializeCurveControlPoint();
+            }
+            this.controlPoint = { x: newX, y: newY };
         }
-        this.draw();
+        
+        // Only redraw the line, not the entire structure
+        this.updateLineElement();
+        this.updateAnchorPositions();
+    }
+
+    updateLineElement() {
+        // Update just the line element without rebuilding entire structure
+        if (this.element && this.element.parentNode) {
+            this.element.parentNode.removeChild(this.element);
+        }
+
+        const rc = rough.svg(svg);
+        let lineElement;
+        
+        if (this.isCurved && this.controlPoint) {
+            const pathData = `M ${this.startPoint.x} ${this.startPoint.y} Q ${this.controlPoint.x} ${this.controlPoint.y} ${this.endPoint.x} ${this.endPoint.y}`;
+            lineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            lineElement.setAttribute('d', pathData);
+            lineElement.setAttribute('stroke', this.options.stroke || lineColor);
+            lineElement.setAttribute('stroke-width', this.options.strokeWidth || lineStrokeWidth);
+            lineElement.setAttribute('fill', 'none');
+            lineElement.setAttribute('stroke-linecap', 'round');
+            if (this.options.strokeDasharray) {
+                lineElement.setAttribute('stroke-dasharray', this.options.strokeDasharray);
+            }
+        } else {
+            lineElement = rc.line(
+                this.startPoint.x, this.startPoint.y,
+                this.endPoint.x, this.endPoint.y,
+                this.options
+            );
+        }
+        
+        this.element = lineElement;
+        this.group.insertBefore(lineElement, this.group.firstChild);
+    }
+
+    updateAnchorPositions() {
+        // Update anchor positions without rebuilding them
+        if (this.anchors[0]) {
+            this.anchors[0].setAttribute('cx', this.startPoint.x);
+            this.anchors[0].setAttribute('cy', this.startPoint.y);
+        }
+        if (this.anchors[1]) {
+            this.anchors[1].setAttribute('cx', this.endPoint.x);
+            this.anchors[1].setAttribute('cy', this.endPoint.y);
+        }
+        if (this.anchors[2]) {
+            const midX = (this.startPoint.x + this.endPoint.x) / 2;
+            const midY = (this.startPoint.y + this.endPoint.y) / 2;
+            this.anchors[2].setAttribute('cx', this.isCurved && this.controlPoint ? this.controlPoint.x : midX);
+            this.anchors[2].setAttribute('cy', this.isCurved && this.controlPoint ? this.controlPoint.y : midY);
+            this.anchors[2].setAttribute('fill', this.isCurved ? '#5B57D1' : '#121212');
+        }
     }
 
     // Add move method for dragging the entire line
@@ -216,9 +366,16 @@ class Line {
         this.startPoint.y += dy;
         this.endPoint.x += dx;
         this.endPoint.y += dy;
+        if (this.controlPoint) {
+            this.controlPoint.x += dx;
+            this.controlPoint.y += dy;
+        }
+        
+        // Update without full redraw to prevent jitter
+        this.updateLineElement();
+        this.updateAnchorPositions();
         
         // Only update frame containment if we're actively dragging the shape itself
-        // and not being moved by a parent frame
         if (isDraggingLine && !this.isBeingMovedByFrame) {
             this.updateFrameContainment();
         }
@@ -255,8 +412,37 @@ class Line {
     }
 
     contains(x, y) {
-        const tolerance = 5 / currentZoom;
-        return this.pointToLineDistance(x, y, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y) <= tolerance;
+        const tolerance = 8 / (currentZoom || 1); // Slightly larger tolerance for easier selection
+        
+        if (this.isCurved && this.controlPoint) {
+            return this.pointToQuadraticBezierDistance(x, y) <= tolerance;
+        } else {
+            return this.pointToLineDistance(x, y, this.startPoint.x, this.startPoint.y, this.endPoint.x, this.endPoint.y) <= tolerance;
+        }
+    }
+
+    pointToQuadraticBezierDistance(x, y) {
+        let minDistance = Infinity;
+        const steps = 50; // Reduced steps for better performance
+
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const point = this.getQuadraticBezierPoint(t);
+            const distance = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2));
+            minDistance = Math.min(minDistance, distance);
+        }
+
+        return minDistance;
+    }
+
+    getQuadraticBezierPoint(t) {
+        if (!this.controlPoint) return this.startPoint;
+        
+        const mt = 1 - t;
+        return {
+            x: mt * mt * this.startPoint.x + 2 * mt * t * this.controlPoint.x + t * t * this.endPoint.x,
+            y: mt * mt * this.startPoint.y + 2 * mt * t * this.controlPoint.y + t * t * this.endPoint.y
+        };
     }
 
     pointToLineDistance(x, y, x1, y1, x2, y2) {
@@ -282,6 +468,13 @@ class Line {
         const dx = x - xx;
         const dy = y - yy;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    updateSidebar() {
+        // Update sidebar to reflect current line properties
+        if (typeof updateLineSidebar === 'function') {
+            updateLineSidebar(this);
+        }
     }
 }
 
@@ -330,11 +523,61 @@ const handleMouseDown = (e) => {
         
         // Check if clicking on current selected line
         if (currentShape && currentShape.shapeName === 'line' && currentShape.isSelected) {
-            if (currentShape.contains(x, y)) {
+            const anchorInfo = currentShape.isNearAnchor(x, y);
+            console.log('Anchor info:', anchorInfo); // Debug log
+            
+            if (anchorInfo && anchorInfo.type === 'anchor') {
+                clickedOnShape = true;
+                // Start anchor drag
+                dragOldPosLine = {
+                    startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                    controlPoint: currentShape.controlPoint ? { x: currentShape.controlPoint.x, y: currentShape.controlPoint.y } : null,
+                    isCurved: currentShape.isCurved,
+                    parentFrame: currentShape.parentFrame
+                };
+                
+                const anchorIndex = anchorInfo.index;
+                console.log('Dragging anchor index:', anchorIndex); // Debug log
+                
+                const onPointerMove = (event) => {
+                    const { x: newX, y: newY } = getSVGCoordsFromMouse(event);
+                    currentShape.updatePosition(anchorIndex, newX, newY);
+                };
+                
+                const onPointerUp = () => {
+                    console.log('Anchor drag ended'); // Debug log
+                    if (dragOldPosLine) {
+                        const newPos = {
+                            startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
+                            endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                            controlPoint: currentShape.controlPoint ? { x: currentShape.controlPoint.x, y: currentShape.controlPoint.y } : null,
+                            isCurved: currentShape.isCurved,
+                            parentFrame: currentShape.parentFrame
+                        };
+                        pushTransformAction(currentShape, dragOldPosLine, newPos);
+                        dragOldPosLine = null;
+                    }
+                    svg.removeEventListener('pointermove', onPointerMove);
+                    svg.removeEventListener('pointerup', onPointerUp);
+                };
+                
+                svg.addEventListener('pointermove', onPointerMove);
+                svg.addEventListener('pointerup', onPointerUp);
+                
+                // Prevent default to stop any other drag behavior
+                e.preventDefault();
+                e.stopPropagation();
+                
+            } else if (currentShape.contains(x, y)) {
+                // Dragging the line itself (not anchors)
+                console.log('Dragging line body'); // Debug log
                 isDraggingLine = true;
                 dragOldPosLine = {
                     startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
                     endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+                    controlPoint: currentShape.controlPoint ? { x: currentShape.controlPoint.x, y: currentShape.controlPoint.y } : null,
+                    isCurved: currentShape.isCurved,
                     parentFrame: currentShape.parentFrame
                 };
                 
@@ -364,40 +607,35 @@ const handleMouseDown = (e) => {
             }
 
             if (currentShape && currentShape !== shapeToSelect) {
-                currentShape.deselectLine();
+                currentShape.removeSelection();
                 currentShape = null;
             }
 
             if (shapeToSelect) {
                 currentShape = shapeToSelect;
                 currentShape.selectLine();
-                isDraggingLine = true;
-                dragOldPosLine = {
-                    startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
-                    endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
-                    parentFrame: currentShape.parentFrame
-                };
-                
-                // Store initial frame state
-                draggedShapeInitialFrameLine = currentShape.parentFrame || null;
-                
-                // Temporarily remove from frame clipping if dragging
-                if (currentShape.parentFrame) {
-                    currentShape.parentFrame.temporarilyRemoveFromFrame(currentShape);
-                }
-                
-                startX = x;
-                startY = y;
+                console.log('Selected new line, anchors count:', currentShape.anchors.length); // Debug log
                 clickedOnShape = true;
             }
         }
 
         if (!clickedOnShape && currentShape) {
-            currentShape.deselectLine();
+            currentShape.removeSelection();
             currentShape = null;
         }
     }
 };
+// Update clone function to remove rotation property
+function cloneLineData(line) {
+    return {
+        startPoint: { x: line.startPoint.x, y: line.startPoint.y },
+        endPoint: { x: line.endPoint.x, y: line.endPoint.y },
+        controlPoint: line.controlPoint ? { x: line.controlPoint.x, y: line.controlPoint.y } : null,
+        isCurved: line.isCurved || false,
+        parentFrame: line.parentFrame,
+        options: cloneOptions(line.options)
+    };
+}
 
 const handleMouseMove = (e) => {
     const { x, y } = getSVGCoordsFromMouse(e);
@@ -477,6 +715,7 @@ const handleMouseUp = (e) => {
         const newPos = {
             startPoint: { x: currentShape.startPoint.x, y: currentShape.startPoint.y },
             endPoint: { x: currentShape.endPoint.x, y: currentShape.endPoint.y },
+            controlPoint: currentShape.controlPoint ? { x: currentShape.controlPoint.x, y: currentShape.controlPoint.y } : null,
             parentFrame: currentShape.parentFrame
         };
         const oldPos = {
@@ -630,73 +869,6 @@ lineEdgeOptions.forEach((span) => {
 function cloneOptions(options) {
     return JSON.parse(JSON.stringify(options));
 }
-
-function cloneLineData(line) {
-    return {
-        startPoint: { x: line.startPoint.x, y: line.startPoint.y },
-        endPoint: { x: line.endPoint.x, y: line.endPoint.y },
-        options: cloneOptions(line.options)
-    };
-}
-
-document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-        if (currentShape && currentShape.shapeName === 'line' && currentShape.isSelected) {
-            copiedShapeData = cloneLineData(currentShape);
-        }
-    }
-});
-
-document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-        if (copiedShapeData) {
-            e.preventDefault();
-            let pasteX, pasteY;
-            if (lastMousePos && typeof lastMousePos.x === 'number' && typeof lastMousePos.y === 'number') {
-                const svgPoint = svg.createSVGPoint();
-                svgPoint.x = lastMousePos.x;
-                svgPoint.y = lastMousePos.y;
-                const CTM = svg.getScreenCTM().inverse();
-                const userPoint = svgPoint.matrixTransform(CTM);
-                pasteX = userPoint.x;
-                pasteY = userPoint.y;
-            } else {
-                const svgRect = svg.getBoundingClientRect();
-                pasteX = svgRect.width / 2;
-                pasteY = svgRect.height / 2;
-                const svgPoint = svg.createSVGPoint();
-                svgPoint.x = pasteX;
-                svgPoint.y = pasteY;
-                const CTM = svg.getScreenCTM().inverse();
-                const userPoint = svgPoint.matrixTransform(CTM);
-                pasteX = userPoint.x;
-                pasteY = userPoint.y;
-            }
-
-            shapes.forEach(shape => {
-                if (shape.isSelected) {
-                    shape.removeSelection();
-                }
-            });
-
-            currentShape = null;
-            disableAllSideBars();
-            
-            const offset = 20;
-            const newLine = new Line(
-                { x: copiedShapeData.startPoint.x + offset, y: copiedShapeData.startPoint.y + offset },
-                { x: copiedShapeData.endPoint.x + offset, y: copiedShapeData.endPoint.y + offset },
-                cloneOptions(copiedShapeData.options)
-            );
-            
-            shapes.push(newLine);
-            newLine.isSelected = true;
-            currentShape = newLine;
-            newLine.draw();
-            pushCreateAction(newLine);
-        }
-    }
-});
 
 export {
     handleMouseDown as handleMouseDownLine,

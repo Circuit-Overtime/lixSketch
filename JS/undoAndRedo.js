@@ -298,21 +298,34 @@ export function pushTransformAction(shape, oldPos, newPos) {
                     }
                 }))
         });
-    } else if (shape.shapeName === 'line') {
-        // Handle line transform
+    } 
+    else if (shape.shapeName === 'line') {
+        // Enhanced line handling with curve support
+        const currentFrame = shape.parentFrame || null;
+        
         undoStack.push({
             type: 'transform',
             shape: shape,
             oldPos: {
                 startPoint: { x: oldPos.startPoint.x, y: oldPos.startPoint.y },
-                endPoint: { x: oldPos.endPoint.x, y: oldPos.endPoint.y }
+                endPoint: { x: oldPos.endPoint.x, y: oldPos.endPoint.y },
+                controlPoint: oldPos.controlPoint ? { x: oldPos.controlPoint.x, y: oldPos.controlPoint.y } : null,
+                isCurved: oldPos.isCurved || false
             },
             newPos: {
                 startPoint: { x: newPos.startPoint.x, y: newPos.startPoint.y },
-                endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y }
+                endPoint: { x: newPos.endPoint.x, y: newPos.endPoint.y },
+                controlPoint: newPos.controlPoint ? { x: newPos.controlPoint.x, y: newPos.controlPoint.y } : null,
+                isCurved: newPos.isCurved || false
+            },
+            // Track frame attachment state
+            frameAttachment: {
+                oldFrame: oldPos.parentFrame || null,
+                newFrame: currentFrame
             }
         });
-    } else if (shape.shapeName === 'arrow') {
+    }
+     else if (shape.shapeName === 'arrow') {
         // Handle arrow transform with attachment state
         undoStack.push({
             type: 'transform',
@@ -637,13 +650,52 @@ export function undo() {
                 });
             }
         } else if (action.shape.shapeName === 'line') {
-            // Handle line transform undo
+            // Enhanced line transform undo with curve support
             action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
             action.shape.endPoint = { x: action.oldPos.endPoint.x, y: action.oldPos.endPoint.y };
+            
+            // Restore curve state
+            action.shape.isCurved = action.oldPos.isCurved || false;
+            if (action.oldPos.controlPoint) {
+                action.shape.controlPoint = { x: action.oldPos.controlPoint.x, y: action.oldPos.controlPoint.y };
+            } else {
+                action.shape.controlPoint = null;
+            }
+            
+            // Handle frame attachment changes
+            if (action.frameAttachment) {
+                // Remove from new frame if it exists
+                if (action.frameAttachment.newFrame) {
+                    const frameIndex = action.frameAttachment.newFrame.containedShapes.indexOf(action.shape);
+                    if (frameIndex > -1) {
+                        action.frameAttachment.newFrame.containedShapes.splice(frameIndex, 1);
+                        if (action.shape.group && action.shape.group.parentNode === action.frameAttachment.newFrame.clipGroup) {
+                            action.frameAttachment.newFrame.clipGroup.removeChild(action.shape.group);
+                            svg.appendChild(action.shape.group);
+                        }
+                    }
+                }
+                
+                // Add back to old frame if it exists
+                if (action.frameAttachment.oldFrame) {
+                    if (!action.frameAttachment.oldFrame.containedShapes.includes(action.shape)) {
+                        action.frameAttachment.oldFrame.containedShapes.push(action.shape);
+                        action.shape.parentFrame = action.frameAttachment.oldFrame;
+                        if (action.shape.group && action.shape.group.parentNode === svg) {
+                            svg.removeChild(action.shape.group);
+                            action.frameAttachment.oldFrame.clipGroup.appendChild(action.shape.group);
+                        }
+                    }
+                } else {
+                    action.shape.parentFrame = null;
+                }
+            }
+            
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else if (action.shape.shapeName === 'arrow') {
+        }
+         else if (action.shape.shapeName === 'arrow') {
             // Enhanced arrow transform undo with attachment restoration
             action.shape.startPoint = { x: action.oldPos.startPoint.x, y: action.oldPos.startPoint.y };
             action.shape.endPoint = { x: action.oldPos.endPoint.x, y: action.oldPos.endPoint.y };
@@ -990,13 +1042,52 @@ export function redo() {
                 });
             }
         } else if (action.shape.shapeName === 'line') {
-            // Handle line transform redo
+            // Enhanced line transform redo with curve support
             action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
             action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };
+            
+            // Restore curve state
+            action.shape.isCurved = action.newPos.isCurved || false;
+            if (action.newPos.controlPoint) {
+                action.shape.controlPoint = { x: action.newPos.controlPoint.x, y: action.newPos.controlPoint.y };
+            } else {
+                action.shape.controlPoint = null;
+            }
+            
+            // Handle frame attachment changes
+            if (action.frameAttachment) {
+                // Remove from old frame if it exists
+                if (action.frameAttachment.oldFrame) {
+                    const oldFrameIndex = action.frameAttachment.oldFrame.containedShapes.indexOf(action.shape);
+                    if (oldFrameIndex > -1) {
+                        action.frameAttachment.oldFrame.containedShapes.splice(oldFrameIndex, 1);
+                        if (action.shape.group && action.shape.group.parentNode === action.frameAttachment.oldFrame.clipGroup) {
+                            action.frameAttachment.oldFrame.clipGroup.removeChild(action.shape.group);
+                            svg.appendChild(action.shape.group);
+                        }
+                    }
+                }
+                
+                // Add to new frame if it exists
+                if (action.frameAttachment.newFrame) {
+                    if (!action.frameAttachment.newFrame.containedShapes.includes(action.shape)) {
+                        action.frameAttachment.newFrame.containedShapes.push(action.shape);
+                        action.shape.parentFrame = action.frameAttachment.newFrame;
+                        if (action.shape.group && action.shape.group.parentNode === svg) {
+                            svg.removeChild(action.shape.group);
+                            action.frameAttachment.newFrame.clipGroup.appendChild(action.shape.group);
+                        }
+                    }
+                } else {
+                    action.shape.parentFrame = null;
+                }
+            }
+            
             action.shape.isSelected = false;
             if (typeof action.shape.removeSelection === 'function') action.shape.removeSelection();
             action.shape.draw();
-        } else if (action.shape.shapeName === 'arrow') {
+        }
+         else if (action.shape.shapeName === 'arrow') {
             // Enhanced arrow transform redo with attachment restoration
             action.shape.startPoint = { x: action.newPos.startPoint.x, y: action.newPos.startPoint.y };
             action.shape.endPoint = { x: action.newPos.endPoint.x, y: action.newPos.endPoint.y };

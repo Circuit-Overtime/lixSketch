@@ -1204,31 +1204,77 @@ function handleMultiSelectionMouseDown(e) {
         }
     }
 
-    if (e.target.closest('.anchor') || e.target.closest('.rotate-anchor')) {
-        return false; 
+    // Check if clicking on individual shape anchors - let them handle it
+    if (e.target.closest('.anchor') || e.target.closest('.rotate-anchor') || e.target.closest('.rotation-anchor')) {
+        return false; // Let individual shape handlers manage their own anchors
     }
 
-
+    // Check if clicking on any shape
     let clickedOnShape = false;
+    let clickedShape = null;
     if (typeof shapes !== 'undefined') {
         for (let i = shapes.length - 1; i >= 0; i--) {
             const shape = shapes[i];
             if (shape.contains && shape.contains(x, y)) {
                 clickedOnShape = true;
+                clickedShape = shape;
                 break;
             }
         }
     }
 
-    
+    // If clicking on a shape
+    if (clickedOnShape && clickedShape) {
+        // If it's the same shape that's already selected, let individual handlers manage it
+        if (currentShape === clickedShape) {
+            return false; // Let individual shape handlers manage their own interactions
+        }
+        
+        // If it's a different shape, deselect current and select the new one
+        if (currentShape && typeof currentShape.removeSelection === 'function') {
+            currentShape.removeSelection();
+        }
+        
+        // Clear multi-selection
+        multiSelection.clearSelection();
+        
+        // Set new current shape
+        currentShape = clickedShape;
+        
+        // Trigger the shape's own selection handling
+        if (typeof clickedShape.addAnchors === 'function') {
+            clickedShape.addAnchors();
+            clickedShape.isSelected = true;
+        } else if (typeof clickedShape.createSelection === 'function') {
+            clickedShape.createSelection();
+            clickedShape.isSelected = true;
+        }
+        
+        // Update sidebar if function exists
+        if (typeof clickedShape.updateSidebar === 'function') {
+            clickedShape.updateSidebar();
+        }
+        
+        return false; // Return false so individual handlers can also process the event
+    }
+
+    // If not clicking on a shape, deselect everything and start multi-selection
     if (!clickedOnShape) {
+        // Deselect current individual shape
+        if (typeof currentShape !== 'undefined' && currentShape && typeof currentShape.removeSelection === 'function') {
+            currentShape.removeSelection();
+            currentShape = null;
+        }
+        if (typeof disableAllSideBars === 'function') {
+            disableAllSideBars();
+        }
+        
         multiSelectionStart = { x, y };
         isMultiSelecting = true;
         createMultiSelectionRect(x, y);
         clearAllSelections();
         return true;
     }
-
 
     return false;
 }
@@ -1272,6 +1318,16 @@ function handleMultiSelectionMouseUp(e) {
         return true;
     }
 
+    if (multiSelection.isResizing) {
+        multiSelection.handleResize(e);
+        return true;
+    }
+
+    if (multiSelection.isRotating) {
+        multiSelection.handleRotation(e);
+        return true;
+    }
+
     if (isMultiSelecting) {
         const { x, y } = getSVGCoordsFromMouse(e);
 
@@ -1283,7 +1339,45 @@ function handleMultiSelectionMouseUp(e) {
         };
 
         if (selectionBounds.width > 5 && selectionBounds.height > 5) {
-            multiSelection.selectShapesInRect(selectionBounds);
+            // First, find all shapes in the selection bounds
+            let shapesInBounds = [];
+            if (typeof shapes !== 'undefined') {
+                shapes.forEach(shape => {
+                    if (isShapeInSelectionRect(shape, selectionBounds)) {
+                        shapesInBounds.push(shape);
+                    }
+                });
+            }
+
+            // If only one shape is selected, let the shape handle its own selection
+            if (shapesInBounds.length === 1) {
+                const selectedShape = shapesInBounds[0];
+                
+                // Clear any existing multi-selection
+                multiSelection.clearSelection();
+                
+                // Set the current shape and let it handle its own selection
+                if (typeof currentShape !== 'undefined') {
+                    currentShape = selectedShape;
+                }
+                
+                // Trigger the shape's own selection handling
+                if (typeof selectedShape.addAnchors === 'function') {
+                    selectedShape.addAnchors();
+                    selectedShape.isSelected = true;
+                } else if (typeof selectedShape.createSelection === 'function') {
+                    selectedShape.createSelection();
+                    selectedShape.isSelected = true;
+                }
+                
+                // Update sidebar if function exists
+                if (typeof selectedShape.updateSidebar === 'function') {
+                    selectedShape.updateSidebar();
+                }
+            } else if (shapesInBounds.length > 1) {
+                // Multiple shapes selected - use multi-selection
+                multiSelection.selectShapesInRect(selectionBounds);
+            }
         }
 
         removeMultiSelectionRect();
@@ -1293,6 +1387,7 @@ function handleMultiSelectionMouseUp(e) {
 
     return false;
 }
+
 
 export {
     handleMultiSelectionMouseDown,
