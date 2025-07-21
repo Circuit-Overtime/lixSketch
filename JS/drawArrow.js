@@ -500,9 +500,121 @@ class Arrow {
                 return { shape, attachment };
             }
         }
+
+         else if (shape.shapeName === 'icon' && shape.element) {
+            console.log('Checking icon shape:', shape.element);
+            const attachment = Arrow.getIconAttachmentPoint(point, shape.element, tolerance);
+            if (attachment) {
+                console.log('Found icon attachment:', attachment);
+                return { shape: shape.element, attachment }; // Return the DOM element for consistency
+            }
+        }
     }
     return null;
 }
+
+static getIconAttachmentPoint(point, iconElement, tolerance = 20) {
+    // Check if it's an SVG icon element (group)
+    if (!iconElement || (iconElement.tagName !== 'g' && (!iconElement.getAttribute || iconElement.getAttribute('type') !== 'icon'))) {
+        console.warn('Invalid icon element for attachment:', iconElement);
+        return null;
+    }
+
+    // Get icon position and dimensions from data attributes
+    const iconX = parseFloat(iconElement.getAttribute('data-shape-x') || iconElement.getAttribute('x'));
+    const iconY = parseFloat(iconElement.getAttribute('data-shape-y') || iconElement.getAttribute('y'));
+    const iconWidth = parseFloat(iconElement.getAttribute('data-shape-width') || iconElement.getAttribute('width'));
+    const iconHeight = parseFloat(iconElement.getAttribute('data-shape-height') || iconElement.getAttribute('height'));
+
+    // Get rotation from data attribute or transform attribute
+    let rotation = 0;
+    const dataRotation = iconElement.getAttribute('data-shape-rotation');
+    if (dataRotation) {
+        rotation = parseFloat(dataRotation) * Math.PI / 180; // Convert to radians
+    } else {
+        const transform = iconElement.getAttribute('transform');
+        if (transform) {
+            const rotateMatch = transform.match(/rotate\(([^,]+)/);
+            if (rotateMatch) {
+                rotation = parseFloat(rotateMatch[1]) * Math.PI / 180; // Convert to radians
+            }
+        }
+    }
+
+    const centerX = iconX + iconWidth / 2;
+    const centerY = iconY + iconHeight / 2;
+
+    // Transform the bounding box corners to world coordinates
+    const corners = [
+        { x: iconX, y: iconY }, // top-left
+        { x: iconX + iconWidth, y: iconY }, // top-right
+        { x: iconX + iconWidth, y: iconY + iconHeight }, // bottom-right
+        { x: iconX, y: iconY + iconHeight } // bottom-left
+    ];
+
+    // Apply rotation to corners
+    const transformedCorners = corners.map(corner => {
+        if (rotation === 0) return corner;
+
+        const dx = corner.x - centerX;
+        const dy = corner.y - centerY;
+
+        return {
+            x: centerX + dx * Math.cos(rotation) - dy * Math.sin(rotation),
+            y: centerY + dx * Math.sin(rotation) + dy * Math.cos(rotation)
+        };
+    });
+
+    // Calculate sides of the transformed rectangle
+    const sides = [
+        { name: 'top', start: transformedCorners[0], end: transformedCorners[1] },
+        { name: 'right', start: transformedCorners[1], end: transformedCorners[2] },
+        { name: 'bottom', start: transformedCorners[2], end: transformedCorners[3] },
+        { name: 'left', start: transformedCorners[3], end: transformedCorners[0] }
+    ];
+
+    let closestSide = null;
+    let minDistance = tolerance;
+    let attachPoint = null;
+
+    sides.forEach(side => {
+        const distance = Arrow.pointToLineSegmentDistance(point, side.start, side.end);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestSide = side.name;
+
+            // Calculate the closest point on the line segment
+            attachPoint = Arrow.closestPointOnLineSegment(point, side.start, side.end);
+        }
+    });
+
+    if (closestSide && attachPoint) {
+        // Calculate offset relative to the original icon rectangle
+        // Transform the attach point back to local coordinates
+        let localPoint = attachPoint;
+        if (rotation !== 0) {
+            const dx = attachPoint.x - centerX;
+            const dy = attachPoint.y - centerY;
+
+            localPoint = {
+                x: centerX + dx * Math.cos(-rotation) - dy * Math.sin(-rotation),
+                y: centerY + dx * Math.sin(-rotation) + dy * Math.cos(-rotation)
+            };
+        }
+
+        // Calculate offset relative to the icon rectangle
+        const offset = {
+            x: localPoint.x - iconX,
+            y: localPoint.y - iconY,
+            side: closestSide
+        };
+
+        return { side: closestSide, point: attachPoint, offset };
+    }
+
+    return null;
+}
+
 
     static getImageAttachmentPoint(point, imageElement, tolerance = 20) {
     // Check if it's an SVG image element
@@ -975,6 +1087,50 @@ static getFrameAttachmentPoint(point, frame, tolerance = 20) {
         return localPoint;
     }   
     
+    else if (shape.tagName === 'g' && (shape.getAttribute && shape.getAttribute('type') === 'icon')) {
+        // Handle icon attachment - ADD THIS BLOCK
+        const iconX = parseFloat(shape.getAttribute('data-shape-x') || shape.getAttribute('x'));
+        const iconY = parseFloat(shape.getAttribute('data-shape-y') || shape.getAttribute('y'));
+        const iconWidth = parseFloat(shape.getAttribute('data-shape-width') || shape.getAttribute('width'));
+        const iconHeight = parseFloat(shape.getAttribute('data-shape-height') || shape.getAttribute('height'));
+
+        // Get rotation from data attribute or transform attribute
+        let rotation = 0;
+        const dataRotation = shape.getAttribute('data-shape-rotation');
+        if (dataRotation) {
+            rotation = parseFloat(dataRotation) * Math.PI / 180; // Convert to radians
+        } else {
+            const transform = shape.getAttribute('transform');
+            if (transform) {
+                const rotateMatch = transform.match(/rotate\(([^,]+)/);
+                if (rotateMatch) {
+                    rotation = parseFloat(rotateMatch[1]) * Math.PI / 180; // Convert to radians
+                }
+            }
+        }
+
+        // Calculate the point on the icon using the stored offset
+        let localPoint = {
+            x: iconX + offset.x,
+            y: iconY + offset.y
+        };
+
+        // Apply rotation if necessary
+        if (rotation !== 0) {
+            const centerX = iconX + iconWidth / 2;
+            const centerY = iconY + iconHeight / 2;
+            const dx = localPoint.x - centerX;
+            const dy = localPoint.y - centerY;
+
+            localPoint = {
+                x: centerX + dx * Math.cos(rotation) - dy * Math.sin(rotation),
+                y: centerY + dx * Math.sin(rotation) + dy * Math.cos(rotation)
+            };
+        }
+
+        return localPoint;
+    }
+
     else if (shape.shapeName === 'frame') {
         switch (side) {
             case 'top':
