@@ -261,7 +261,8 @@ removeHighlight() {
     }
 }
     
-    move(dx, dy) {
+
+move(dx, dy) {
     this.x += dx;
     this.y += dy;
     
