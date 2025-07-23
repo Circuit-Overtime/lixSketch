@@ -72,7 +72,148 @@
     border-radius: 8px;
     transition: 0.25s;
 }
+.iconsToolBar 
+{
+    position: absolute;
+    height: 75%;
+    left: 8%;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    z-index: 10;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
+    align-items: center;
+    border: 2px solid rgb(91, 84, 84);
+    border-radius: 10px;
+    padding: 10px 5px;
+    gap: 10px;
+    box-sizing: border-box;
+}
+.iconsToolBar::-webkit-scrollbar
+{
+    display: none;
+}
+.choiceBoxes
+{
+    width: 90%;
+    height: 40px;
+    margin-bottom: 5px;
+    padding: 5px 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 2px solid #444448;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.choiceBoxes:hover 
+{
+    background: #343448;
+    transition: 0.25s;
+}
+.choiceBoxes .information 
+{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: left;
+    margin-left: 10px;
+    gap: 10px;
+    width: 100%;
+}
+.choiceBoxes i 
+{
+    font-size: 1.5em;
+    color: #fff;
+    cursor: pointer;
+    transition: 0.25s;
+}
 
+.choiceBoxes p 
+{
+    font-size: 1.2em;
+    color: #fff;
+    font-family: "lixFont", serif;
+    font-weight: 300;
+    user-select: none;
+    margin-left: 10px;
+}
+
+.searchBar 
+{
+    position: relative;
+    top: 0;
+    left: 0;
+    width: 90%;
+    padding: 5px 10px;
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+}
+
+.searchBar i 
+{
+    font-size: 1.5em;
+    color: #fff;
+}
+.searchBar input[type="text"]
+{
+    height: 30px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 1.3em;
+    font-family: "lixFont", serif;
+    font-weight: 300;
+    user-select: none;
+}
+.iconsContainer 
+{
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    max-width: 340px;
+    max-height: 90%;
+    flex-wrap: wrap;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 5px 5px;
+    gap: 2px;
+    box-sizing: border-box;
+}
+.icons 
+{
+    height: 50px;
+    width: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: 0.25s;
+    border: 2px solid #444448;
+    margin: 5px;
+    position: relative;
+    overflow: hidden;
+}
+.icons svg
+{
+    height: 35px;
+    width: 35px;
+    fill: #fff;
+}
+.icons:hover 
+{
+    background: #343448;
+    border: 2px solid #5555a0;
+    transition: 0.25s;
+}
 
 #freehand-canvas 
 {
@@ -324,3 +465,5 @@
     transition: 0.25s;
     border: 1px solid #444480;
 }
+
+
