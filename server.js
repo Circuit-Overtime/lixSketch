@@ -6,8 +6,8 @@ const Fuse = require('fuse.js');
 const rateLimit = require('express-rate-limit');
 
 const PORT = 3000;
-const ICONS_FOLDER = path.join(__dirname, 'all_icons');
-const METADATA_FILE = path.join(__dirname, 'metadata.json');
+const ICONS_FOLDER = path.join(__dirname, 'icons');
+const METADATA_FILE = path.join(__dirname, 'icons.json');
 
 const app = express();
 app.use(cors());
