@@ -1,28 +1,32 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const cors = require('cors');
 const Fuse = require('fuse.js');
 const rateLimit = require('express-rate-limit');
 
 const PORT = 3000;
-const app = express();
+const ICONS_FOLDER = path.join(__dirname, 'all_icons');
+const METADATA_FILE = path.join(__dirname, 'metadata.json');
 
+const app = express();
 app.use(cors());
 
-
+// Rate limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/search', limiter);
+app.use('/serve', limiter);
 
 let metadata = {};
 let fuse = null;
 
 // Load and index metadata
 function loadMetadata() {
-    const raw = fs.readFileSync('./metadata.json', 'utf-8');
+    const raw = fs.readFileSync(METADATA_FILE, 'utf-8');
     metadata = JSON.parse(raw);
 
     const dataArray = Object.keys(metadata).map(filename => ({
@@ -43,7 +47,7 @@ function loadMetadata() {
 loadMetadata();
 
 // Watch for changes in metadata.json and reload index
-fs.watchFile('./metadata.json', { interval: 1000 }, () => {
+fs.watchFile(METADATA_FILE, { interval: 1000 }, () => {
     console.log('🔁 Detected metadata.json change, reloading...');
     loadMetadata();
 });
@@ -59,7 +63,28 @@ app.get('/search', (req, res) => {
     res.json(top);
 });
 
-// Start the server
+// Serve raw SVG file as plain text (not rendered)
+app.get('/serve', (req, res) => {
+    const name = (req.query.name || '').trim();
+
+    if (!name || !name.endsWith('.svg')) {
+        return res.status(400).json({ error: 'Invalid or missing SVG filename.' });
+    }
+
+    const filePath = path.join(ICONS_FOLDER, name);
+
+    fs.readFile(filePath, 'utf-8', (err, svg) => {
+        if (err) {
+            return res.status(404).json({ error: 'SVG file not found.' });
+        }
+
+        res.set('Content-Type', 'text/plain');
+        res.send(svg);
+    });
+});
+
+
+// Start server
 app.listen(PORT, () => {
     console.log(`🚀 Icon search API running on http://localhost:${PORT}`);
 });
