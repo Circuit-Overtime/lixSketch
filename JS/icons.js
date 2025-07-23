@@ -1244,7 +1244,7 @@ document.addEventListener('keydown', (e) => {
 
 async function fetchIconsFromServer() {
     try {
-        const response = await fetch('http://localhost:3000/feed?offset=0&limit=50');
+        const response = await fetch('http://localhost:3000/feed?offset=0&limit=20');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
