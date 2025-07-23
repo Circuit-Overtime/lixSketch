@@ -24,6 +24,8 @@ const minIconSize = 20;
 let draggedShapeInitialFrameIcon = null;
 let hoveredFrameIcon = null;
 
+const iconSearchInput = document.getElementById('iconSearchInput');
+let searchTimeout = null;
 
 function getSVGElement() {
     return document.getElementById('freehand-canvas');
@@ -321,34 +323,37 @@ function wrapIconElement(element) {
 
 document.getElementById("importIcon").addEventListener('click', () => {
     console.log('Import icon clicked');
-    isIconToolActive = true;
-    console.log('isIconToolActive set to:', isIconToolActive);
-
-    // Use the building.svg icon from the root
-    const hardcodedIconPath = 'building.svg';
-    loadHardcodedIcon(hardcodedIconPath);
+    
+    // Remove hidden class from iconContainer to show it
+    const iconContainer = document.getElementById('iconsToolBar');
+    if (iconContainer) {
+        iconContainer.classList.remove('hidden');
+    }
+    
+    // Add click event listeners to all icon elements
+    const iconElements = document.querySelectorAll('#iconsContainer .icons');
+    iconElements.forEach(iconElement => {
+        iconElement.addEventListener('click', (e) => {
+            // Get the SVG content from the clicked icon
+            const svgElement = iconElement.querySelector('svg');
+            if (svgElement) {
+                const svgContent = svgElement.outerHTML;
+                
+                // Set up for icon placement
+                iconToPlace = svgContent;
+                isDraggingIcon = true;
+                isIconToolActive = true;
+                
+                console.log('Icon selected and ready to place');
+                
+                // Hide the icon container after selection
+                iconContainer.classList.add('hidden');
+            }
+        });
+    });
 });
 
-const loadHardcodedIcon = (iconPath) => {
-    console.log('Loading hardcoded icon:', iconPath);
-    fetch(iconPath)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Failed to load icon: ${response.statusText}`);
-            }
-            return response.text();
-        })
-        .then(svgContent => {
-            console.log('Icon loaded successfully:', svgContent);
-            iconToPlace = svgContent;
-            isDraggingIcon = true;
-            console.log('Icon ready to place, isDraggingIcon:', isDraggingIcon);
-        })
-        .catch(error => {
-            console.error('Failed to load the hardcoded icon:', error);
-            console.error('Icon path:', iconPath);
-        });
-};
+
 
 // Add coordinate conversion function like in other tools
 function getSVGCoordsFromMouse(e) {
@@ -1236,4 +1241,97 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+
+async function fetchIconsFromServer() {
+    try {
+        const response = await fetch('http://localhost:3000/feed?offset=0&limit=50');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        // console.log('Icons from server:', data.results, data.limit);
+        return data.results;
+    } catch (error) {
+        console.error('Failed to fetch icons from server:', error);
+        return null;
+    }
+}
+
+async function renderIconsFromServer() {
+    const icons = await fetchIconsFromServer();
+    if (icons) {
+        for (const icon of icons) {
+            try {
+                const response = await fetch('http://localhost:3000/serve?name=' + encodeURIComponent(icon.filename));
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const svgContent = await response.text();
+                let svgIcon = `<div class="icons">
+                   ${svgContent}
+                </div>`;
+                document.getElementById("iconsContainer").innerHTML += svgIcon;
+            } catch (error) {
+                console.error('Failed to render icon:', icon.filename, error);
+            }
+        }
+    }
+}
+
+
+iconSearchInput.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+    
+    // Clear previous timeout
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+    }
+    
+    // Debounce the search to avoid too many requests
+    searchTimeout = setTimeout(async () => {
+        if (query === '') {
+            // If search is empty, show all icons using /feed
+            await renderIconsFromServer();
+        } else {
+            // Search for icons
+            await searchAndRenderIcons(query);
+        }
+    }, 300);
+});
+
+async function searchAndRenderIcons(query) {
+    try {
+        // Search for icons
+        const response = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const searchResults = await response.json();
+        
+        // Clear current icons
+        document.getElementById("iconsContainer").innerHTML = '';
+        
+        // Render search results
+        for (const icon of searchResults) {
+            try {
+                const svgResponse = await fetch('http://localhost:3000/serve?name=' + encodeURIComponent(icon.filename));
+                if (!svgResponse.ok) {
+                    throw new Error(`HTTP error! status: ${svgResponse.status}`);
+                }
+                const svgContent = await svgResponse.text();
+                let svgIcon = `<div class="icons">
+                   ${svgContent}
+                </div>`;
+                document.getElementById("iconsContainer").innerHTML += svgIcon;
+            } catch (error) {
+                console.error('Failed to render search result:', icon.filename, error);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to search icons:', error);
+    }
+}
+
+
+renderIconsFromServer()
 export { handleMouseDownIcon, handleMouseMoveIcon, handleMouseUpIcon };

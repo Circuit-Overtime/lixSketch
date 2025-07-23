@@ -305,10 +305,10 @@
             <ion-icon name="sparkles" style="transform: rotate(90deg);"></ion-icon>
         </div>
 
-        <div class="iconsToolBar">
+        <div class="iconsToolBar hidden" id="iconsToolBar">
           <div class="searchBar">
             <i class='bx  bx-search'  ></i> 
-            <input type="text" id="searchInput" placeholder="Search..." spellcheck="false" autocomplete="off" autocapitalize="off">
+            <input type="text" id="iconSearchInput" placeholder="Search..." spellcheck="false" autocomplete="off" autocapitalize="off">
           </div>
           <div class="choiceBoxes">
             <div class="information">
@@ -324,50 +324,14 @@
             </div>
             <i class='bx  bx-caret-right'  ></i> 
           </div>
-          <div class="iconsContainer">
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg>  
+          <div class="choiceBoxes">
+            <div class="information">
+              <i class='bx  bx-cloud'  ></i> 
+            <p>Devops Icons</p>
             </div>
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg>  
-            </div>
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg>  
-            </div>
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg>  
-            </div>
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg>  
-            </div>
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg> 
-                 
-            </div>
-            <div class="icons">
-              <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24" transform="" id="injected-svg">
-                <path d="M6 22h12c.55 0 1-.45 1-1V4c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v17c0 .55.45 1 1 1M7 4h10v16H7z"/>
-                <path d="M9 6h2v2H9zM13 6h2v2h-2zM9 10h2v2H9zM13 10.03h2V12h-2zM9 14h2v2H9zM13 14h2v2h-2z"/>
-                </svg>  
-            </div>
+            <i class='bx  bx-caret-right'  ></i> 
+          </div>
+          <div class="iconsContainer" id="iconsContainer">
           </div>
         </div>
 
@@ -540,7 +504,7 @@
     <script src="JS/drawArrow.js" type="module" defer></script>
     <script src="JS/frameHolder.js" type="module" defer></script>
     <script src="JS/icons.js" type="module" defer></script>
-
+    
     <script src="JS/undoAndRedo.js" type="module" defer></script>
     <script src="JS/copyAndPaste.js"  type="module" defer></script>
     <script src="JS/zoomFunction.js" defer></script>

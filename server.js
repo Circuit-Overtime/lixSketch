@@ -18,8 +18,8 @@ const limiter = rateLimit({
     max: 100,
     message: { error: 'Too many requests, please try again later.' }
 });
-app.use('/search', limiter);
-app.use('/serve', limiter);
+// app.use('/search', limiter);
+// app.use('/serve', limiter);
 
 let metadata = {};
 let fuse = null;
@@ -80,6 +80,28 @@ app.get('/serve', (req, res) => {
 
         res.set('Content-Type', 'text/plain');
         res.send(svg);
+    });
+});
+
+// Feed endpoint — returns sequential batch of icons
+app.get('/feed', (req, res) => {
+    const offset = parseInt(req.query.offset || '0', 10);
+    const limit = parseInt(req.query.limit || '5', 10);
+
+    const dataArray = Object.keys(metadata)
+        .sort() // Optional: remove `.sort()` if you want original order
+        .map(filename => ({
+            filename,
+            ...metadata[filename]
+        }));
+
+    const paginated = dataArray.slice(offset, offset + limit);
+
+    res.json({
+        offset,
+        limit,
+        total: dataArray.length,
+        results: paginated
     });
 });
 
