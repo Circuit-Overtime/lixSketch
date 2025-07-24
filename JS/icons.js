@@ -1180,8 +1180,8 @@ async function renderIconsFromServer() {
 
                 const normalizedSVG = normalizeSVGSize(svgContent);
 
-                let svgIcon = `<div class="icons" data-url="${icon.filename}">
-                   ${normalizedSVG}
+                let svgIcon = `<div class="icons" data-url="${icon.filename} data-svg="${encodeURIComponent(normalizedSVG)}">
+                   ${svgContent}
                 </div>`;
                 document.getElementById("iconsContainer").innerHTML += svgIcon;
             } catch (error) {
@@ -1229,7 +1229,7 @@ function handleIconClick(event, filename) {
     const svgElement = iconElement.querySelector('svg');
 
     if (svgElement) {
-        const svgContent = svgElement.outerHTML;
+        const svgContent = svgElement.getAttribute('data-svg') || svgElement.outerHTML;
 
         iconToPlace = svgContent;
         isDraggingIcon = true;
