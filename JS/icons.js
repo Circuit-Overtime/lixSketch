@@ -18,7 +18,7 @@ let startRotationMouseAngle = null;
 let startIconRotation = null;
 let iconRotation = 0;
 let aspect_ratio_lock = true;
-const minIconSize = 40;
+const minIconSize = 25;
 const miniatureSize = 40;
 const placedIconSize = 40;
 let draggedShapeInitialFrameIcon = null;
@@ -791,12 +791,19 @@ function startResize(event) {
     originalWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
     originalHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
 
+    // Store the initial mouse position
+    const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(event);
+    currentAnchor.startMouseX = mouseX;
+    currentAnchor.startMouseY = mouseY;
+
     const svg = getSVGElement();
     if (svg) {
         svg.addEventListener('mousemove', resizeIcon);
     }
     document.addEventListener('mouseup', stopResize);
 }
+
+
 
 function stopResize(event) {
     stopInteracting();
@@ -806,10 +813,11 @@ function stopResize(event) {
 function resizeIcon(event) {
     if (!selectedIcon || !currentAnchor) return;
 
-    const { x: globalX, y: globalY } = getSVGCoordsFromMouse(event);
-
-    let dx = globalX - originalX;
-    let dy = globalY - originalY;
+    const { x: currentMouseX, y: currentMouseY } = getSVGCoordsFromMouse(event);
+    
+    // Calculate the delta from the initial mouse position
+    const deltaX = currentMouseX - currentAnchor.startMouseX;
+    const deltaY = currentMouseY - currentAnchor.startMouseY;
 
     let newWidth = originalWidth;
     let newHeight = originalHeight;
@@ -818,38 +826,45 @@ function resizeIcon(event) {
 
     switch (currentAnchor.style.cursor) {
         case "nw-resize":
-            newWidth = originalWidth - dx;
-            newHeight = originalHeight - dy;
+            newWidth = originalWidth - deltaX;
+            newHeight = originalHeight - deltaY;
             if (aspect_ratio_lock) {
-                newHeight = newWidth;
+                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
+                newWidth = originalWidth * avgScale;
+                newHeight = originalHeight * avgScale;
             }
             newX = originalX + (originalWidth - newWidth);
             newY = originalY + (originalHeight - newHeight);
             break;
         case "ne-resize":
-            newWidth = dx;
-            newHeight = originalHeight - dy;
+            newWidth = originalWidth + deltaX;
+            newHeight = originalHeight - deltaY;
             if (aspect_ratio_lock) {
-                newHeight = newWidth;
-                dy = originalHeight - newHeight;
+                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
+                newWidth = originalWidth * avgScale;
+                newHeight = originalHeight * avgScale;
             }
             newX = originalX;
             newY = originalY + (originalHeight - newHeight);
             break;
         case "sw-resize":
-            newWidth = originalWidth - dx;
-            newHeight = dy;
+            newWidth = originalWidth - deltaX;
+            newHeight = originalHeight + deltaY;
             if (aspect_ratio_lock) {
-                newHeight = newWidth;
+                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
+                newWidth = originalWidth * avgScale;
+                newHeight = originalHeight * avgScale;
             }
             newX = originalX + (originalWidth - newWidth);
             newY = originalY;
             break;
         case "se-resize":
-            newWidth = dx;
-            newHeight = dy;
+            newWidth = originalWidth + deltaX;
+            newHeight = originalHeight + deltaY;
             if (aspect_ratio_lock) {
-                newHeight = newWidth;
+                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
+                newWidth = originalWidth * avgScale;
+                newHeight = originalHeight * avgScale;
             }
             newX = originalX;
             newY = originalY;
@@ -870,7 +885,9 @@ function resizeIcon(event) {
     selectedIcon.setAttribute('data-shape-height', newHeight);
 
     const scale = newWidth / 24;
-    selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation})`);
+    const localCenterX = newWidth / 2 / scale;
+    const localCenterY = newHeight / 2 / scale;
+    selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation}, ${localCenterX}, ${localCenterY})`);
 
     if (typeof updateAttachedArrows === 'function') {
         updateAttachedArrows(selectedIcon);
@@ -879,6 +896,7 @@ function resizeIcon(event) {
     removeSelection();
     addSelectionOutline();
 }
+
 
 function startDrag(event) {
     if (!isSelectionToolActive || !selectedIcon) return;
