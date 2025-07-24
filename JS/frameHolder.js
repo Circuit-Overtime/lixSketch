@@ -688,9 +688,173 @@ startLabelEdit(labelElement) {
         const centerY = initialFrame.y + initialFrame.height / 2;
         
         const angle = Math.atan2(mousePos.y - centerY, mousePos.x - centerX);
-        this.rotation = (angle * 180 / Math.PI + 90) % 360;
+        const newRotation = (angle * 180 / Math.PI + 90) % 360;
+        const angleDiff = newRotation - this.rotation;
+        const angleRad = angleDiff * Math.PI / 180;
+        const cosAngle = Math.cos(angleRad);
+        const sinAngle = Math.sin(angleRad);
         
-        // Update arrows attached to this frame when rotating
+        // Store the rotation center for contained shapes
+        const rotationCenter = { x: centerX, y: centerY };
+        
+        // Rotate all contained shapes around the frame's center
+        this.containedShapes.forEach(shape => {
+            if (!shape) return;
+            
+            // Mark shape as being moved by frame to prevent frame containment updates
+            shape.isBeingMovedByFrame = true;
+            
+            switch (shape.shapeName) {
+                case 'rectangle':
+                case 'frame':
+                case 'image':
+                case 'icon':
+                    // Get shape's current center
+                    const shapeCenterX = shape.x + shape.width / 2;
+                    const shapeCenterY = shape.y + shape.height / 2;
+                    
+                    // Calculate relative position from rotation center
+                    const relativeX = shapeCenterX - rotationCenter.x;
+                    const relativeY = shapeCenterY - rotationCenter.y;
+                    
+                    // Apply rotation to get new center position
+                    const newCenterX = rotationCenter.x + (relativeX * cosAngle - relativeY * sinAngle);
+                    const newCenterY = rotationCenter.y + (relativeX * sinAngle + relativeY * cosAngle);
+                    
+                    // Update shape position
+                    shape.x = newCenterX - shape.width / 2;
+                    shape.y = newCenterY - shape.height / 2;
+                    shape.rotation = (shape.rotation || 0) + angleDiff;
+                    
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
+                    
+                case 'circle':
+                    // Get circle's center
+                    const circleCenterX = shape.x;
+                    const circleCenterY = shape.y;
+                    
+                    // Calculate relative position from rotation center
+                    const relativeCircleX = circleCenterX - rotationCenter.x;
+                    const relativeCircleY = circleCenterY - rotationCenter.y;
+                    
+                    // Apply rotation
+                    const newCircleCenterX = rotationCenter.x + (relativeCircleX * cosAngle - relativeCircleY * sinAngle);
+                    const newCircleCenterY = rotationCenter.y + (relativeCircleX * sinAngle + relativeCircleY * cosAngle);
+                    
+                    shape.x = newCircleCenterX;
+                    shape.y = newCircleCenterY;
+                    shape.rotation = (shape.rotation || 0) + angleDiff;
+                    
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
+                    
+                case 'line':
+                case 'arrow':
+                    // Calculate relative positions for start and end points
+                    const relativeStartX = shape.startPoint.x - rotationCenter.x;
+                    const relativeStartY = shape.startPoint.y - rotationCenter.y;
+                    const relativeEndX = shape.endPoint.x - rotationCenter.x;
+                    const relativeEndY = shape.endPoint.y - rotationCenter.y;
+                    
+                    // Apply rotation to both points
+                    const newStartX = rotationCenter.x + (relativeStartX * cosAngle - relativeStartY * sinAngle);
+                    const newStartY = rotationCenter.y + (relativeStartX * sinAngle + relativeStartY * cosAngle);
+                    const newEndX = rotationCenter.x + (relativeEndX * cosAngle - relativeEndY * sinAngle);
+                    const newEndY = rotationCenter.y + (relativeEndX * sinAngle + relativeEndY * cosAngle);
+                    
+                    shape.startPoint.x = newStartX;
+                    shape.startPoint.y = newStartY;
+                    shape.endPoint.x = newEndX;
+                    shape.endPoint.y = newEndY;
+                    
+                    if (shape.shapeName === 'arrow' && shape.arrowCurved && typeof shape.initializeCurveControlPoints === 'function') {
+                        shape.initializeCurveControlPoints();
+                    }
+                    if (typeof shape.draw === 'function') {
+                        shape.draw();
+                    }
+                    break;
+                    
+                case 'text':
+                    // Get text bounds for center calculation
+                    const textElement = shape.group ? shape.group.querySelector('text') : null;
+                    if (textElement) {
+                        const bbox = textElement.getBBox();
+                        const transform = shape.group.transform.baseVal.consolidate();
+                        const matrix = transform ? transform.matrix : { e: 0, f: 0 };
+                        
+                        const textCenterX = bbox.x + matrix.e + bbox.width / 2;
+                        const textCenterY = bbox.y + matrix.f + bbox.height / 2;
+                        
+                        // Calculate relative position
+                        const relativeTextX = textCenterX - rotationCenter.x;
+                        const relativeTextY = textCenterY - rotationCenter.y;
+                        
+                        // Apply rotation
+                        const newTextCenterX = rotationCenter.x + (relativeTextX * cosAngle - relativeTextY * sinAngle);
+                        const newTextCenterY = rotationCenter.y + (relativeTextX * sinAngle + relativeTextY * cosAngle);
+                        
+                        // Update text position
+                        const newTransformX = newTextCenterX - bbox.width / 2;
+                        const newTransformY = newTextCenterY - bbox.height / 2;
+                        const newRotation = (shape.rotation || 0) + angleDiff;
+                        
+                        const textCenterRelativeX = bbox.width / 2;
+                        const textCenterRelativeY = bbox.height / 2;
+                        
+                        shape.group.setAttribute('transform',
+                            `translate(${newTransformX}, ${newTransformY}) rotate(${newRotation}, ${textCenterRelativeX}, ${textCenterRelativeY})`
+                        );
+                        
+                        shape.x = newTransformX;
+                        shape.y = newTransformY;
+                        shape.rotation = newRotation;
+                    }
+                    break;
+                    
+                case 'freehandStroke':
+                    if (shape.points && Array.isArray(shape.points)) {
+                        // Rotate each point in the stroke
+                        shape.points = shape.points.map(point => {
+                            if (!Array.isArray(point) || point.length < 2) return point;
+                            
+                            const relativePointX = point[0] - rotationCenter.x;
+                            const relativePointY = point[1] - rotationCenter.y;
+                            
+                            const newPointX = rotationCenter.x + (relativePointX * cosAngle - relativePointY * sinAngle);
+                            const newPointY = rotationCenter.y + (relativePointX * sinAngle + relativePointY * cosAngle);
+                            
+                            return [newPointX, newPointY, point[2] || 0.5];
+                        });
+                        
+                        if (typeof shape.updateBoundingBox === 'function') {
+                            shape.updateBoundingBox();
+                        }
+                        if (typeof shape.draw === 'function') {
+                            shape.draw();
+                        }
+                    }
+                    break;
+            }
+            
+            // Update arrows attached to the contained shape
+            if (typeof shape.updateAttachedArrows === 'function') {
+                shape.updateAttachedArrows();
+            }
+            
+            // Remove the flag after rotation
+            delete shape.isBeingMovedByFrame;
+        });
+        
+        // Update the frame's rotation
+        this.rotation = newRotation;
+        
+        // Update arrows attached to this frame
         this.updateAttachedArrows();
     }
 

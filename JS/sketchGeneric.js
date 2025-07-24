@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-wink-smile");
+let selectedTool = document.querySelector(".bx-frame");
 let history = [];
 let redoStack = [];
 let shapes = [];
