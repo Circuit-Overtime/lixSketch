@@ -18,9 +18,9 @@ let startRotationMouseAngle = null;
 let startIconRotation = null;
 let iconRotation = 0;
 let aspect_ratio_lock = true;
-const minIconSize = 40;
-const miniatureSize = 40;
-const placedIconSize = 40;
+const minIconSize = 24;
+const miniatureSize = 24;
+const placedIconSize = 50;
 let draggedShapeInitialFrameIcon = null;
 let hoveredFrameIcon = null;
 
@@ -364,49 +364,22 @@ const drawMiniatureIcon = () => {
     if (svgElement) {
         const iconGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
-        // Get the original viewBox or infer from width/height
-        const viewBox = svgElement.getAttribute('viewBox');
-        let vbWidth = 24, vbHeight = 24; // Default to 24x24
-
-        if (viewBox) {
-            const [, , widthStr, heightStr] = viewBox.split(/\s+/);
-            vbWidth = parseFloat(widthStr) || 24;
-            vbHeight = parseFloat(heightStr) || 24;
-        } else {
-            // Try to get from width/height attributes
-            const width = svgElement.getAttribute('width');
-            const height = svgElement.getAttribute('height');
-            if (width && height) {
-                vbWidth = parseFloat(width) || 24;
-                vbHeight = parseFloat(height) || 24;
-            }
-        }
-
-        // Calculate scale to make miniature 24x24 (miniatureSize = 25, so scale ≈ 1.04)
-        const scale = miniatureSize / Math.max(vbWidth, vbHeight);
+        const scale = miniatureSize / 24;
         iconGroup.setAttribute("transform", `translate(${iconX - miniatureSize / 2}, ${iconY - miniatureSize / 2}) scale(${scale})`);
 
-        // Simply clone the entire content of the original SVG without modification
-        const allChildren = svgElement.children;
-        for (let i = 0; i < allChildren.length; i++) {
-            const clonedChild = allChildren[i].cloneNode(true);
-            
-            // Apply gray styling to all elements for miniature preview
-            const applyGrayStyle = (element) => {
-                if (element.nodeType === 1) { // Element node
-                    element.setAttribute('fill', '#666');
-                    element.setAttribute('stroke', '#666');
-                    
-                    // Apply to child elements as well
-                    for (let j = 0; j < element.children.length; j++) {
-                        applyGrayStyle(element.children[j]);
-                    }
-                }
-            };
-            
-            applyGrayStyle(clonedChild);
-            iconGroup.appendChild(clonedChild);
-        }
+        const paths = svgElement.querySelectorAll('path, circle, rect, line, polygon, polyline');
+        paths.forEach(element => {
+            const newElement = document.createElementNS("http://www.w3.org/2000/svg", element.tagName);
+
+            for (let attr of element.attributes) {
+                newElement.setAttribute(attr.name, attr.value);
+            }
+
+            newElement.setAttribute('fill', '#666');
+            newElement.setAttribute('stroke', '#666');
+
+            iconGroup.appendChild(newElement);
+        });
 
         iconGroup.setAttribute("style", "pointer-events: none; opacity: 0.7;");
         iconGroup.setAttribute("class", "miniature-icon");
@@ -442,7 +415,6 @@ const handleMouseDownIcon = async (e) => {
 
         const { x: placedX, y: placedY } = getSVGCoordsFromMouse(e);
 
-        // Parse the original SVG
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = iconToPlace;
         const originalSvgElement = tempDiv.querySelector('svg');
@@ -451,112 +423,114 @@ const handleMouseDownIcon = async (e) => {
             throw new Error('Invalid SVG content');
         }
 
-        // Create the final icon group
+        // Get original dimensions for proper scaling
+        const originalWidth = parseFloat(originalSvgElement.getAttribute('width')) || 24;
+        const originalHeight = parseFloat(originalSvgElement.getAttribute('height')) || 24;
+        const viewBox = originalSvgElement.getAttribute('viewBox');
+        
+        // Use a consistent scale based on desired icon size
+        let scale = placedIconSize / 24; // Always scale relative to 24x24 base
+        
+        // If there's a viewBox, adjust scale accordingly
+        if (viewBox) {
+            const viewBoxValues = viewBox.split(' ').map(v => parseFloat(v));
+            if (viewBoxValues.length === 4) {
+                const viewBoxWidth = viewBoxValues[2];
+                scale = placedIconSize / viewBoxWidth;
+            }
+        }
+
         const finalIconGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
         const finalX = placedX - placedIconSize / 2;
         const finalY = placedY - placedIconSize / 2;
 
-        // Get the original viewBox or infer from width/height
-        const viewBox = originalSvgElement.getAttribute('viewBox');
-        let vbWidth = 24, vbHeight = 24; // Default to 24x24
-
-        if (viewBox) {
-            const [, , widthStr, heightStr] = viewBox.split(/\s+/);
-            vbWidth = parseFloat(widthStr) || 24;
-            vbHeight = parseFloat(heightStr) || 24;
-        } else {
-            // Try to get from width/height attributes
-            const width = originalSvgElement.getAttribute('width');
-            const height = originalSvgElement.getAttribute('height');
-            if (width && height) {
-                vbWidth = parseFloat(width) || 24;
-                vbHeight = parseFloat(height) || 24;
-            }
-        }
-
-        // Calculate scale to make it 24x24 on canvas (placedIconSize = 50, so scale = 50/24 ≈ 2.08)
-        const scale = placedIconSize / Math.max(vbWidth, vbHeight);
-        
-        // Set transform to position and scale the icon
         finalIconGroup.setAttribute("transform", `translate(${finalX}, ${finalY}) scale(${scale})`);
-        finalIconGroup.setAttribute('data-viewbox-width', vbWidth);
-        finalIconGroup.setAttribute('data-viewbox-height', vbHeight);
 
-        // Create a transparent background for interaction
+        // Add background rect for selection - use the actual icon size, not original
         const backgroundRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
         backgroundRect.setAttribute('x', 0);
         backgroundRect.setAttribute('y', 0);
-        backgroundRect.setAttribute('width', vbWidth);
-        backgroundRect.setAttribute('height', vbHeight);
+        backgroundRect.setAttribute('width', 24); // Standard size for background
+        backgroundRect.setAttribute('height', 24);
         backgroundRect.setAttribute('fill', 'transparent');
         backgroundRect.setAttribute('stroke', 'none');
         backgroundRect.setAttribute('style', 'pointer-events: all; cursor: pointer;');
         finalIconGroup.appendChild(backgroundRect);
 
-        // Simply clone the entire content of the original SVG without modification
-        const allChildren = originalSvgElement.children;
-        for (let i = 0; i < allChildren.length; i++) {
-            const clonedChild = allChildren[i].cloneNode(true);
-            finalIconGroup.appendChild(clonedChild);
+        // Clone the entire content of the original SVG, preserving structure
+        function cloneElementWithChildren(element) {
+            const cloned = document.createElementNS("http://www.w3.org/2000/svg", element.tagName);
+            
+            // Copy all attributes
+            for (let attr of element.attributes) {
+                cloned.setAttribute(attr.name, attr.value);
+            }
+            
+            // Add pointer events style
+            const existingStyle = cloned.getAttribute('style') || '';
+            cloned.setAttribute('style', existingStyle + '; pointer-events: all;');
+            
+            // Recursively clone children
+            for (let child of element.children) {
+                cloned.appendChild(cloneElementWithChildren(child));
+            }
+            
+            return cloned;
         }
 
-        // Set icon properties
-        finalIconGroup.setAttribute('x', finalX);
-        finalIconGroup.setAttribute('y', finalY);
-        finalIconGroup.setAttribute('width', placedIconSize);
-        finalIconGroup.setAttribute('height', placedIconSize);
-        finalIconGroup.setAttribute('type', 'icon');
-        finalIconGroup.setAttribute('data-shape-x', finalX);
-        finalIconGroup.setAttribute('data-shape-y', finalY);
-        finalIconGroup.setAttribute('data-shape-width', placedIconSize);
-        finalIconGroup.setAttribute('data-shape-height', placedIconSize);
-        finalIconGroup.setAttribute('data-shape-rotation', 0);
-        finalIconGroup.shapeID = `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
-        finalIconGroup.setAttribute('style', 'cursor: pointer; pointer-events: all;');
+        // Clone all children of the original SVG
+        for (let child of originalSvgElement.children) {
+            finalIconGroup.appendChild(cloneElementWithChildren(child));
+        }
+
+        // Set attributes for the final icon group - use placedIconSize consistently
+        finalIconGroup.setAttribute("x", finalX);
+        finalIconGroup.setAttribute("y", finalY);
+        finalIconGroup.setAttribute("width", placedIconSize);
+        finalIconGroup.setAttribute("height", placedIconSize);
+        finalIconGroup.setAttribute("type", "icon");
+        finalIconGroup.setAttribute("data-shape-x", finalX);
+        finalIconGroup.setAttribute("data-shape-y", finalY);
+        finalIconGroup.setAttribute("data-shape-width", placedIconSize);
+        finalIconGroup.setAttribute("data-shape-height", placedIconSize);
+        finalIconGroup.setAttribute("data-shape-rotation", "0");
+        finalIconGroup.setAttribute("style", "cursor: pointer; pointer-events: all;");
+        finalIconGroup.setAttribute("id", `icon-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
 
         svg.appendChild(finalIconGroup);
 
-        const iconShape = wrapIconElement(finalIconGroup);
+        // Reset state
+        isDraggingIcon = false;
+        isIconToolActive = false;
+        iconToPlace = null;
 
+        document.body.style.cursor = 'default';
+
+        // Add to shapes array if it exists
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            const iconShape = {
+                shapeName: 'icon',
+                element: finalIconGroup,
+                id: finalIconGroup.getAttribute('id'),
+                x: finalX,
+                y: finalY,
+                width: placedIconSize,
+                height: placedIconSize,
+                rotation: 0,
+                parentFrame: null
+            };
             shapes.push(iconShape);
-            console.log('Icon added to shapes array for arrow attachment and frame functionality');
-        } else {
-            console.warn('shapes array not found - arrows and frames may not work with icons');
-        }
-
-        const finalFrame = hoveredFrameIcon;
-        if (finalFrame) {
-            finalFrame.addShapeToFrame(iconShape);
-            pushFrameAttachmentAction(finalFrame, iconShape, 'attach', null);
-        }
-
-        pushCreateAction(iconShape);
-
-        finalIconGroup.addEventListener('click', selectIcon);
-        finalIconGroup.addEventListener('mousedown', (e) => {
-            if (isSelectionToolActive) {
-                selectIcon({ target: finalIconGroup, stopPropagation: () => e.stopPropagation() });
+            
+            if (typeof pushCreateAction === 'function') {
+                pushCreateAction(iconShape);
             }
-        });
-
-        if (hoveredFrameIcon) {
-            hoveredFrameIcon.removeHighlight();
-            hoveredFrameIcon = null;
         }
-
-        console.log('Icon placed successfully:', finalIconGroup);
 
     } catch (error) {
-        console.error("Error placing icon:", error);
+        console.error('Error placing icon:', error);
         isDraggingIcon = false;
-        iconToPlace = null;
         isIconToolActive = false;
-    } finally {
-        isDraggingIcon = false;
         iconToPlace = null;
-        isIconToolActive = false;
-        document.body.style.cursor = 'default';
     }
 };
 
@@ -583,31 +557,38 @@ const handleMouseUpIcon = (e) => {
 
 function addSelectionOutline() {
     if (!selectedIcon) return;
-
+    console.log("added selection outline");
+    
     const svg = getSVGElement();
     if (!svg) return;
 
-    const rect = selectedIcon.getBoundingClientRect();
-    const svgRect = svg.getBoundingClientRect();
+    // Don't remove selection here - it causes the flickering
+    // removeSelection();
 
-    const scaleX = svg.viewBox.baseVal.width / svgRect.width;
-    const scaleY = svg.viewBox.baseVal.height / svgRect.height;
+    // Check if selection outline already exists
+    const existingOutline = svg.querySelector(".selection-outline");
+    if (existingOutline) {
+        svg.removeChild(existingOutline);
+    }
 
-    const x = (rect.left - svgRect.left) * scaleX;
-    const y = (rect.top - svgRect.top) * scaleY;
-    const width = rect.width * scaleX;
-    const height = rect.height * scaleY;
+    // Remove existing anchors
+    const existingAnchors = svg.querySelectorAll(".resize-anchor, .rotation-anchor");
+    existingAnchors.forEach(anchor => svg.removeChild(anchor));
 
-    const centerX = x + width / 2;
-    const centerY = y + height / 2;
+    // Get the icon's position and size from attributes
+    const iconX = parseFloat(selectedIcon.getAttribute('x')) || 0;
+    const iconY = parseFloat(selectedIcon.getAttribute('y')) || 0;
+    const iconWidth = parseFloat(selectedIcon.getAttribute('width')) || placedIconSize;
+    const iconHeight = parseFloat(selectedIcon.getAttribute('height')) || placedIconSize;
 
-    const selectionPadding = Math.max(4, width * 0.08);
-    const expandedX = x - selectionPadding;
-    const expandedY = y - selectionPadding;
-    const expandedWidth = width + 2 * selectionPadding;
-    const expandedHeight = height + 2 * selectionPadding;
+    const centerX = iconX + iconWidth / 2;
+    const centerY = iconY + iconHeight / 2;
 
-    removeSelection();
+    const selectionPadding = Math.max(4, iconWidth * 0.08);
+    const expandedX = iconX - selectionPadding;
+    const expandedY = iconY - selectionPadding;
+    const expandedWidth = iconWidth + 2 * selectionPadding;
+    const expandedHeight = iconHeight + 2 * selectionPadding;
 
     const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     const outlinePoints = [
@@ -620,15 +601,15 @@ function addSelectionOutline() {
     outline.setAttribute("points", outlinePoints.map(p => p.join(',')).join(' '));
     outline.setAttribute("fill", "none");
     outline.setAttribute("stroke", "#5B57D1");
-    outline.setAttribute("stroke-width", Math.max(1, width * 0.02));
-    outline.setAttribute("stroke-dasharray", `${Math.max(3, width * 0.04)} ${Math.max(2, width * 0.02)}`);
+    outline.setAttribute("stroke-width", Math.max(1, iconWidth * 0.02));
+    outline.setAttribute("stroke-dasharray", `${Math.max(3, iconWidth * 0.04)} ${Math.max(2, iconWidth * 0.02)}`);
     outline.setAttribute("style", "pointer-events: none;");
     outline.setAttribute("class", "selection-outline");
 
     svg.appendChild(outline);
 
-    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width);
-    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width);
+    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, iconWidth);
+    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, iconWidth);
 }
 
 function selectIcon(event) {
@@ -670,6 +651,7 @@ function selectIcon(event) {
     }
 
     addSelectionOutline();
+   
 
     originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
     originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
@@ -803,6 +785,7 @@ function stopResize(event) {
     document.removeEventListener('mouseup', stopResize);
 }
 
+
 function resizeIcon(event) {
     if (!selectedIcon || !currentAnchor) return;
 
@@ -869,16 +852,20 @@ function resizeIcon(event) {
     selectedIcon.setAttribute('data-shape-width', newWidth);
     selectedIcon.setAttribute('data-shape-height', newHeight);
 
+    // Fix the scaling - use consistent 24px base
     const scale = newWidth / 24;
-    selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation})`);
+    const localCenterX = newWidth / 2 / scale;
+    const localCenterY = newHeight / 2 / scale;
+    selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation}, ${localCenterX}, ${localCenterY})`);
 
     if (typeof updateAttachedArrows === 'function') {
         updateAttachedArrows(selectedIcon);
     }
 
-    removeSelection();
+    // Update selection outline without removing it completely
     addSelectionOutline();
 }
+
 
 function startDrag(event) {
     if (!isSelectionToolActive || !selectedIcon) return;
@@ -950,7 +937,7 @@ function dragIcon(event) {
         updateAttachedArrows(selectedIcon);
     }
 
-    removeSelection();
+    // Update selection outline without removing it completely
     addSelectionOutline();
 }
 
@@ -1022,7 +1009,7 @@ function rotateIcon(event) {
         updateAttachedArrows(selectedIcon);
     }
 
-    removeSelection();
+    // Update selection outline without removing it completely
     addSelectionOutline();
 }
 
@@ -1223,7 +1210,7 @@ async function renderIconsFromServer() {
 
                 const normalizedSVG = normalizeSVGSize(svgContent);
 
-                let svgIcon = `<div class="icons" data-url="${icon.filename} data-svg="${encodeURIComponent(normalizedSVG)}">
+                let svgIcon = `<div class="icons" data-url="${icon.filename} data-svg="${encodeURIComponent(svgContent)}">
                    ${svgContent}
                 </div>`;
                 document.getElementById("iconsContainer").innerHTML += svgIcon;
@@ -1270,6 +1257,7 @@ function normalizeSVGSize(svgContent) {
     return svgContent;
 }
 
+
 function addIconClickListeners() {
     const iconElements = document.querySelectorAll('#iconsContainer .icons');
     iconElements.forEach(iconElement => {
@@ -1305,8 +1293,9 @@ function handleIconClick(event, filename) {
     const svgElement = iconElement.querySelector('svg');
 
     if (svgElement) {
-        // Store the complete SVG with its normalized dimensions and styling
-        iconToPlace = svgElement.outerHTML;
+        const svgContent = svgElement.getAttribute('data-svg') || svgElement.outerHTML;
+
+        iconToPlace = svgContent;
         isDraggingIcon = true;
         isIconToolActive = true;
 
@@ -1356,6 +1345,10 @@ async function searchAndRenderIcons(query) {
         console.error('Failed to search icons:', error);
     }
 }
+
+
+
+
 
 
 
