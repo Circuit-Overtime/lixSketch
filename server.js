@@ -5,7 +5,7 @@ const cors = require('cors');
 const Fuse = require('fuse.js');
 const rateLimit = require('express-rate-limit');
 
-const PORT = 3000;
+const PORT = 3002;
 const ICONS_FOLDER = path.join(__dirname, 'icons');
 const METADATA_FILE = path.join(__dirname, 'icons.json');
 

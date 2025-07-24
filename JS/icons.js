@@ -1284,7 +1284,7 @@ document.addEventListener('keydown', (e) => {
 
 async function fetchIconsFromServer() {
     try {
-        const response = await fetch('http://localhost:3000/feed?offset=0&limit=20');
+        const response = await fetch('http://localhost:3002/feed?offset=0&limit=20');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1303,7 +1303,7 @@ async function renderIconsFromServer() {
 
         for (const icon of icons) {
             try {
-                const response = await fetch('http://localhost:3000/serve?name=' + encodeURIComponent(icon.filename));
+                const response = await fetch('http://localhost:3002/serve?name=' + encodeURIComponent(icon.filename));
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -1403,7 +1403,7 @@ function handleIconClick(event, filename) {
 
 async function searchAndRenderIcons(query) {
     try {
-        const response = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`http://localhost:3002/search?q=${encodeURIComponent(query)}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1413,7 +1413,7 @@ async function searchAndRenderIcons(query) {
 
         for (const icon of searchResults) {
             try {
-                const svgResponse = await fetch('http://localhost:3000/serve?name=' + encodeURIComponent(icon.filename));
+                const svgResponse = await fetch('http://localhost:3002/serve?name=' + encodeURIComponent(icon.filename));
                 if (!svgResponse.ok) {
                     throw new Error(`HTTP error! status: ${svgResponse.status}`);
                 }
