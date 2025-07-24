@@ -587,48 +587,47 @@ function addSelectionOutline() {
     const svg = getSVGElement();
     if (!svg) return;
 
-    const rect = selectedIcon.getBoundingClientRect();
-    const svgRect = svg.getBoundingClientRect();
+    // Get icon properties
+    const x = parseFloat(selectedIcon.getAttribute('x')) || 0;
+    const y = parseFloat(selectedIcon.getAttribute('y')) || 0;
+    const width = parseFloat(selectedIcon.getAttribute('width')) || placedIconSize;
+    const height = parseFloat(selectedIcon.getAttribute('height')) || placedIconSize;
+    const rotation = parseFloat(selectedIcon.getAttribute('data-shape-rotation')) || 0;
 
-    const scaleX = svg.viewBox.baseVal.width / svgRect.width;
-    const scaleY = svg.viewBox.baseVal.height / svgRect.height;
+    // Get the actual visual size after scaling
+    const scale = width / 24; // This is how the icon is scaled
+    const visualWidth = 24 * scale; // This should equal width, but let's be explicit
+    const visualHeight = 24 * scale; // Assuming square icons, adjust if needed
 
-    const x = (rect.left - svgRect.left) * scaleX;
-    const y = (rect.top - svgRect.top) * scaleY;
-    const width = rect.width * scaleX;
-    const height = rect.height * scaleY;
+    const centerX = x + visualWidth / 2;
+    const centerY = y + visualHeight / 2;
 
-    const centerX = x + width / 2;
-    const centerY = y + height / 2;
-
-    const selectionPadding = Math.max(4, width * 0.08);
+    const selectionPadding = Math.max(4, visualWidth * 0.08);
     const expandedX = x - selectionPadding;
     const expandedY = y - selectionPadding;
-    const expandedWidth = width + 2 * selectionPadding;
-    const expandedHeight = height + 2 * selectionPadding;
+    const expandedWidth = visualWidth + 2 * selectionPadding;
+    const expandedHeight = visualHeight + 2 * selectionPadding;
 
     removeSelection();
 
-    const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-    const outlinePoints = [
-        [expandedX, expandedY],
-        [expandedX + expandedWidth, expandedY],
-        [expandedX + expandedWidth, expandedY + expandedHeight],
-        [expandedX, expandedY + expandedHeight],
-        [expandedX, expandedY]
-    ];
-    outline.setAttribute("points", outlinePoints.map(p => p.join(',')).join(' '));
+    // Create rotated selection outline
+    const outline = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    outline.setAttribute("x", expandedX);
+    outline.setAttribute("y", expandedY);
+    outline.setAttribute("width", expandedWidth);
+    outline.setAttribute("height", expandedHeight);
     outline.setAttribute("fill", "none");
     outline.setAttribute("stroke", "#5B57D1");
-    outline.setAttribute("stroke-width", Math.max(1, width * 0.02));
-    outline.setAttribute("stroke-dasharray", `${Math.max(3, width * 0.04)} ${Math.max(2, width * 0.02)}`);
+    outline.setAttribute("stroke-width", Math.max(1, visualWidth * 0.02));
+    outline.setAttribute("stroke-dasharray", `${Math.max(3, visualWidth * 0.04)} ${Math.max(2, visualWidth * 0.02)}`);
     outline.setAttribute("style", "pointer-events: none;");
     outline.setAttribute("class", "selection-outline");
+    outline.setAttribute("transform", `rotate(${rotation}, ${centerX}, ${centerY})`);
 
     svg.appendChild(outline);
 
-    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width);
-    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width);
+    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, visualWidth, rotation);
+    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, visualWidth, rotation);
 }
 
 function selectIcon(event) {
@@ -684,9 +683,7 @@ function selectIcon(event) {
 }
 
 
-
-
-function addResizeAnchors(x, y, width, height, centerX, centerY, iconWidth) {
+function addResizeAnchors(x, y, width, height, centerX, centerY, iconWidth, rotation) {
     const svg = getSVGElement();
     if (!svg) return;
 
@@ -694,13 +691,13 @@ function addResizeAnchors(x, y, width, height, centerX, centerY, iconWidth) {
     const anchorStrokeWidth = Math.max(1.5, anchorSize * 0.15);
 
     const positions = [
-        { x: x, y: y },
-        { x: x + width, y: y },
-        { x: x, y: y + height },
-        { x: x + width, y: y + height }
+        { x: x, y: y, cursor: "nw-resize" },
+        { x: x + width, y: y, cursor: "ne-resize" },
+        { x: x, y: y + height, cursor: "sw-resize" },
+        { x: x + width, y: y + height, cursor: "se-resize" }
     ];
 
-    positions.forEach((pos, i) => {
+    positions.forEach((pos) => {
         const anchor = document.createElementNS("http://www.w3.org/2000/svg", "rect");
         anchor.setAttribute("x", pos.x - anchorSize / 2);
         anchor.setAttribute("y", pos.y - anchorSize / 2);
@@ -710,9 +707,8 @@ function addResizeAnchors(x, y, width, height, centerX, centerY, iconWidth) {
         anchor.setAttribute("stroke", "#5B57D1");
         anchor.setAttribute("stroke-width", anchorStrokeWidth);
         anchor.setAttribute("class", "resize-anchor");
-        anchor.style.cursor = ["nw-resize", "ne-resize", "sw-resize", "se-resize"][i];
-
-        anchor.setAttribute('transform', `rotate(${iconRotation}, ${centerX}, ${centerY})`);
+        anchor.setAttribute("transform", `rotate(${rotation}, ${centerX}, ${centerY})`);
+        anchor.style.cursor = pos.cursor;
 
         svg.appendChild(anchor);
 
@@ -721,7 +717,7 @@ function addResizeAnchors(x, y, width, height, centerX, centerY, iconWidth) {
     });
 }
 
-function addRotationAnchor(x, y, width, height, centerX, centerY, iconWidth) {
+function addRotationAnchor(x, y, width, height, centerX, centerY, iconWidth, rotation) {
     const svg = getSVGElement();
     if (!svg) return;
 
@@ -729,19 +725,19 @@ function addRotationAnchor(x, y, width, height, centerX, centerY, iconWidth) {
     const anchorStrokeWidth = Math.max(1.5, anchorRadius * 0.2);
     const rotationDistance = Math.max(25, iconWidth * 0.4);
 
-    const rotationAnchorPos = { x: x + width / 2, y: y - rotationDistance };
+    const rotationAnchorX = x + width / 2;
+    const rotationAnchorY = y - rotationDistance;
 
     const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    rotationAnchor.setAttribute('cx', rotationAnchorPos.x);
-    rotationAnchor.setAttribute('cy', rotationAnchorPos.y);
+    rotationAnchor.setAttribute('cx', rotationAnchorX);
+    rotationAnchor.setAttribute('cy', rotationAnchorY);
     rotationAnchor.setAttribute('r', anchorRadius);
     rotationAnchor.setAttribute('class', 'rotation-anchor');
     rotationAnchor.setAttribute('fill', '#121212');
     rotationAnchor.setAttribute('stroke', '#5B57D1');
     rotationAnchor.setAttribute('stroke-width', anchorStrokeWidth);
-    rotationAnchor.setAttribute('style', 'pointer-events: all;');
-
-    rotationAnchor.setAttribute('transform', `rotate(${iconRotation}, ${centerX}, ${centerY})`);
+    rotationAnchor.setAttribute('style', 'pointer-events: all; cursor: grab;');
+    rotationAnchor.setAttribute('transform', `rotate(${rotation}, ${centerX}, ${centerY})`);
 
     svg.appendChild(rotationAnchor);
 
@@ -780,6 +776,7 @@ function removeResizeAnchors() {
     anchors.forEach(anchor => svg.removeChild(anchor));
 }
 
+
 function startResize(event) {
     event.preventDefault();
     event.stopPropagation();
@@ -796,13 +793,15 @@ function startResize(event) {
     currentAnchor.startMouseX = mouseX;
     currentAnchor.startMouseY = mouseY;
 
+    // Store the current rotation
+    currentAnchor.iconRotation = iconRotation;
+
     const svg = getSVGElement();
     if (svg) {
         svg.addEventListener('mousemove', resizeIcon);
     }
     document.addEventListener('mouseup', stopResize);
 }
-
 
 
 function stopResize(event) {
@@ -815,9 +814,19 @@ function resizeIcon(event) {
 
     const { x: currentMouseX, y: currentMouseY } = getSVGCoordsFromMouse(event);
     
-    // Calculate the delta from the initial mouse position
-    const deltaX = currentMouseX - currentAnchor.startMouseX;
-    const deltaY = currentMouseY - currentAnchor.startMouseY;
+    // Get the center of the icon for rotation calculations
+    const centerX = originalX + originalWidth / 2;
+    const centerY = originalY + originalHeight / 2;
+    const rotation = currentAnchor.iconRotation || 0;
+    const rotationRad = (rotation * Math.PI) / 180;
+
+    // Calculate deltas relative to the rotated coordinate system
+    const rawDeltaX = currentMouseX - currentAnchor.startMouseX;
+    const rawDeltaY = currentMouseY - currentAnchor.startMouseY;
+
+    // Rotate the deltas to align with the icon's coordinate system
+    const deltaX = rawDeltaX * Math.cos(-rotationRad) - rawDeltaY * Math.sin(-rotationRad);
+    const deltaY = rawDeltaX * Math.sin(-rotationRad) + rawDeltaY * Math.cos(-rotationRad);
 
     let newWidth = originalWidth;
     let newHeight = originalHeight;
@@ -829,9 +838,9 @@ function resizeIcon(event) {
             newWidth = originalWidth - deltaX;
             newHeight = originalHeight - deltaY;
             if (aspect_ratio_lock) {
-                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
-                newWidth = originalWidth * avgScale;
-                newHeight = originalHeight * avgScale;
+                const scale = Math.min(newWidth / originalWidth, newHeight / originalHeight);
+                newWidth = originalWidth * scale;
+                newHeight = originalHeight * scale;
             }
             newX = originalX + (originalWidth - newWidth);
             newY = originalY + (originalHeight - newHeight);
@@ -840,9 +849,9 @@ function resizeIcon(event) {
             newWidth = originalWidth + deltaX;
             newHeight = originalHeight - deltaY;
             if (aspect_ratio_lock) {
-                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
-                newWidth = originalWidth * avgScale;
-                newHeight = originalHeight * avgScale;
+                const scale = Math.max(newWidth / originalWidth, newHeight / originalHeight);
+                newWidth = originalWidth * scale;
+                newHeight = originalHeight * scale;
             }
             newX = originalX;
             newY = originalY + (originalHeight - newHeight);
@@ -851,9 +860,9 @@ function resizeIcon(event) {
             newWidth = originalWidth - deltaX;
             newHeight = originalHeight + deltaY;
             if (aspect_ratio_lock) {
-                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
-                newWidth = originalWidth * avgScale;
-                newHeight = originalHeight * avgScale;
+                const scale = Math.max(newWidth / originalWidth, newHeight / originalHeight);
+                newWidth = originalWidth * scale;
+                newHeight = originalHeight * scale;
             }
             newX = originalX + (originalWidth - newWidth);
             newY = originalY;
@@ -862,9 +871,9 @@ function resizeIcon(event) {
             newWidth = originalWidth + deltaX;
             newHeight = originalHeight + deltaY;
             if (aspect_ratio_lock) {
-                const avgScale = (newWidth / originalWidth + newHeight / originalHeight) / 2;
-                newWidth = originalWidth * avgScale;
-                newHeight = originalHeight * avgScale;
+                const scale = Math.max(newWidth / originalWidth, newHeight / originalHeight);
+                newWidth = originalWidth * scale;
+                newHeight = originalHeight * scale;
             }
             newX = originalX;
             newY = originalY;
