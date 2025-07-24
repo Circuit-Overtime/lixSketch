@@ -6,8 +6,8 @@ import path from 'path';
 import fs from 'fs';
 
 const PORT = 3002;
-const ICONS_FOLDER = path.join('ICONS');
-const METADATA_FILE = path.join('ICON_CONT/info/icons.json');
+const ICONS_FOLDER = path.join('ICONS_CONT');
+const METADATA_FILE = path.join('ICONS_CONT/info/icons.json');
 
 const app = express();
 app.use(cors());
@@ -89,7 +89,6 @@ app.get('/feed', (req, res) => {
     const limit = parseInt(req.query.limit || '5', 10);
 
     const dataArray = Object.keys(metadata)
-        .sort() // Optional: remove `.sort()` if you want original order
         .map(filename => ({
             filename,
             ...metadata[filename]

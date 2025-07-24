@@ -1309,7 +1309,7 @@ async function renderIconsFromServer() {
             try {
                 const apiUrl = location.hostname === "localhost"
                 ? `http://localhost:3002/serve?name=${encodeURIComponent(icon.filename)}`
-                : `/serve&name=${encodeURIComponent(icon.filename)}`;
+                : `/api/iconsFetch?action=serve&name=${encodeURIComponent(icon.filename)}`;
                 
                 const response = await fetch(apiUrl);
                 if (!response.ok) {
@@ -1319,8 +1319,9 @@ async function renderIconsFromServer() {
 
                 const normalizedSVG = normalizeSVGSize(svgContent);
 
+                // Use normalizedSVG for display, not original svgContent
                 let svgIcon = `<div class="icons" data-url="${icon.filename}" data-svg="${encodeURIComponent(normalizedSVG)}">
-                   ${svgContent}
+                   ${normalizedSVG}
                 </div>`;
                 document.getElementById("iconsContainer").innerHTML += svgIcon;
             } catch (error) {
@@ -1336,7 +1337,7 @@ async function searchAndRenderIcons(query) {
     try {
         const apiUrl = location.hostname === "localhost"
         ? `http://localhost:3002/search?q=${encodeURIComponent(query)}`
-        : `/search&q=${encodeURIComponent(query)}`;
+        : `/api/iconsFetch?action=search&q=${encodeURIComponent(query)}`;
         
         const response = await fetch(apiUrl);
         if (!response.ok) {
@@ -1350,7 +1351,7 @@ async function searchAndRenderIcons(query) {
             try {
                 const serveApiUrl = location.hostname === "localhost"
                 ? `http://localhost:3002/serve?name=${encodeURIComponent(icon.filename)}`
-                : `/serve&name=${encodeURIComponent(icon.filename)}`;
+                : `/api/iconsFetch?action=serve&name=${encodeURIComponent(icon.filename)}`;
                 
                 const svgResponse = await fetch(serveApiUrl);
                 if (!svgResponse.ok) {
@@ -1360,6 +1361,7 @@ async function searchAndRenderIcons(query) {
 
                 const normalizedSVG = normalizeSVGSize(svgContent);
 
+                // Use normalizedSVG for display, not original svgContent
                 let svgIcon = `<div class="icons" data-url="${icon.filename}">
                    ${normalizedSVG}
                 </div>`;
@@ -1376,11 +1378,11 @@ async function searchAndRenderIcons(query) {
     }
 }
 
-function normalizeSVGSize(svgContent) {
+function normalizeSVGSize(svgContent, fillColor = '#fff', strokeColor = null) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = svgContent;
     const svgElement = tempDiv.querySelector('svg');
-
+    
     if (svgElement) {
         const originalViewBox = svgElement.getAttribute('viewBox');
         
@@ -1390,7 +1392,6 @@ function normalizeSVGSize(svgContent) {
         if (!originalViewBox) {
             const width = svgElement.getAttribute('width') || '24';
             const height = svgElement.getAttribute('height') || '24';
-            
             const numWidth = parseFloat(width);
             const numHeight = parseFloat(height);
             
@@ -1398,6 +1399,58 @@ function normalizeSVGSize(svgContent) {
                 svgElement.setAttribute('viewBox', `0 0 ${numWidth} ${numHeight}`);
             }
         }
+        
+        // Apply custom styling with more selective logic
+        const applyCustomStyling = (element) => {
+            if (element.nodeType === 1) {
+                const tagName = element.tagName.toLowerCase();
+                
+                // Only apply to shape elements, not container elements like 'g'
+                if (['path', 'circle', 'rect', 'polygon', 'ellipse', 'polyline', 'line'].includes(tagName)) {
+                    const currentFill = element.getAttribute('fill');
+                    const currentStroke = element.getAttribute('stroke');
+                    
+                    // Check if parent <g> has explicit colors - if so, don't override
+                    let parentG = element.parentElement;
+                    let hasParentColor = false;
+                    
+                    while (parentG && parentG.tagName.toLowerCase() === 'g') {
+                        if (parentG.getAttribute('fill') || parentG.getAttribute('stroke')) {
+                            hasParentColor = true;
+                            break;
+                        }
+                        parentG = parentG.parentElement;
+                    }
+                    
+                    // Only apply white fill if:
+                    // 1. Element doesn't have explicit 'none' fill
+                    // 2. Element doesn't already have a specific color (other than black/default)
+                    // 3. Parent <g> doesn't have explicit colors
+                    if (!hasParentColor && currentFill !== 'none') {
+                        // Only override if it's black, default, or unset
+                        if (!currentFill || currentFill === '#000' || currentFill === '#000000' || currentFill === 'black' || currentFill === 'currentColor') {
+                            element.setAttribute('fill', fillColor);
+                        }
+                    }
+                    
+                    // Handle stroke similarly
+                    if (strokeColor && !hasParentColor) {
+                        if (currentStroke && currentStroke !== 'none') {
+                            if (!currentStroke || currentStroke === '#000' || currentStroke === '#000000' || currentStroke === 'black' || currentStroke === 'currentColor') {
+                                element.setAttribute('stroke', strokeColor);
+                            }
+                        }
+                    }
+                }
+                
+                // Recursively process children
+                for (let i = 0; i < element.children.length; i++) {
+                    applyCustomStyling(element.children[i]);
+                }
+            }
+        };
+        
+        applyCustomStyling(svgElement);
         
         return svgElement.outerHTML;
     }
