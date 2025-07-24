@@ -1,13 +1,13 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
-const Fuse = require('fuse.js');
-const rateLimit = require('express-rate-limit');
+import express from 'express'
+import Fuse from 'fuse.js';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
+import fs from 'fs';
 
 const PORT = 3002;
-const ICONS_FOLDER = path.join(__dirname, 'icons');
-const METADATA_FILE = path.join(__dirname, 'icons.json');
+const ICONS_FOLDER = path.join('icons');
+const METADATA_FILE = path.join('icons.json');
 
 const app = express();
 app.use(cors());

@@ -1284,7 +1284,11 @@ document.addEventListener('keydown', (e) => {
 
 async function fetchIconsFromServer() {
     try {
-        const response = await fetch('http://localhost:3002/feed?offset=0&limit=20');
+        const apiUrl = location.hostname === "localhost"
+        ? "http://localhost:3002/feed?offset=0&limit=20"
+        : "/feed&offset=0&limit=20";
+        
+        const response = await fetch(apiUrl);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1303,7 +1307,11 @@ async function renderIconsFromServer() {
 
         for (const icon of icons) {
             try {
-                const response = await fetch('http://localhost:3002/serve?name=' + encodeURIComponent(icon.filename));
+                const apiUrl = location.hostname === "localhost"
+                ? `http://localhost:3002/serve?name=${encodeURIComponent(icon.filename)}`
+                : `/serve&name=${encodeURIComponent(icon.filename)}`;
+                
+                const response = await fetch(apiUrl);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -1311,7 +1319,7 @@ async function renderIconsFromServer() {
 
                 const normalizedSVG = normalizeSVGSize(svgContent);
 
-                let svgIcon = `<div class="icons" data-url="${icon.filename} data-svg="${encodeURIComponent(normalizedSVG)}">
+                let svgIcon = `<div class="icons" data-url="${icon.filename}" data-svg="${encodeURIComponent(normalizedSVG)}">
                    ${svgContent}
                 </div>`;
                 document.getElementById("iconsContainer").innerHTML += svgIcon;
@@ -1321,6 +1329,50 @@ async function renderIconsFromServer() {
         }
 
         addIconClickListeners();
+    }
+}
+
+async function searchAndRenderIcons(query) {
+    try {
+        const apiUrl = location.hostname === "localhost"
+        ? `http://localhost:3002/search?q=${encodeURIComponent(query)}`
+        : `/search&q=${encodeURIComponent(query)}`;
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const searchResults = await response.json();
+
+        document.getElementById("iconsContainer").innerHTML = '';
+
+        for (const icon of searchResults) {
+            try {
+                const serveApiUrl = location.hostname === "localhost"
+                ? `http://localhost:3002/serve?name=${encodeURIComponent(icon.filename)}`
+                : `/serve&name=${encodeURIComponent(icon.filename)}`;
+                
+                const svgResponse = await fetch(serveApiUrl);
+                if (!svgResponse.ok) {
+                    throw new Error(`HTTP error! status: ${svgResponse.status}`);
+                }
+                const svgContent = await svgResponse.text();
+
+                const normalizedSVG = normalizeSVGSize(svgContent);
+
+                let svgIcon = `<div class="icons" data-url="${icon.filename}">
+                   ${normalizedSVG}
+                </div>`;
+                document.getElementById("iconsContainer").innerHTML += svgIcon;
+            } catch (error) {
+                console.error('Failed to render search result:', icon.filename, error);
+            }
+        }
+
+        addIconClickListeners();
+
+    } catch (error) {
+        console.error('Failed to search icons:', error);
     }
 }
 
@@ -1401,41 +1453,7 @@ function handleIconClick(event, filename) {
     }
 }
 
-async function searchAndRenderIcons(query) {
-    try {
-        const response = await fetch(`http://localhost:3002/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const searchResults = await response.json();
 
-        document.getElementById("iconsContainer").innerHTML = '';
-
-        for (const icon of searchResults) {
-            try {
-                const svgResponse = await fetch('http://localhost:3002/serve?name=' + encodeURIComponent(icon.filename));
-                if (!svgResponse.ok) {
-                    throw new Error(`HTTP error! status: ${svgResponse.status}`);
-                }
-                const svgContent = await svgResponse.text();
-
-                const normalizedSVG = normalizeSVGSize(svgContent);
-
-                let svgIcon = `<div class="icons" data-url="${icon.filename}">
-                   ${normalizedSVG}
-                </div>`;
-                document.getElementById("iconsContainer").innerHTML += svgIcon;
-            } catch (error) {
-                console.error('Failed to render search result:', icon.filename, error);
-            }
-        }
-
-        addIconClickListeners();
-
-    } catch (error) {
-        console.error('Failed to search icons:', error);
-    }
-}
 
 renderIconsFromServer()
 export { handleMouseDownIcon, handleMouseMoveIcon, handleMouseUpIcon, startDrag, stopDrag}
