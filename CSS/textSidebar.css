@@ -24,7 +24,7 @@
     width: 250px;
     border-top-right-radius: 25px;
     border-bottom-right-radius: 25px;
-    height: 55%;
+    height: 65%;
     background-color: #232329;
     overflow-x: hidden;
     overflow-y: auto;
@@ -49,7 +49,8 @@
 .textColorLabel,
 .textFontLabel,
 .textSizeLabel,
-.textAlignLabel
+.textAlignLabel,
+.textCodeLabel
 {
     color: #fff;
     font-size: 20px;
@@ -62,7 +63,8 @@
 .textColor,
 .textFont,
 .textSize,
-.textAlign
+.textAlign,
+.textCode
 {
     position: relative;
     top: 10px;
@@ -107,7 +109,8 @@
 
 .textFont span,
 .textSize span,
-.textAlign span
+.textAlign span,
+.textCode span
 {
     width: 35px;
     height: 35px;
@@ -127,7 +130,8 @@
 }
 .textFont span.selected,
 .textSize span.selected,
-.textAlign span.selected
+.textAlign span.selected,
+.textCode span.selected
 {
     background: #444480;
     border: 2px solid #3c09d6;
@@ -137,10 +141,43 @@
 
 .textFont span svg,
 .textSize span svg,
-.textAlign span svg
+.textAlign span svg,
+.textCode span svg
 {
     width: 30px;
     height: 30px;
     stroke: #fff;
     transition: 0.25s;
+}
+
+
+
+.syntax-highlight-overlay pre {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    white-space: inherit;
+    word-wrap: inherit;
+}
+
+.syntax-highlight-overlay code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+/* Hide scrollbars for text editor */
+.svg-text-editor::-webkit-scrollbar {
+    display: none;
+}
+
+.svg-text-editor {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }

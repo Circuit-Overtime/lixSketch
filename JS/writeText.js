@@ -14,11 +14,13 @@ let textSize = "30px";
 let textFont = "lixFont";
 let textColor = "#fff";
 let textAlign = "left";
+let isCodeblock = true;
 
 let textColorOptions = document.querySelectorAll(".textColorSpan");
 let textFontOptions = document.querySelectorAll(".textFontSpan");
 let textSizeOptions = document.querySelectorAll(".textSizeSpan");
 let textAlignOptions = document.querySelectorAll(".textAlignSpan");
+let textCodeOptions = document.querySelectorAll(".textCodeSpan");
 
 let selectedElement = null;
 let selectionBox = null;
@@ -288,22 +290,24 @@ function addText(event) {
 
     textElement.setAttribute("x", 0);
     textElement.setAttribute("y", 0);
-    textElement.setAttribute("fill", textColor);
-    textElement.setAttribute("font-size", textSize);
-    textElement.setAttribute("font-family", textFont);
+    textElement.setAttribute("fill", isCodeblock ? "#c9d1d9" : textColor);
+    textElement.setAttribute("font-size", isCodeblock ? "14px" : textSize);
+    textElement.setAttribute("font-family", isCodeblock ? "lixCode" : textFont);
     textElement.setAttribute("text-anchor", textAlignElement);
     textElement.setAttribute("cursor", "text");
     textElement.setAttribute("white-space", "pre");
+    textElement.setAttribute("data-code-mode", isCodeblock);
     textElement.setAttribute("dominant-baseline", "hanging");
     textElement.textContent = "";
-
+    
     gElement.setAttribute("data-x", x);
     gElement.setAttribute("data-y", y);
-    textElement.setAttribute("data-initial-size", textSize);
-    textElement.setAttribute("data-initial-font", textFont);
-    textElement.setAttribute("data-initial-color", textColor);
+    textElement.setAttribute("data-initial-size", isCodeblock ? "14px" : textSize);
+    textElement.setAttribute("data-initial-font", isCodeblock ? "lixCode" : textFont);
+    textElement.setAttribute("data-initial-color", isCodeblock ? "#c9d1d9" : textColor);
     textElement.setAttribute("data-initial-align", textAlign);
     textElement.setAttribute("data-type", "text");
+    
     gElement.appendChild(textElement);
     svg.appendChild(gElement);
     
@@ -341,36 +345,31 @@ function makeTextEditable(textElement, groupElement) {
         deselectElement();
     }
 
+    // Check if this text element is in code mode
+    const isTextCodeMode = textElement.getAttribute('data-code-mode') === 'true';
+
     let input = document.createElement("textarea");
     input.className = "svg-text-editor";
 
+    // Get text content from existing tspans
     let textContent = "";
     const tspans = textElement.querySelectorAll('tspan');
     if (tspans.length > 0) {
         tspans.forEach((tspan, index) => {
-            textContent += tspan.textContent.replace(/ /g, '\u00A0');
+            textContent += tspan.textContent;
             if (index < tspans.length - 1) {
                 textContent += "\n";
             }
         });
     } else {
-        textContent = textElement.textContent.replace(/ /g, '\u00A0');
+        textContent = textElement.textContent;
     }
 
     input.value = textContent;
-    input.style.position = "absolute";
-    input.style.outline = "none";
-    input.style.padding = "1px";
-    input.style.margin = "0";
-    input.style.boxSizing = "border-box";
-    input.style.overflow = "hidden";
-    input.style.resize = "none";
-    input.style.whiteSpace = "pre-wrap";
-    input.style.minHeight = "1.2em";
-    input.style.zIndex = "10000";
 
+    // Get positioning and sizing info
     const svgRect = svg.getBoundingClientRect();
-
+    
     let groupTransformMatrix = svg.createSVGMatrix();
     if (groupElement && groupElement.transform && groupElement.transform.baseVal) {
         const transformList = groupElement.transform.baseVal;
@@ -378,78 +377,232 @@ function makeTextEditable(textElement, groupElement) {
             const consolidatedTransform = transformList.consolidate();
             if (consolidatedTransform) {
                 groupTransformMatrix = consolidatedTransform.matrix;
-            } else {
-                console.warn("Could not consolidate transform for group:", groupElement);
-                try {
-                    if (transformList.length > 0) {
-                       groupTransformMatrix = transformList.getItem(0).matrix;
-                    }
-                } catch (err) {
-                    console.error("Failed to get any transform matrix.", err);
-                }
             }
-        } else {
-            console.warn("Group element transform list is empty:", groupElement);
         }
-    } else {
-         console.warn("Group element, transform, or baseVal is missing or invalid:", groupElement);
     }
 
     const textBBox = textElement.getBBox();
-
     let pt = svg.createSVGPoint();
     pt.x = textBBox.x;
     pt.y = textBBox.y;
-
     let screenPt = pt.matrixTransform(groupTransformMatrix.multiply(svg.getScreenCTM()));
 
-    input.style.left = `${screenPt.x + svgRect.left}px`;
-    input.style.top = `${screenPt.y + svgRect.top}px`;
-
-    const svgZoomFactor = svg.getScreenCTM() ? svg.getScreenCTM().a : 1;
-    const screenWidth = textBBox.width * svgZoomFactor;
-
-    input.style.width = `${Math.max(screenWidth + 30, 100)}px`;
-    input.style.height = "auto";
-
+    // Get current text properties
     const currentFontSize = textElement.getAttribute("font-size") || "30px";
     const currentFontFamily = textElement.getAttribute("font-family") || "lixFont";
     const currentFill = textElement.getAttribute("fill") || "#fff";
     const currentAnchor = textElement.getAttribute("text-anchor") || "start";
-    input.style.width = "auto";
-    input.style.height = "auto";
-    input.style.overflow = "visible";
-    input.style.whiteSpace = "nowrap";
-    input.style.fontSize = currentFontSize;
-    input.style.fontFamily = currentFontFamily;
-    input.style.color = currentFill;
-    input.style.lineHeight = "1.2em";
-    input.style.textAlign = currentAnchor === "middle" ? "center" : currentAnchor === "end" ? "right" : "left";
-    input.style.backgroundColor = "transparent";
-    input.style.border = "none"
-    input.style.outline = "none"
-    document.body.appendChild(input);
 
-    const adjustHeight = () => {
-        input.style.height = 'auto';
-        input.style.height = input.scrollHeight + 'px';
-        const maxHeight = svgRect.height - (screenPt.y);
-        if (input.scrollHeight > maxHeight) {
-            input.style.height = maxHeight + 'px';
-            input.style.overflowY = 'auto';
-        } else {
-            input.style.overflowY = 'hidden';
+    // Apply base styles
+    input.style.position = "absolute";
+    input.style.outline = "none";
+    input.style.margin = "0";
+    input.style.boxSizing = "border-box";
+    input.style.resize = "none";
+    input.style.whiteSpace = "pre";  // Prevent wrapping
+    input.style.wordWrap = "normal";  // Prevent word breaking
+    input.style.overflow = "visible";  // Allow content to be visible
+    input.style.zIndex = "10000";
+    input.style.border = "none";
+    
+    // Apply code mode specific styles
+    if (isTextCodeMode) {
+        input.style.fontFamily = "lixCode, monospace";
+        input.style.fontSize = currentFontSize;
+        input.style.lineHeight = "1.2em";
+        input.style.background = "#0d1117";
+        input.style.color = "#c9d1d9";
+        input.style.border = "1px solid #30363d";
+        input.style.borderRadius = "6px";
+        input.style.padding = "8px";
+        
+        // Create highlighted display overlay for code mode
+        const highlightOverlay = document.createElement("div");
+        highlightOverlay.className = "syntax-highlight-overlay";
+        highlightOverlay.style.cssText = `
+            position: absolute;
+            padding: 8px;
+            margin: 0;
+            box-sizing: border-box;
+            font-family: lixCode, monospace;
+            font-size: ${currentFontSize};
+            line-height: 1.2em;
+            white-space: pre;
+            word-wrap: normal;
+            overflow: visible;
+            pointer-events: none;
+            z-index: 9999;
+            background: transparent;
+            border-radius: 6px;
+            border: 1px solid transparent;
+        `;
+        
+        // Function to update syntax highlighting
+        const updateHighlighting = () => {
+            const code = input.value;
+            if (code.trim()) {
+                try {
+                    const result = hljs.highlightAuto(code);
+                    highlightOverlay.innerHTML = `<pre style="margin:0;padding:0;background:transparent;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;word-wrap:inherit;"><code class="hljs" style="background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;">${result.value}</code></pre>`;
+                    console.log("Detected language:", result.language);
+                } catch (error) {
+                    console.error("Highlighting error:", error);
+                    highlightOverlay.innerHTML = `<pre style="margin:0;padding:0;background:transparent;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;word-wrap:inherit;"><code style="background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;">${code}</code></pre>`;
+                }
+            } else {
+                highlightOverlay.innerHTML = "";
+            }
+        };
+
+        // Sync scrolling and sizing
+        const syncOverlay = () => {
+            highlightOverlay.scrollTop = input.scrollTop;
+            highlightOverlay.scrollLeft = input.scrollLeft;
+            highlightOverlay.style.width = input.style.width;
+            highlightOverlay.style.height = input.style.height;
+            highlightOverlay.style.left = input.style.left;
+            highlightOverlay.style.top = input.style.top;
+        };
+
+        input.addEventListener('input', () => {
+            updateHighlighting();
+            syncOverlay();
+        });
+        input.addEventListener('scroll', syncOverlay);
+        
+        document.body.appendChild(highlightOverlay);
+        
+        // Store reference for cleanup
+        input.highlightOverlay = highlightOverlay;
+        
+        // Initial highlighting will be done after sizing
+    } else {
+        // Normal text mode styles
+        input.style.fontFamily = currentFontFamily;
+        input.style.fontSize = currentFontSize;
+        input.style.color = currentFill;
+        input.style.lineHeight = "1.2em";
+        input.style.backgroundColor = "transparent";
+        input.style.padding = "2px";
+        input.style.textAlign = currentAnchor === "middle" ? "center" : currentAnchor === "end" ? "right" : "left";
+    }
+
+    // Advanced auto-sizing function that prevents wrapping
+    const calculateOptimalSize = () => {
+        // Create a temporary element to measure text size
+        const tempDiv = document.createElement('div');
+        tempDiv.style.cssText = `
+            position: absolute;
+            visibility: hidden;
+            white-space: pre;
+            word-wrap: normal;
+            font-family: ${input.style.fontFamily};
+            font-size: ${input.style.fontSize};
+            line-height: ${input.style.lineHeight};
+            padding: ${input.style.padding};
+            border: ${input.style.border};
+            box-sizing: ${input.style.boxSizing};
+            border-radius: ${input.style.borderRadius};
+        `;
+        
+        const content = input.value || 'M'; // Use 'M' as minimum size reference
+        const lines = content.split('\n');
+        
+        // Calculate width based on longest line
+        let maxWidth = 0;
+        lines.forEach(line => {
+            tempDiv.textContent = line || 'M'; // Ensure non-empty line for measurement
+            document.body.appendChild(tempDiv);
+            maxWidth = Math.max(maxWidth, tempDiv.offsetWidth);
+            document.body.removeChild(tempDiv);
+        });
+        
+        // Calculate height based on number of lines
+        tempDiv.textContent = content || 'M';
+        document.body.appendChild(tempDiv);
+        const singleLineHeight = tempDiv.offsetHeight;
+        const totalHeight = Math.max(singleLineHeight, lines.length * (singleLineHeight / Math.max(lines.length, 1)));
+        document.body.removeChild(tempDiv);
+        
+        // Add some minimum size constraints
+        const minWidth = isTextCodeMode ? 100 : 50;
+        const minHeight = isTextCodeMode ? 40 : 20;
+        
+        // For code mode, add extra width to prevent horizontal scrolling
+        const finalWidth = Math.max(maxWidth + (isTextCodeMode ? 20 : 10), minWidth);
+        const finalHeight = Math.max(totalHeight, minHeight);
+        
+        return { width: finalWidth, height: finalHeight };
+    };
+
+    // Function to apply the calculated size
+    const adjustSize = () => {
+        const { width, height } = calculateOptimalSize();
+        
+        input.style.width = `${width}px`;
+        input.style.height = `${height}px`;
+        
+        // Update highlight overlay size and position if in code mode
+        if (isTextCodeMode && input.highlightOverlay) {
+            input.highlightOverlay.style.width = input.style.width;
+            input.highlightOverlay.style.height = input.style.height;
+            input.highlightOverlay.style.left = input.style.left;
+            input.highlightOverlay.style.top = input.style.top;
         }
     };
-    adjustHeight();
+
+    // Position textarea after calculating size
+    const positionAndSize = () => {
+        // First calculate the size
+        adjustSize();
+        
+        // Then position it
+        input.style.left = `${screenPt.x + svgRect.left}px`;
+        input.style.top = `${screenPt.y + svgRect.top}px`;
+        
+        // Update highlight overlay position if in code mode
+        if (isTextCodeMode && input.highlightOverlay) {
+            input.highlightOverlay.style.left = input.style.left;
+            input.highlightOverlay.style.top = input.style.top;
+            
+            // Now do initial highlighting
+            const updateHighlighting = () => {
+                const code = input.value;
+                if (code.trim()) {
+                    try {
+                        const result = hljs.highlightAuto(code);
+                        input.highlightOverlay.innerHTML = `<pre style="margin:0;padding:0;background:transparent;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;word-wrap:inherit;"><code class="hljs" style="background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;">${result.value}</code></pre>`;
+                        console.log("Detected language:", result.language);
+                    } catch (error) {
+                        console.error("Highlighting error:", error);
+                        input.highlightOverlay.innerHTML = `<pre style="margin:0;padding:0;background:transparent;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;word-wrap:inherit;"><code style="background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;">${code}</code></pre>`;
+                    }
+                } else {
+                    input.highlightOverlay.innerHTML = "";
+                }
+            };
+            updateHighlighting();
+        }
+    };
+
+    document.body.appendChild(input);
+
+    // Initial positioning and sizing
+    positionAndSize();
 
     setTimeout(() => {
         input.focus();
         input.select();
     }, 50);
 
-    input.addEventListener('input', adjustHeight);
+    // Update size on input, but debounce it for performance
+    let resizeTimeout;
+    input.addEventListener('input', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(adjustSize, 100);
+    });
 
+    // Event handlers
     input.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -458,13 +611,14 @@ function makeTextEditable(textElement, groupElement) {
             e.preventDefault();
             renderText(input, textElement, true);
         }
+        
     });
 
     input.originalTextElement = textElement;
     input.textGroup = groupElement;
 
     const handleClickOutside = (event) => {
-        if (!input.contains(event.target)) {
+        if (!input.contains(event.target) && (!input.highlightOverlay || !input.highlightOverlay.contains(event.target))) {
             renderText(input, textElement, true);
             document.removeEventListener('mousedown', handleClickOutside, true);
         }
@@ -488,6 +642,11 @@ function renderText(input, textElement, deleteIfEmpty = false) {
         document.removeEventListener('mousedown', input.handleClickOutside, true);
     }
 
+    // Clean up highlight overlay if it exists
+    if (input.highlightOverlay && document.body.contains(input.highlightOverlay)) {
+        document.body.removeChild(input.highlightOverlay);
+    }
+
     document.body.removeChild(input);
 
     if (!gElement || !textElement) {
@@ -504,7 +663,6 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     }
 
     if (deleteIfEmpty && text.trim() === "") {
-        // Find the TextShape wrapper
         let textShape = null;
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === gElement);
@@ -514,14 +672,12 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             }
         }
 
-        // Use enhanced delete action for text with arrow attachments
         pushDeleteActionWithAttachments({
             type: 'text',
             element: textShape || gElement,
             shapeName: 'text'
         });
 
-        // Clean up any arrow attachments before deleting
         if (typeof cleanupAttachments === 'function') {
             cleanupAttachments(gElement);
         }
@@ -532,23 +688,36 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             removeSelectionFeedback();
         }
     } else {
+        // Clear existing content
         while (textElement.firstChild) {
             textElement.removeChild(textElement.firstChild);
         }
 
+        const isTextCodeMode = textElement.getAttribute('data-code-mode') === 'true';
         const lines = text.split("\n");
         const x = textElement.getAttribute("x") || 0;
 
-        lines.forEach((line, index) => {
-            let tspan = document.createElementNS(
-                "http://www.w3.org/2000/svg",
-                "tspan"
-            );
-            tspan.setAttribute("x", x);
-            tspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
-            tspan.textContent = line.replace(/\u00A0/g, ' ') || " ";
-            textElement.appendChild(tspan);
-        });
+        if (isTextCodeMode) {
+            // Apply code font
+            textElement.setAttribute('font-family', 'lixCode');
+            
+            // Apply syntax highlighting to the text
+            try {
+                const result = hljs.highlightAuto(text);
+                console.log("Rendering with syntax highlighting, detected language:", result.language);
+                
+                // Create highlighted HTML structure and convert to SVG tspans
+                renderHighlightedCode(textElement, result.value, x);
+                
+            } catch (error) {
+                console.error("Error applying syntax highlighting:", error);
+                // Fallback to plain text rendering
+                renderPlainText(textElement, lines, x);
+            }
+        } else {
+            // Normal text rendering
+            renderPlainText(textElement, lines, x);
+        }
 
         gElement.style.display = 'block';
 
@@ -566,6 +735,126 @@ function renderText(input, textElement, deleteIfEmpty = false) {
         deselectElement();
     }
 }
+
+// Helper function to render plain text
+function renderPlainText(textElement, lines, x) {
+    lines.forEach((line, index) => {
+        let tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        tspan.setAttribute("x", x);
+        tspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
+        tspan.textContent = line.replace(/\u00A0/g, ' ') || " ";
+        textElement.appendChild(tspan);
+    });
+}
+
+
+// Helper function to render highlighted code
+function renderHighlightedCode(textElement, highlightedHTML, x) {
+    // Parse the highlighted HTML and convert to SVG tspans with colors
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = highlightedHTML;
+    
+    // Extract text content with color information
+    const coloredSegments = extractColoredSegments(tempDiv);
+    
+    let currentLine = 0;
+    let isFirstSegmentInLine = true;
+    
+    coloredSegments.forEach((segment, index) => {
+        if (segment.text === '\n') {
+            currentLine++;
+            isFirstSegmentInLine = true;
+            return;
+        }
+        
+        if (segment.text.trim() === '' && segment.text !== ' ') return;
+        
+        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        
+        // Position the tspan
+        if (isFirstSegmentInLine) {
+            tspan.setAttribute("x", x);
+            tspan.setAttribute("dy", currentLine === 0 ? "0" : "1.2em");
+            isFirstSegmentInLine = false;
+        }
+        
+        // Apply syntax highlighting color
+        if (segment.color) {
+            tspan.setAttribute("fill", segment.color);
+        } else {
+            tspan.setAttribute("fill", "#c9d1d9"); // Default code text color
+        }
+        
+        // Apply text content
+        tspan.textContent = segment.text;
+        
+        textElement.appendChild(tspan);
+    });
+}
+
+// Helper function to extract colored text segments from highlighted HTML
+function extractColoredSegments(element) {
+    const segments = [];
+    const colorMap = {
+        'hljs-keyword': '#ff7b72',      // Keywords (red)
+        'hljs-string': '#a5d6ff',       // Strings (light blue)
+        'hljs-comment': '#8b949e',      // Comments (gray)
+        'hljs-number': '#79c0ff',       // Numbers (blue)
+        'hljs-function': '#d2a8ff',     // Functions (purple)
+        'hljs-variable': '#ffa657',     // Variables (orange)
+        'hljs-built_in': '#ffa657',     // Built-ins (orange)
+        'hljs-type': '#ff7b72',         // Types (red)
+        'hljs-class': '#f0883e',        // Classes (orange)
+        'hljs-tag': '#7ee787',          // HTML tags (green)
+        'hljs-attr': '#79c0ff',         // Attributes (blue)
+        'hljs-literal': '#79c0ff',      // Literals (blue)
+        'hljs-operator': '#f85149',     // Operators (red)
+        'hljs-punctuation': '#c9d1d9',  // Punctuation (light gray)
+        'hljs-title': '#d2a8ff',        // Function/method names (purple)
+        'hljs-params': '#ffa657',       // Parameters (orange)
+        'hljs-property': '#79c0ff',     // Properties (blue)
+        'hljs-regexp': '#7ee787'        // Regular expressions (green)
+    };
+    
+    function traverse(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const text = node.textContent;
+            if (text) {
+                // Handle newlines explicitly
+                const parts = text.split('\n');
+                parts.forEach((part, partIndex) => {
+                    if (partIndex > 0) {
+                        segments.push({ text: '\n', color: null, newLine: true });
+                    }
+                    if (part.length > 0) {
+                        const parentClass = node.parentElement?.className || '';
+                        const color = getColorFromClass(parentClass, colorMap);
+                        segments.push({ text: part, color: color, newLine: false });
+                    }
+                });
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            for (let child of node.childNodes) {
+                traverse(child);
+            }
+        }
+    }
+    
+    traverse(element);
+    return segments;
+}
+
+
+// Helper function to get color from CSS class
+function getColorFromClass(className, colorMap) {
+    for (const [cls, color] of Object.entries(colorMap)) {
+        if (className.includes(cls)) {
+            return color;
+        }
+    }
+    return '#c9d1d9'; // Default color (light gray)
+}
+
 
 function createSelectionFeedback(groupElement) {
     if (!groupElement) return;
@@ -791,6 +1080,18 @@ function removeSelectionFeedback() {
 function selectElement(groupElement) {
     if (!groupElement || !groupElement.parentNode) return;
     if (groupElement === selectedElement) return;
+
+    const textElement = groupElement.querySelector('text');
+    if (textElement) {
+        const storedCodeMode = textElement.getAttribute('data-code-mode') === 'true';
+        if (storedCodeMode !== isCodeblock) {
+            isCodeblock = storedCodeMode;
+            // Update UI to reflect the code mode
+            textCodeOptions.forEach(el => el.classList.remove("selected"));
+            const targetOption = document.querySelector(`.textCodeSpan[data-id="${isCodeblock}"]`);
+            if (targetOption) targetOption.classList.add("selected");
+        }
+    }
 
     deselectElement();
     selectedElement = groupElement;
@@ -1614,5 +1915,97 @@ textAlignOptions.forEach((span) => {
     });
 });
 
+
+textCodeOptions.forEach((span) => {
+    span.addEventListener("click", (event) => {
+        event.stopPropagation();
+        textCodeOptions.forEach((el) => el.classList.remove("selected"));
+        span.classList.add("selected");
+
+        const newCodeMode = span.getAttribute("data-id") === "true";
+        const oldCodeMode = isCodeblock;
+        isCodeblock = newCodeMode;
+        console.log("Set Code Mode:", isCodeblock);
+
+        if (selectedElement) {
+            const textElement = selectedElement.querySelector('text');
+            if (textElement) {
+                const oldFont = textElement.getAttribute('font-family');
+                const newFont = newCodeMode ? 'lixCode' : textFont;
+                
+                // Store code mode in element attribute
+                textElement.setAttribute('data-code-mode', isCodeblock);
+                textElement.setAttribute('font-family', newFont);
+                
+                // Re-render the text with new formatting
+                const currentContent = extractTextContent(textElement);
+                if (currentContent.trim()) {
+                    // Clear existing content
+                    while (textElement.firstChild) {
+                        textElement.removeChild(textElement.firstChild);
+                    }
+                    
+                    // Re-render with new mode
+                    const lines = currentContent.split("\n");
+                    const x = textElement.getAttribute("x") || 0;
+                    
+                    if (newCodeMode) {
+                        try {
+                            const result = hljs.highlightAuto(currentContent);
+                            renderHighlightedCode(textElement, result.value, x);
+                        } catch (error) {
+                            console.error("Error applying syntax highlighting:", error);
+                            renderPlainText(textElement, lines, x);
+                        }
+                    } else {
+                        renderPlainText(textElement, lines, x);
+                    }
+                }
+                
+                // Push options change for undo/redo
+                pushOptionsChangeAction(
+                    {
+                        type: 'text',
+                        element: selectedElement,
+                        shapeName: 'text'
+                    },
+                    {
+                        color: textElement.getAttribute('fill'),
+                        font: oldFont,
+                        size: textElement.getAttribute('font-size'),
+                        align: textElement.getAttribute('text-anchor'),
+                        codeMode: oldCodeMode
+                    },
+                    {
+                        color: textElement.getAttribute('fill'),
+                        font: newFont,
+                        size: textElement.getAttribute('font-size'),
+                        align: textElement.getAttribute('text-anchor'),
+                        codeMode: newCodeMode
+                    }
+                );
+                
+                setTimeout(updateSelectionFeedback, 0);
+            }
+        }
+    });
+});
+
+// Helper function to extract text content from SVG text element
+function extractTextContent(textElement) {
+    let content = "";
+    const tspans = textElement.querySelectorAll('tspan');
+    if (tspans.length > 0) {
+        tspans.forEach((tspan, index) => {
+            content += tspan.textContent;
+            if (index < tspans.length - 1) {
+                content += "\n";
+            }
+        });
+    } else {
+        content = textElement.textContent;
+    }
+    return content;
+}
 
 export { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp };

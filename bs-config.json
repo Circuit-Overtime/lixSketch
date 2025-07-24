@@ -16,5 +16,14 @@
         "handle": "historyApiFallback"
       }
     }
-  }
+  },
+  "files": [
+    "**/*.css",
+    "**/*.html",
+    "**/*.js"
+  ],
+  "injectChanges": true,
+  "reloadOnRestart": true,
+  "notify": false,
+  "open": false
 }
