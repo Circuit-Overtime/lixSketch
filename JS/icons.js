@@ -5,12 +5,12 @@ let isDraggingIcon = false;
 let iconToPlace = null;
 let iconX = 0;
 let iconY = 0;
-let scaleFactor = 0.2; 
-let currentIconElement = null; 
+let scaleFactor = 0.2;
+let currentIconElement = null;
 
 let selectedIcon = null;
 let originalX, originalY, originalWidth, originalHeight;
-let currentAnchor = null; 
+let currentAnchor = null;
 let isDragging = false;
 let isRotatingIcon = false;
 let dragOffsetX, dragOffsetY;
@@ -18,9 +18,9 @@ let startRotationMouseAngle = null;
 let startIconRotation = null;
 let iconRotation = 0;
 let aspect_ratio_lock = true;
-const minIconSize = 20; 
-
-// Frame attachment variables
+const minIconSize = 24;
+const miniatureSize = 24;
+const placedIconSize = 24;
 let draggedShapeInitialFrameIcon = null;
 let hoveredFrameIcon = null;
 
@@ -31,131 +31,115 @@ function getSVGElement() {
     return document.getElementById('freehand-canvas');
 }
 
-// Icon class to make it consistent with other shapes
 class IconShape {
     constructor(element) {
         this.element = element;
         this.shapeName = 'icon';
         this.shapeID = element.shapeID || `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
-        this.type = 'icon'; 
-        
-        // Frame attachment properties
+        this.type = 'icon';
+
         this.parentFrame = null;
         this.isDraggedOutTemporarily = false;
-        
-        // Update element attributes
+
         this.element.setAttribute('type', 'icon');
         this.element.shapeID = this.shapeID;
-        
-        // Use the existing group or element as the group
+
         this.group = this.element;
         this.group.setAttribute('id', this.shapeID);
     }
-    
-    // ...existing code...
+
     get x() {
         return parseFloat(this.element.getAttribute('x')) || 0;
     }
-    
+
     set x(value) {
         this.element.setAttribute('x', value);
         this.element.setAttribute('data-shape-x', value);
     }
-    
+
     get y() {
         return parseFloat(this.element.getAttribute('y')) || 0;
     }
-    
+
     set y(value) {
         this.element.setAttribute('y', value);
         this.element.setAttribute('data-shape-y', value);
     }
-    
+
     get width() {
         return parseFloat(this.element.getAttribute('width')) || 100;
     }
-    
+
     set width(value) {
         this.element.setAttribute('width', value);
         this.element.setAttribute('data-shape-width', value);
     }
-    
+
     get height() {
         return parseFloat(this.element.getAttribute('height')) || 100;
     }
-    
+
     set height(value) {
         this.element.setAttribute('height', value);
         this.element.setAttribute('data-shape-height', value);
     }
-    
-    get rotation() {
-    const dataRotation = this.element.getAttribute('data-shape-rotation');
-    if (dataRotation) {
-        return parseFloat(dataRotation);
-    }
-    
-    const transform = this.element.getAttribute('transform');
-    if (transform) {
-        const rotateMatch = transform.match(/rotate\(([^,\s]+)/);
-        if (rotateMatch) {
-            return parseFloat(rotateMatch[1]);
-        }
-    }
-    return 0;
-}
 
-set rotation(value) {
-    // Update the data attribute for consistency
-    this.element.setAttribute('data-shape-rotation', value);
-    
-    // Update the full transform
-    const scale = this.width / 24;
-    const localCenterX = this.width / 2 / scale;
-    const localCenterY = this.height / 2 / scale;
-    
-    this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${value}, ${localCenterX}, ${localCenterY})`);
-}
-    
+    get rotation() {
+        const dataRotation = this.element.getAttribute('data-shape-rotation');
+        if (dataRotation) {
+            return parseFloat(dataRotation);
+        }
+
+        const transform = this.element.getAttribute('transform');
+        if (transform) {
+            const rotateMatch = transform.match(/rotate\(([^,\s]+)/);
+            if (rotateMatch) {
+                return parseFloat(rotateMatch[1]);
+            }
+        }
+        return 0;
+    }
+
+    set rotation(value) {
+        this.element.setAttribute('data-shape-rotation', value);
+
+        const scale = this.width / 24;
+        const localCenterX = this.width / 2 / scale;
+        const localCenterY = this.height / 2 / scale;
+
+        this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${value}, ${localCenterX}, ${localCenterY})`);
+    }
+
 
     move(dx, dy) {
         this.x += dx;
         this.y += dy;
-        
-        // Update the transform for the icon
+
         const scale = this.width / 24;
         const localCenterX = this.width / 2 / scale;
         const localCenterY = this.height / 2 / scale;
-        
-        // Use the correct transform format with translate, scale, and rotate
+
         this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${this.rotation}, ${localCenterX}, ${localCenterY})`);
-        
-        // Update the element's x and y attributes to match the internal properties
+
         this.element.setAttribute('x', this.x);
         this.element.setAttribute('y', this.y);
-        
-        // Update data attributes for arrow attachment
+
         this.element.setAttribute('data-shape-x', this.x);
         this.element.setAttribute('data-shape-y', this.y);
-        
-        // Update attached arrows
+
         if (typeof updateAttachedArrows === 'function') {
             updateAttachedArrows(this.element);
         }
-        
-        // Only update frame containment if we're actively dragging the shape itself
-        // and not being moved by a parent frame
+
         if (isDragging && !this.isBeingMovedByFrame) {
             this.updateFrameContainment();
         }
     }
     updateFrameContainment() {
-        // Don't update if we're being moved by a frame
         if (this.isBeingMovedByFrame) return;
-        
+
         let targetFrame = null;
-        
-        // Find which frame this shape is over
+
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             shapes.forEach(shape => {
                 if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
@@ -163,21 +147,19 @@ set rotation(value) {
                 }
             });
         }
-        
-        // If we have a parent frame and we're being dragged, temporarily remove clipping
+
         if (this.parentFrame && isDragging) {
             this.parentFrame.temporarilyRemoveFromFrame(this);
         }
-        
-        // Update frame highlighting
+
         if (hoveredFrameIcon && hoveredFrameIcon !== targetFrame) {
             hoveredFrameIcon.removeHighlight();
         }
-        
+
         if (targetFrame && targetFrame !== hoveredFrameIcon) {
             targetFrame.highlightFrame();
         }
-        
+
         hoveredFrameIcon = targetFrame;
     }
 
@@ -186,26 +168,23 @@ set rotation(value) {
         const iconY = this.y;
         const iconWidth = this.width;
         const iconHeight = this.height;
-        
+
         return x >= iconX && x <= iconX + iconWidth && y >= iconY && y <= iconY + iconHeight;
     }
 
-draw() {
-        // Update the transform based on current properties
+    draw() {
         const scale = this.width / 24;
         const localCenterX = this.width / 2 / scale;
         const localCenterY = this.height / 2 / scale;
-        
+
         this.element.setAttribute('transform', `translate(${this.x}, ${this.y}) scale(${scale}) rotate(${this.rotation}, ${localCenterX}, ${localCenterY})`);
-        
-        // Update data attributes for arrow attachment
+
         this.element.setAttribute('data-shape-x', this.x);
         this.element.setAttribute('data-shape-y', this.y);
         this.element.setAttribute('data-shape-width', this.width);
         this.element.setAttribute('data-shape-height', this.height);
         this.element.setAttribute('data-shape-rotation', this.rotation);
-        
-        // Update attached arrows
+
         if (typeof updateAttachedArrows === 'function') {
             updateAttachedArrows(this.element);
         }
@@ -219,101 +198,85 @@ draw() {
         selectIcon({ target: this.element, stopPropagation: () => {} });
     }
 
-remove() {
-    // Remove from shapes array
-    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-        const idx = shapes.indexOf(this);
-        if (idx !== -1) shapes.splice(idx, 1);
-    }
-    
-    // Clean up arrow attachments
-    if (typeof cleanupAttachments === 'function') {
-        cleanupAttachments(this.element);
-    }
-    
-    // Remove from parent frame if attached
-    if (this.parentFrame) {
-        this.parentFrame.removeShapeFromFrame(this);
-    }
-    
-    // Remove the group (which contains the icon element)
-    if (this.group && this.group.parentNode) {
-        this.group.parentNode.removeChild(this.group);
-    }
-}
-    restore(pos) {
-    const svg = getSVGElement();
-    
-    // Add back to DOM if not present
-    if (!this.group.parentNode && svg) {
-        svg.appendChild(this.group);
-    }
-    
-    // Add back to shapes array if not present
-    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-        if (shapes.indexOf(this) === -1) {
-            shapes.push(this);
+    remove() {
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            const idx = shapes.indexOf(this);
+            if (idx !== -1) shapes.splice(idx, 1);
+        }
+
+        if (typeof cleanupAttachments === 'function') {
+            cleanupAttachments(this.element);
+        }
+
+        if (this.parentFrame) {
+            this.parentFrame.removeShapeFromFrame(this);
+        }
+
+        if (this.group && this.group.parentNode) {
+            this.group.parentNode.removeChild(this.group);
         }
     }
-    
-    // Restore position and dimensions
-    this.x = pos.x;
-    this.y = pos.y;
-    this.width = pos.width;
-    this.height = pos.height;
-    this.rotation = pos.rotation;
-    
-    // Restore frame attachment if present
-    if (pos.parentFrame) {
-        this.parentFrame = pos.parentFrame;
-        pos.parentFrame.addShapeToFrame(this);
+    restore(pos) {
+        const svg = getSVGElement();
+
+        if (!this.group.parentNode && svg) {
+            svg.appendChild(this.group);
+        }
+
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            if (shapes.indexOf(this) === -1) {
+                shapes.push(this);
+            }
+        }
+
+        this.x = pos.x;
+        this.y = pos.y;
+        this.width = pos.width;
+        this.height = pos.height;
+        this.rotation = pos.rotation;
+
+        if (pos.parentFrame) {
+            this.parentFrame = pos.parentFrame;
+            pos.parentFrame.addShapeToFrame(this);
+        }
+
+        const scale = pos.width / 24;
+        const localCenterX = pos.width / 2 / scale;
+        const localCenterY = pos.height / 2 / scale;
+
+        this.element.setAttribute('transform', `translate(${pos.x}, ${pos.y}) scale(${scale}) rotate(${pos.rotation}, ${localCenterX}, ${localCenterY})`);
+
+        this.element.setAttribute('data-shape-x', pos.x);
+        this.element.setAttribute('data-shape-y', pos.y);
+        this.element.setAttribute('data-shape-width', pos.width);
+        this.element.setAttribute('data-shape-height', pos.height);
+        this.element.setAttribute('data-shape-rotation', pos.rotation);
+
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(this.element);
+        }
     }
-    
-    // Update the transform
-    const scale = pos.width / 24;
-    const localCenterX = pos.width / 2 / scale;
-    const localCenterY = pos.height / 2 / scale;
-    
-    this.element.setAttribute('transform', `translate(${pos.x}, ${pos.y}) scale(${scale}) rotate(${pos.rotation}, ${localCenterX}, ${localCenterY})`);
-    
-    // Update data attributes for arrow attachment
-    this.element.setAttribute('data-shape-x', pos.x);
-    this.element.setAttribute('data-shape-y', pos.y);
-    this.element.setAttribute('data-shape-width', pos.width);
-    this.element.setAttribute('data-shape-height', pos.height);
-    this.element.setAttribute('data-shape-rotation', pos.rotation);
-    
-    // Update attached arrows
-    if (typeof updateAttachedArrows === 'function') {
-        updateAttachedArrows(this.element);
-    }
-}
 }
 
 
 function removeSelection() {
-        const svg = getSVGElement();
+    const svg = getSVGElement();
     if (!svg) return;
 
-    // Remove the selection outline
     const outline = svg.querySelector(".selection-outline");
     if (outline) {
         svg.removeChild(outline);
     }
 
-    // Remove resize anchors
     removeResizeAnchors();
-    
-    // Remove rotation anchor
     removeRotationAnchor();
 
-    // Remove drag event listeners
     if (selectedIcon) {
         selectedIcon.removeEventListener('mousedown', startDrag);
         selectedIcon.removeEventListener('mouseup', stopDrag);
         selectedIcon.removeEventListener('mouseleave', stopDrag);
     }
-    }
+}
 
 
 function wrapIconElement(element) {
@@ -323,46 +286,21 @@ function wrapIconElement(element) {
 
 document.getElementById("importIcon").addEventListener('click', () => {
     console.log('Import icon clicked');
-    
-    // Remove hidden class from iconContainer to show it
+
     const iconContainer = document.getElementById('iconsToolBar');
     if (iconContainer) {
         iconContainer.classList.remove('hidden');
     }
-    
-    // Add click event listeners to all icon elements
-    const iconElements = document.querySelectorAll('#iconsContainer .icons');
-    iconElements.forEach(iconElement => {
-        iconElement.addEventListener('click', (e) => {
-            // Get the SVG content from the clicked icon
-            const svgElement = iconElement.querySelector('svg');
-            if (svgElement) {
-                const svgContent = svgElement.outerHTML;
-                
-                // Set up for icon placement
-                iconToPlace = svgContent;
-                isDraggingIcon = true;
-                isIconToolActive = true;
-                
-                console.log('Icon selected and ready to place');
-                
-                // Hide the icon container after selection
-                iconContainer.classList.add('hidden');
-            }
-        });
-    });
 });
 
 
-
-// Add coordinate conversion function like in other tools
 function getSVGCoordsFromMouse(e) {
     const svg = getSVGElement();
     if (!svg) {
         console.error('SVG element not found');
         return { x: 0, y: 0 };
     }
-    
+
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -376,25 +314,22 @@ function getSVGCoordsFromMouse(e) {
 const handleMouseMoveIcon = (e) => {
     if (!isDraggingIcon || !iconToPlace || !isIconToolActive) return;
 
-    // Get mouse coordinates relative to the SVG element
     const { x, y } = getSVGCoordsFromMouse(e);
     iconX = x;
     iconY = y;
 
     drawMiniatureIcon();
-    
-    // Check for frame containment while placing icon (but don't apply clipping yet)
+
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
         shapes.forEach(frame => {
             if (frame.shapeName === 'frame') {
-                // Create temporary icon bounds for frame checking
                 const tempIconBounds = {
-                    x: iconX - 50, // Half of miniature width
-                    y: iconY - 50, // Approximate half height
+                    x: iconX - 50,
+                    y: iconY - 50,
                     width: 100,
                     height: 100
                 };
-                
+
                 if (frame.isShapeInFrame(tempIconBounds)) {
                     frame.highlightFrame();
                     hoveredFrameIcon = frame;
@@ -417,45 +352,46 @@ const drawMiniatureIcon = () => {
         return;
     }
 
-    const miniatureSize = 50; // Fixed size for miniature
-
-    // Remove the previous miniature icon, if it exists
     if (currentIconElement) {
         svg.removeChild(currentIconElement);
         currentIconElement = null;
     }
 
-    // Create a temporary div to parse the SVG content
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = iconToPlace;
     const svgElement = tempDiv.querySelector('svg');
-    
+
     if (svgElement) {
-        // Create an SVG group for the miniature icon
         const iconGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        iconGroup.setAttribute("transform", `translate(${iconX - miniatureSize / 2}, ${iconY - miniatureSize / 2}) scale(${miniatureSize / 24})`);
-        
-        // Copy the SVG content (the paths)
-        const paths = svgElement.querySelectorAll('path');
-        paths.forEach(path => {
-            const newPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            newPath.setAttribute('d', path.getAttribute('d'));
-            newPath.setAttribute('fill', '#666');
-            iconGroup.appendChild(newPath);
+
+        const scale = miniatureSize / 24;
+        iconGroup.setAttribute("transform", `translate(${iconX - miniatureSize / 2}, ${iconY - miniatureSize / 2}) scale(${scale})`);
+
+        const paths = svgElement.querySelectorAll('path, circle, rect, line, polygon, polyline');
+        paths.forEach(element => {
+            const newElement = document.createElementNS("http://www.w3.org/2000/svg", element.tagName);
+
+            for (let attr of element.attributes) {
+                newElement.setAttribute(attr.name, attr.value);
+            }
+
+            newElement.setAttribute('fill', '#666');
+            newElement.setAttribute('stroke', '#666');
+
+            iconGroup.appendChild(newElement);
         });
-        
+
         iconGroup.setAttribute("style", "pointer-events: none; opacity: 0.7;");
         iconGroup.setAttribute("class", "miniature-icon");
-        
+
         currentIconElement = iconGroup;
         svg.appendChild(currentIconElement);
     }
 };
 
-// Update the handleMouseDownIcon function to create proper group structure
+
 const handleMouseDownIcon = async (e) => {
     if (!isDraggingIcon || !iconToPlace || !isIconToolActive) {
-        // Handle icon selection if selection tool is active
         if (isSelectionToolActive) {
             const clickedIcon = e.target.closest('[type="icon"]');
             if (clickedIcon) {
@@ -472,50 +408,59 @@ const handleMouseDownIcon = async (e) => {
             throw new Error('SVG element not found');
         }
 
-        // Remove the miniature
         if (currentIconElement) {
             svg.removeChild(currentIconElement);
             currentIconElement = null;
         }
 
-        // Calculate actual dimensions of the placed icon
-        const placedIconSize = 100; // Adjust as needed
-
-        // Get SVG coordinates
         const { x: placedX, y: placedY } = getSVGCoordsFromMouse(e);
 
-        // Create a temporary div to parse the SVG content
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = iconToPlace;
         const svgElement = tempDiv.querySelector('svg');
-        
+
         if (!svgElement) {
             throw new Error('Invalid SVG content');
         }
 
-        // Create a new SVG group element for the final icon
         const finalIconGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
         const finalX = placedX - placedIconSize / 2;
         const finalY = placedY - placedIconSize / 2;
-        
+
         finalIconGroup.setAttribute("transform", `translate(${finalX}, ${finalY}) scale(${placedIconSize / 24})`);
-        
-        // Copy the SVG content (the paths)
-        const paths = svgElement.querySelectorAll('path');
-        paths.forEach(path => {
-            const newPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            newPath.setAttribute('d', path.getAttribute('d'));
-            newPath.setAttribute('fill', '#fff');
-            finalIconGroup.appendChild(newPath);
+
+        const backgroundRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        backgroundRect.setAttribute('x', 0);
+        backgroundRect.setAttribute('y', 0);
+        backgroundRect.setAttribute('width', 24);
+        backgroundRect.setAttribute('height', 24);
+        backgroundRect.setAttribute('fill', 'transparent');
+        backgroundRect.setAttribute('stroke', 'none');
+        backgroundRect.setAttribute('style', 'pointer-events: all; cursor: pointer;');
+        finalIconGroup.appendChild(backgroundRect);
+
+        const elements = svgElement.querySelectorAll('path, circle, rect, line, polygon, polyline, ellipse, g');
+        elements.forEach(element => {
+            const newElement = document.createElementNS("http://www.w3.org/2000/svg", element.tagName);
+
+            for (let attr of element.attributes) {
+                newElement.setAttribute(attr.name, attr.value);
+            }
+
+            if (!newElement.getAttribute('fill') || newElement.getAttribute('fill') === 'none') {
+                newElement.setAttribute('fill', 'currentColor');
+            }
+
+            newElement.setAttribute('style', (newElement.getAttribute('style') || '') + '; pointer-events: all;');
+
+            finalIconGroup.appendChild(newElement);
         });
 
-        // Store data for undo/redo and positioning
         finalIconGroup.setAttribute('x', finalX);
         finalIconGroup.setAttribute('y', finalY);
         finalIconGroup.setAttribute('width', placedIconSize);
         finalIconGroup.setAttribute('height', placedIconSize);
-        
-        // Add arrow attachment support data attributes
+
         finalIconGroup.setAttribute('type', 'icon');
         finalIconGroup.setAttribute('data-shape-x', finalX);
         finalIconGroup.setAttribute('data-shape-y', finalY);
@@ -524,13 +469,12 @@ const handleMouseDownIcon = async (e) => {
         finalIconGroup.setAttribute('data-shape-rotation', 0);
         finalIconGroup.shapeID = `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
 
-        // Add the final icon to the SVG
+        finalIconGroup.setAttribute('style', 'cursor: pointer; pointer-events: all;');
+
         svg.appendChild(finalIconGroup);
 
-        // Create IconShape wrapper for frame functionality
         const iconShape = wrapIconElement(finalIconGroup);
 
-        // Add to shapes array for arrow attachment and frame functionality
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             shapes.push(iconShape);
             console.log('Icon added to shapes array for arrow attachment and frame functionality');
@@ -538,21 +482,21 @@ const handleMouseDownIcon = async (e) => {
             console.warn('shapes array not found - arrows and frames may not work with icons');
         }
 
-        // Check for frame containment and track attachment
         const finalFrame = hoveredFrameIcon;
         if (finalFrame) {
             finalFrame.addShapeToFrame(iconShape);
-            // Track the attachment for undo
             pushFrameAttachmentAction(finalFrame, iconShape, 'attach', null);
         }
 
-        // Add to undo stack for icon creation
         pushCreateAction(iconShape);
 
-        // Add click event to the newly added icon
         finalIconGroup.addEventListener('click', selectIcon);
+        finalIconGroup.addEventListener('mousedown', (e) => {
+            if (isSelectionToolActive) {
+                selectIcon({ target: finalIconGroup, stopPropagation: () => e.stopPropagation() });
+            }
+        });
 
-        // Clear frame highlighting
         if (hoveredFrameIcon) {
             hoveredFrameIcon.removeHighlight();
             hoveredFrameIcon = null;
@@ -569,68 +513,30 @@ const handleMouseDownIcon = async (e) => {
         isDraggingIcon = false;
         iconToPlace = null;
         isIconToolActive = false;
+        document.body.style.cursor = 'default';
     }
 };
 
+
 const handleMouseUpIcon = (e) => {
-    // Handle icon deselection when clicking outside
     if (isSelectionToolActive) {
-        // Check if we clicked on an icon or icon-related element
         const clickedElement = e.target;
         const isIconElement = clickedElement.closest('[type="icon"]');
-        const isAnchorElement = clickedElement.classList.contains('resize-anchor') || 
-                               clickedElement.classList.contains('rotation-anchor') ||
-                               clickedElement.classList.contains('selection-outline');
-        
-        // If we didn't click on an icon or its controls, deselect
+        const isAnchorElement = clickedElement.classList.contains('resize-anchor') ||
+            clickedElement.classList.contains('rotation-anchor') ||
+            clickedElement.classList.contains('selection-outline');
+
         if (!isIconElement && !isAnchorElement && selectedIcon) {
             removeSelection();
             selectedIcon = null;
         }
     }
-    
-    // Clear frame highlighting if placing icon
+
     if (hoveredFrameIcon) {
         hoveredFrameIcon.removeHighlight();
         hoveredFrameIcon = null;
     }
 };
-
-function selectIcon(event) {
-    if (!isSelectionToolActive) return;
-
-    event.stopPropagation(); // Prevent click from propagating to the SVG
-
-    if (selectedIcon) {
-        removeSelection();
-    }
-
-    selectedIcon = event.target.closest('[type="icon"]');
-    
-    // Get the current rotation from the icon transform attribute
-    const transform = selectedIcon.getAttribute('transform');
-    if (transform) {
-        const rotateMatch = transform.match(/rotate\(([^,]+)/);
-        if (rotateMatch) {
-            iconRotation = parseFloat(rotateMatch[1]);
-        }
-    } else {
-        iconRotation = 0;
-    }
-    
-    addSelectionOutline();
-
-    // Store original dimensions for resizing
-    originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
-    originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
-    originalWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
-    originalHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
-
-     // Add drag event listeners to the selected icon
-     selectedIcon.addEventListener('mousedown', startDrag);
-     selectedIcon.addEventListener('mouseup', stopDrag);
-     selectedIcon.addEventListener('mouseleave', stopDrag);
-}
 
 function addSelectionOutline() {
     if (!selectedIcon) return;
@@ -638,18 +544,29 @@ function addSelectionOutline() {
     const svg = getSVGElement();
     if (!svg) return;
 
-    const x = parseFloat(selectedIcon.getAttribute('x')) || 0;
-    const y = parseFloat(selectedIcon.getAttribute('y')) || 0;
-    const width = parseFloat(selectedIcon.getAttribute('width')) || 100;
-    const height = parseFloat(selectedIcon.getAttribute('height')) || 100;
+    const rect = selectedIcon.getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
 
-    const selectionPadding = 8;
+    const scaleX = svg.viewBox.baseVal.width / svgRect.width;
+    const scaleY = svg.viewBox.baseVal.height / svgRect.height;
+
+    const x = (rect.left - svgRect.left) * scaleX;
+    const y = (rect.top - svgRect.top) * scaleY;
+    const width = rect.width * scaleX;
+    const height = rect.height * scaleY;
+
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+
+    const selectionPadding = Math.max(4, width * 0.08);
     const expandedX = x - selectionPadding;
     const expandedY = y - selectionPadding;
     const expandedWidth = width + 2 * selectionPadding;
     const expandedHeight = height + 2 * selectionPadding;
 
-    // Create a dashed outline
+    removeSelection();
+
+    const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     const outlinePoints = [
         [expandedX, expandedY],
         [expandedX + expandedWidth, expandedY],
@@ -657,44 +574,87 @@ function addSelectionOutline() {
         [expandedX, expandedY + expandedHeight],
         [expandedX, expandedY]
     ];
-    const pointsAttr = outlinePoints.map(p => p.join(',')).join(' ');
-    const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-    outline.setAttribute("points", pointsAttr);
+    outline.setAttribute("points", outlinePoints.map(p => p.join(',')).join(' '));
     outline.setAttribute("fill", "none");
     outline.setAttribute("stroke", "#5B57D1");
-    outline.setAttribute("stroke-width", 1.5);
-    outline.setAttribute("stroke-dasharray", "4 2");
+    outline.setAttribute("stroke-width", Math.max(1, width * 0.02));
+    outline.setAttribute("stroke-dasharray", `${Math.max(3, width * 0.04)} ${Math.max(2, width * 0.02)}`);
     outline.setAttribute("style", "pointer-events: none;");
     outline.setAttribute("class", "selection-outline");
 
-    // Apply the same rotation as the icon
-    const centerX = x + width / 2;
-    const centerY = y + height / 2;
-    outline.setAttribute('transform', `rotate(${iconRotation}, ${centerX}, ${centerY})`);
-
     svg.appendChild(outline);
 
-    // Add resize anchors
-    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY);
-    
-    // Add rotation anchor
-    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY);
+    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width);
+    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width);
+}
+
+function selectIcon(event) {
+    if (!isSelectionToolActive) return;
+
+    event.stopPropagation();
+
+    if (selectedIcon) {
+        removeSelection();
+    }
+
+    let targetIcon = event.target.closest('[type="icon"]');
+    if (!targetIcon) {
+        let current = event.target;
+        while (current && current !== document) {
+            if (current.getAttribute && current.getAttribute('type') === 'icon') {
+                targetIcon = current;
+                break;
+            }
+            current = current.parentElement;
+        }
+    }
+
+    selectedIcon = targetIcon;
+
+    if (!selectedIcon) {
+        console.warn('Could not find icon to select');
+        return;
+    }
+
+    const transform = selectedIcon.getAttribute('transform');
+    if (transform) {
+        const rotateMatch = transform.match(/rotate\(([^,\s]+)/);
+        if (rotateMatch) {
+            iconRotation = parseFloat(rotateMatch[1]);
+        }
+    } else {
+        iconRotation = 0;
+    }
+
+    addSelectionOutline();
+
+    originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
+    originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
+    originalWidth = parseFloat(selectedIcon.getAttribute('width')) || placedIconSize;
+    originalHeight = parseFloat(selectedIcon.getAttribute('height')) || placedIconSize;
+
+    console.log('Icon selected with dimensions:', { originalX, originalY, originalWidth, originalHeight });
+
+    selectedIcon.addEventListener('mousedown', startDrag);
+    selectedIcon.addEventListener('mouseup', stopDrag);
+    selectedIcon.addEventListener('mouseleave', stopDrag);
 }
 
 
 
-function addResizeAnchors(x, y, width, height, centerX, centerY) {
+
+function addResizeAnchors(x, y, width, height, centerX, centerY, iconWidth) {
     const svg = getSVGElement();
     if (!svg) return;
 
-    const anchorSize = 10;
-    const anchorStrokeWidth = 2;
+    const anchorSize = Math.max(8, Math.min(16, iconWidth * 0.15));
+    const anchorStrokeWidth = Math.max(1.5, anchorSize * 0.15);
 
     const positions = [
-        { x: x, y: y }, // Top-left
-        { x: x + width, y: y }, // Top-right
-        { x: x, y: y + height }, // Bottom-left
-        { x: x + width, y: y + height } // Bottom-right
+        { x: x, y: y },
+        { x: x + width, y: y },
+        { x: x, y: y + height },
+        { x: x + width, y: y + height }
     ];
 
     positions.forEach((pos, i) => {
@@ -709,55 +669,55 @@ function addResizeAnchors(x, y, width, height, centerX, centerY) {
         anchor.setAttribute("class", "resize-anchor");
         anchor.style.cursor = ["nw-resize", "ne-resize", "sw-resize", "se-resize"][i];
 
-        // Apply the same rotation as the icon
         anchor.setAttribute('transform', `rotate(${iconRotation}, ${centerX}, ${centerY})`);
 
         svg.appendChild(anchor);
 
-        // Add event listeners for resizing
         anchor.addEventListener('mousedown', startResize);
         anchor.addEventListener('mouseup', stopResize);
     });
 }
 
-function addRotationAnchor(x, y, width, height, centerX, centerY) {
+function addRotationAnchor(x, y, width, height, centerX, centerY, iconWidth) {
     const svg = getSVGElement();
     if (!svg) return;
 
-    const anchorStrokeWidth = 2;
-    const rotationAnchorPos = { x: x + width / 2, y: y - 30 };
-    
+    const anchorRadius = Math.max(6, Math.min(12, iconWidth * 0.12));
+    const anchorStrokeWidth = Math.max(1.5, anchorRadius * 0.2);
+    const rotationDistance = Math.max(25, iconWidth * 0.4);
+
+    const rotationAnchorPos = { x: x + width / 2, y: y - rotationDistance };
+
     const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     rotationAnchor.setAttribute('cx', rotationAnchorPos.x);
     rotationAnchor.setAttribute('cy', rotationAnchorPos.y);
-    rotationAnchor.setAttribute('r', 8);
+    rotationAnchor.setAttribute('r', anchorRadius);
     rotationAnchor.setAttribute('class', 'rotation-anchor');
     rotationAnchor.setAttribute('fill', '#121212');
     rotationAnchor.setAttribute('stroke', '#5B57D1');
     rotationAnchor.setAttribute('stroke-width', anchorStrokeWidth);
     rotationAnchor.setAttribute('style', 'pointer-events: all;');
-    
-    // Apply the same rotation as the icon
+
     rotationAnchor.setAttribute('transform', `rotate(${iconRotation}, ${centerX}, ${centerY})`);
-    
+
     svg.appendChild(rotationAnchor);
 
-    // Add event listeners for rotation
     rotationAnchor.addEventListener('mousedown', startRotation);
     rotationAnchor.addEventListener('mouseup', stopRotation);
-    
-    rotationAnchor.addEventListener('mouseover', function () {
+
+    rotationAnchor.addEventListener('mouseover', function() {
         if (!isRotatingIcon && !isDragging) {
             rotationAnchor.style.cursor = 'grab';
         }
     });
-    
-    rotationAnchor.addEventListener('mouseout', function () {
+
+    rotationAnchor.addEventListener('mouseout', function() {
         if (!isRotatingIcon && !isDragging) {
             rotationAnchor.style.cursor = 'default';
         }
     });
 }
+
 
 function removeRotationAnchor() {
     const svg = getSVGElement();
@@ -777,21 +737,17 @@ function removeResizeAnchors() {
     anchors.forEach(anchor => svg.removeChild(anchor));
 }
 
-// ...existing code for startResize, stopResize, resizeIcon, startDrag, dragIcon, stopDrag, 
-// startRotation, rotateIcon, stopRotation, stopInteracting, deleteCurrentIcon...
-
 function startResize(event) {
     event.preventDefault();
     event.stopPropagation();
 
     currentAnchor = event.target;
-    
-    // Store original values at the start of resize
+
     originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
     originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
     originalWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
     originalHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
-    
+
     const svg = getSVGElement();
     if (svg) {
         svg.addEventListener('mousemove', resizeIcon);
@@ -809,7 +765,6 @@ function resizeIcon(event) {
 
     const { x: globalX, y: globalY } = getSVGCoordsFromMouse(event);
 
-    // Calculate resize deltas
     let dx = globalX - originalX;
     let dy = globalY - originalY;
 
@@ -823,7 +778,7 @@ function resizeIcon(event) {
             newWidth = originalWidth - dx;
             newHeight = originalHeight - dy;
             if (aspect_ratio_lock) {
-                newHeight = newWidth; // Square icons
+                newHeight = newWidth;
             }
             newX = originalX + (originalWidth - newWidth);
             newY = originalY + (originalHeight - newHeight);
@@ -858,32 +813,26 @@ function resizeIcon(event) {
             break;
     }
 
-    // Ensure minimum size
     newWidth = Math.max(minIconSize, newWidth);
     newHeight = Math.max(minIconSize, newHeight);
 
-    // Apply the new dimensions and position
     selectedIcon.setAttribute('width', newWidth);
     selectedIcon.setAttribute('height', newHeight);
     selectedIcon.setAttribute('x', newX);
     selectedIcon.setAttribute('y', newY);
 
-    // Update data attributes for arrow attachment
     selectedIcon.setAttribute('data-shape-x', newX);
     selectedIcon.setAttribute('data-shape-y', newY);
     selectedIcon.setAttribute('data-shape-width', newWidth);
     selectedIcon.setAttribute('data-shape-height', newHeight);
 
-    // Update the transform for scaling
-    const scale = newWidth / 24; // Using 24 as base since building.svg is 24x24
+    const scale = newWidth / 24;
     selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation})`);
 
-    // Update attached arrows during resize
     if (typeof updateAttachedArrows === 'function') {
         updateAttachedArrows(selectedIcon);
     }
 
-    // Update the selection outline and anchors
     removeSelection();
     addSelectionOutline();
 }
@@ -895,14 +844,12 @@ function startDrag(event) {
     event.stopPropagation();
 
     isDragging = true;
-    
-    // Store original values at the start of drag
+
     originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
     originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
     originalWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
     originalHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
 
-    // Find the IconShape wrapper for frame functionality
     let iconShape = null;
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
         iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
@@ -910,10 +857,8 @@ function startDrag(event) {
 
 
     if (iconShape) {
-        // Store initial frame state
         draggedShapeInitialFrameIcon = iconShape.parentFrame || null;
-        
-        // Temporarily remove from frame clipping if dragging
+
         if (iconShape.parentFrame) {
             iconShape.parentFrame.temporarilyRemoveFromFrame(iconShape);
         }
@@ -930,7 +875,7 @@ function startDrag(event) {
     document.addEventListener('mouseup', stopDrag);
 }
 
-    function dragIcon(event) {
+function dragIcon(event) {
     if (!isDragging || !selectedIcon) return;
 
     const { x, y } = getSVGCoordsFromMouse(event);
@@ -940,34 +885,28 @@ function startDrag(event) {
     selectedIcon.setAttribute('x', newX);
     selectedIcon.setAttribute('y', newY);
 
-    // Update data attributes for arrow attachment
     selectedIcon.setAttribute('data-shape-x', newX);
     selectedIcon.setAttribute('data-shape-y', newY);
 
-    // Update the transform
     const width = parseFloat(selectedIcon.getAttribute('width')) || 100;
     const scale = width / 24;
     const localCenterX = width / 2 / scale;
     const localCenterY = width / 2 / scale;
     selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation}, ${localCenterX}, ${localCenterY})`);
 
-    // Update frame containment for IconShape wrapper - SYNC THE PROPERTIES
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
         const iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
         if (iconShape) {
-            // Sync the IconShape properties with the DOM element
             iconShape.x = newX;
             iconShape.y = newY;
             iconShape.updateFrameContainment();
         }
     }
 
-    // Update attached arrows during drag
     if (typeof updateAttachedArrows === 'function') {
         updateAttachedArrows(selectedIcon);
     }
 
-    // Update the selection outline and anchors
     removeSelection();
     addSelectionOutline();
 }
@@ -985,18 +924,16 @@ function startRotation(event) {
 
     isRotatingIcon = true;
     console.log(selectedIcon)
-    // Get icon center - calculate from current position like in image
     const iconX = parseFloat(selectedIcon.getAttribute('x'));
     const iconY = parseFloat(selectedIcon.getAttribute('y'));
     const iconWidth = parseFloat(selectedIcon.getAttribute('width'));
     const iconHeight = parseFloat(selectedIcon.getAttribute('height'));
-    
+
     const centerX = iconX + iconWidth / 2;
     const centerY = iconY + iconHeight / 2;
 
-    // Calculate initial mouse angle relative to icon center
     const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(event);
-    
+
     startRotationMouseAngle = Math.atan2(mouseY - centerY, mouseX - centerX) * 180 / Math.PI;
     console.log('Start rotation mouse angle:', startRotationMouseAngle);
     startIconRotation = iconRotation;
@@ -1013,53 +950,46 @@ function startRotation(event) {
 function rotateIcon(event) {
     if (!isRotatingIcon || !selectedIcon) return;
 
-    // Get icon dimensions and position - just like in imageTool.js
     const iconX = parseFloat(selectedIcon.getAttribute('x')) || 0;
     const iconY = parseFloat(selectedIcon.getAttribute('y')) || 0;
     const iconWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
     const iconHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
-    
-    // Calculate center based on current position and size (like image)
+
     const centerX = iconX + iconWidth / 2;
     const centerY = iconY + iconHeight / 2;
 
-    // Calculate current mouse angle
     const { x: mouseX, y: mouseY } = getSVGCoordsFromMouse(event);
-    
+
     const currentMouseAngle = Math.atan2(mouseY - centerY, mouseX - centerX) * 180 / Math.PI;
     const angleDiff = currentMouseAngle - startRotationMouseAngle;
-    
+
     iconRotation = startIconRotation + angleDiff;
     iconRotation = iconRotation % 360;
     if (iconRotation < 0) iconRotation += 360;
 
-    // Apply rotation transform with center at icon's local center (in scaled coordinates)
     const scale = iconWidth / 24;
-    // The rotation center should be at the center of the scaled icon (12, 12 for a 24x24 icon)
-    const localCenterX = iconWidth / 2 / scale; // This gives us 12 for a 100-width icon
-    const localCenterY = iconHeight / 2 / scale; // This gives us 12 for a 100-height icon
-    
+    const localCenterX = iconWidth / 2 / scale;
+    const localCenterY = iconHeight / 2 / scale;
+
     selectedIcon.setAttribute('transform', `translate(${iconX}, ${iconY}) scale(${scale}) rotate(${iconRotation}, ${localCenterX}, ${localCenterY})`);
-    
-    // Update data attribute for arrow attachment
+
     selectedIcon.setAttribute('data-shape-rotation', iconRotation);
 
-    // Update attached arrows during rotation
     if (typeof updateAttachedArrows === 'function') {
         updateAttachedArrows(selectedIcon);
     }
 
-    // Update the selection outline and anchors
     removeSelection();
     addSelectionOutline();
 }
+
 function stopRotation(event) {
     if (!isRotatingIcon) return;
     stopInteracting();
     isRotatingIcon = false;
     startRotationMouseAngle = null;
     startIconRotation = null;
-    
+
     const svg = getSVGElement();
     if (svg) {
         svg.removeEventListener('mousemove', rotateIcon);
@@ -1068,8 +998,7 @@ function stopRotation(event) {
     document.removeEventListener('mouseup', stopRotation);
 }
 
-   function stopInteracting() {
-    // Store transform data before stopping interaction
+function stopInteracting() {
     if (selectedIcon && (isDragging || isRotatingIcon || currentAnchor)) {
         const newPos = {
             x: parseFloat(selectedIcon.getAttribute('x')) || 0,
@@ -1078,13 +1007,12 @@ function stopRotation(event) {
             height: parseFloat(selectedIcon.getAttribute('height')) || 100,
             rotation: iconRotation
         };
-        
-        // Get the original rotation from the stored start rotation or current rotation
+
         let originalRotation = iconRotation;
         if (isRotatingIcon && startIconRotation !== null) {
             originalRotation = startIconRotation;
         }
-        
+
         const oldPos = {
             x: originalX,
             y: originalY,
@@ -1093,12 +1021,10 @@ function stopRotation(event) {
             rotation: originalRotation
         };
 
-        // Find the IconShape wrapper for frame tracking
         let iconShape = null;
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
             if (iconShape) {
-                // Sync the IconShape properties with the final DOM position
                 iconShape.x = newPos.x;
                 iconShape.y = newPos.y;
                 iconShape.width = newPos.width;
@@ -1107,7 +1033,6 @@ function stopRotation(event) {
             }
         }
 
-        // Add frame information for undo tracking
         const oldPosWithFrame = {
             ...oldPos,
             parentFrame: draggedShapeInitialFrameIcon
@@ -1117,47 +1042,39 @@ function stopRotation(event) {
             parentFrame: iconShape ? iconShape.parentFrame : null
         };
 
-        // Only push transform action if something actually changed
-        const stateChanged = newPos.x !== oldPos.x || newPos.y !== oldPos.y || 
-                           newPos.width !== oldPos.width || newPos.height !== oldPos.height ||
-                           newPos.rotation !== oldPos.rotation;
+        const stateChanged = newPos.x !== oldPos.x || newPos.y !== oldPos.y ||
+            newPos.width !== oldPos.width || newPos.height !== oldPos.height ||
+            newPos.rotation !== oldPos.rotation;
         const frameChanged = oldPosWithFrame.parentFrame !== newPosWithFrame.parentFrame;
 
         if ((stateChanged || frameChanged) && iconShape) {
             pushTransformAction(iconShape, oldPosWithFrame, newPosWithFrame);
         }
 
-        // Handle frame containment changes after drag
         if (isDragging && iconShape) {
             const finalFrame = hoveredFrameIcon;
-            
-            // If shape moved to a different frame
+
             if (draggedShapeInitialFrameIcon !== finalFrame) {
-                // Remove from initial frame
                 if (draggedShapeInitialFrameIcon) {
                     draggedShapeInitialFrameIcon.removeShapeFromFrame(iconShape);
                 }
-                
-                // Add to new frame
+
                 if (finalFrame) {
                     finalFrame.addShapeToFrame(iconShape);
                 }
-                
-                // Track the frame change for undo
+
                 if (frameChanged) {
-                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameIcon, iconShape, 
+                    pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameIcon, iconShape,
                         finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameIcon);
                 }
             } else if (draggedShapeInitialFrameIcon) {
-                // Shape stayed in same frame, restore clipping
                 draggedShapeInitialFrameIcon.restoreToFrame(iconShape);
             }
         }
-        
+
         draggedShapeInitialFrameIcon = null;
     }
 
-    // Clear frame highlighting
     if (hoveredFrameIcon) {
         hoveredFrameIcon.removeHighlight();
         hoveredFrameIcon = null;
@@ -1165,71 +1082,63 @@ function stopRotation(event) {
 
     isDragging = false;
     isRotatingIcon = false;
-    
+
     const svg = getSVGElement();
     if (svg) {
         svg.removeEventListener('mousemove', dragIcon);
         svg.removeEventListener('mousemove', resizeIcon);
         svg.removeEventListener('mousemove', rotateIcon);
     }
-    
+
     currentAnchor = null;
     startRotationMouseAngle = null;
     startIconRotation = null;
 
-    // Update original values after interaction is complete
     if (selectedIcon) {
         originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
         originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
         originalWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
         originalHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
-        
-        // Update data attributes for arrow attachment consistency
+
         selectedIcon.setAttribute('data-shape-x', originalX);
         selectedIcon.setAttribute('data-shape-y', originalY);
         selectedIcon.setAttribute('data-shape-width', originalWidth);
         selectedIcon.setAttribute('data-shape-height', originalHeight);
         selectedIcon.setAttribute('data-shape-rotation', iconRotation);
-        
-        // Update attached arrows after interaction ends
+
         if (typeof updateAttachedArrows === 'function') {
             updateAttachedArrows(selectedIcon);
         }
     }
 }
+
 function deleteCurrentIcon() {
     if (selectedIcon) {
-        // Find the IconShape wrapper
         let iconShape = null;
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
             if (iconShape) {
                 const idx = shapes.indexOf(iconShape);
                 if (idx !== -1) shapes.splice(idx, 1);
-                
-                // Remove the group (which contains the icon)
+
                 if (iconShape.group && iconShape.group.parentNode) {
                     iconShape.group.parentNode.removeChild(iconShape.group);
                 }
             }
         }
-        
-        // Fallback: if no IconShape wrapper found, remove the icon directly
+
         if (!iconShape && selectedIcon.parentNode) {
             selectedIcon.parentNode.removeChild(selectedIcon);
         }
-        
-        // Clean up any arrow attachments before deleting
+
         if (typeof cleanupAttachments === 'function') {
             cleanupAttachments(selectedIcon);
         }
-        
-        // Push delete action for undo
+
         if (iconShape) {
             pushDeleteAction(iconShape);
         }
-        
-        // Clean up selection
+
         removeSelection();
         selectedIcon = null;
     }
@@ -1244,12 +1153,11 @@ document.addEventListener('keydown', (e) => {
 
 async function fetchIconsFromServer() {
     try {
-        const response = await fetch('http://localhost:3000/feed?offset=0&limit=20');
+        const response = await fetch('http://localhost:3000/feed?offset=0&limit=120');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        // console.log('Icons from server:', data.results, data.limit);
         return data.results;
     } catch (error) {
         console.error('Failed to fetch icons from server:', error);
@@ -1260,6 +1168,8 @@ async function fetchIconsFromServer() {
 async function renderIconsFromServer() {
     const icons = await fetchIconsFromServer();
     if (icons) {
+        document.getElementById("iconsContainer").innerHTML = '';
+
         for (const icon of icons) {
             try {
                 const response = await fetch('http://localhost:3000/serve?name=' + encodeURIComponent(icon.filename));
@@ -1267,51 +1177,85 @@ async function renderIconsFromServer() {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const svgContent = await response.text();
-                let svgIcon = `<div class="icons">
-                   ${svgContent}
+
+                const normalizedSVG = normalizeSVGSize(svgContent);
+
+                let svgIcon = `<div class="icons" data-url="${icon.filename}">
+                   ${normalizedSVG}
                 </div>`;
                 document.getElementById("iconsContainer").innerHTML += svgIcon;
             } catch (error) {
                 console.error('Failed to render icon:', icon.filename, error);
             }
         }
+
+        addIconClickListeners();
     }
+}
+
+
+function addIconClickListeners() {
+    const iconElements = document.querySelectorAll('#iconsContainer .icons');
+    iconElements.forEach(iconElement => {
+        iconElement.addEventListener('click', (e) => {
+            const filename = iconElement.getAttribute('data-url') || 'unknown';
+            handleIconClick(e, filename);
+        });
+    });
 }
 
 
 iconSearchInput.addEventListener('input', async (e) => {
     const query = e.target.value.trim();
-    
-    // Clear previous timeout
+
     if (searchTimeout) {
         clearTimeout(searchTimeout);
     }
-    
-    // Debounce the search to avoid too many requests
+
     searchTimeout = setTimeout(async () => {
         if (query === '') {
-            // If search is empty, show all icons using /feed
             await renderIconsFromServer();
         } else {
-            // Search for icons
             await searchAndRenderIcons(query);
         }
     }, 300);
 });
 
+
+function handleIconClick(event, filename) {
+    event.stopPropagation();
+
+    const iconElement = event.currentTarget;
+    const svgElement = iconElement.querySelector('svg');
+
+    if (svgElement) {
+        const svgContent = svgElement.outerHTML;
+
+        iconToPlace = svgContent;
+        isDraggingIcon = true;
+        isIconToolActive = true;
+
+        console.log('Icon selected and ready to place:', filename);
+
+        const iconContainer = document.getElementById('iconsToolBar');
+        if (iconContainer) {
+            iconContainer.classList.add('hidden');
+        }
+
+        document.body.style.cursor = 'crosshair';
+    }
+}
+
 async function searchAndRenderIcons(query) {
     try {
-        // Search for icons
         const response = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(query)}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const searchResults = await response.json();
-        
-        // Clear current icons
+
         document.getElementById("iconsContainer").innerHTML = '';
-        
-        // Render search results
+
         for (const icon of searchResults) {
             try {
                 const svgResponse = await fetch('http://localhost:3000/serve?name=' + encodeURIComponent(icon.filename));
@@ -1319,18 +1263,50 @@ async function searchAndRenderIcons(query) {
                     throw new Error(`HTTP error! status: ${svgResponse.status}`);
                 }
                 const svgContent = await svgResponse.text();
-                let svgIcon = `<div class="icons">
-                   ${svgContent}
+
+                const normalizedSVG = normalizeSVGSize(svgContent);
+
+                let svgIcon = `<div class="icons" data-url="${icon.filename}">
+                   ${normalizedSVG}
                 </div>`;
                 document.getElementById("iconsContainer").innerHTML += svgIcon;
             } catch (error) {
                 console.error('Failed to render search result:', icon.filename, error);
             }
         }
+
+        addIconClickListeners();
+
     } catch (error) {
         console.error('Failed to search icons:', error);
     }
 }
+
+function normalizeSVGSize(svgContent) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = svgContent;
+    const svgElement = tempDiv.querySelector('svg');
+
+    if (svgElement) {
+        svgElement.setAttribute('width', '35');
+        svgElement.setAttribute('height', '35');
+
+        svgElement.setAttribute('viewBox', '0 0 24 24');
+
+        const elements = svgElement.querySelectorAll('path, circle, rect, line, polygon, polyline, ellipse');
+        elements.forEach(element => {
+            const currentFill = element.getAttribute('fill');
+            if (!currentFill || currentFill === 'none') {
+                // leave untouched
+            }
+        });
+
+        return svgElement.outerHTML;
+    }
+
+    return svgContent;
+}
+
 
 
 renderIconsFromServer()
