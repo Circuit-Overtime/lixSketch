@@ -35,7 +35,7 @@ class IconShape {
     constructor(element) {
         this.element = element;
         this.shapeName = 'icon';
-        this.shapeID = element.shapeID || `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
+        this.shapeID =  `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
         this.type = 'icon';
 
         this.parentFrame = null;
@@ -512,6 +512,7 @@ const handleMouseDownIcon = async (e) => {
         finalIconGroup.setAttribute('data-shape-height', placedIconSize);
         finalIconGroup.setAttribute('data-shape-rotation', 0);
         finalIconGroup.shapeID = `icon-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
+        finalIconGroup.setAttribute('id', finalIconGroup.shapeID);
         finalIconGroup.setAttribute('style', 'cursor: pointer; pointer-events: all;');
 
         svg.appendChild(finalIconGroup);
@@ -541,6 +542,7 @@ const handleMouseDownIcon = async (e) => {
         });
 
         if (hoveredFrameIcon) {
+            
             hoveredFrameIcon.removeHighlight();
             hoveredFrameIcon = null;
         }
@@ -581,32 +583,41 @@ const handleMouseUpIcon = (e) => {
     }
 };
 
+
 function addSelectionOutline() {
     if (!selectedIcon) return;
 
     const svg = getSVGElement();
     if (!svg) return;
 
-    // Get icon properties
-    const x = parseFloat(selectedIcon.getAttribute('x')) || 0;
-    const y = parseFloat(selectedIcon.getAttribute('y')) || 0;
-    const width = parseFloat(selectedIcon.getAttribute('width')) || placedIconSize;
-    const height = parseFloat(selectedIcon.getAttribute('height')) || placedIconSize;
+    // Use the shapeID to get the element and its bounding box
+    const iconId = selectedIcon.shapeID || selectedIcon.getAttribute('id');
+    const iconElement = document.getElementById(iconId);
+    
+    if (!iconElement) {
+        console.warn('Could not find icon element by ID');
+        return;
+    }
+
+    // Get the actual bounding box of the icon using its ID
+    const bbox = iconElement.getBoundingClientRect();
+    console.log('Bounding box:', bbox);
+    const x = bbox.x;
+    const y = bbox.y;
+    const width = bbox.width;
+    const height = bbox.height;
+    
     const rotation = parseFloat(selectedIcon.getAttribute('data-shape-rotation')) || 0;
+    console.log(x, y, width, height, rotation);
+    
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
 
-    // Get the actual visual size after scaling
-    const scale = width / 24; // This is how the icon is scaled
-    const visualWidth = 24 * scale; // This should equal width, but let's be explicit
-    const visualHeight = 24 * scale; // Assuming square icons, adjust if needed
-
-    const centerX = x + visualWidth / 2;
-    const centerY = y + visualHeight / 2;
-
-    const selectionPadding = Math.max(4, visualWidth * 0.08);
+    const selectionPadding = Math.max(4, width * 0.08);
     const expandedX = x - selectionPadding;
     const expandedY = y - selectionPadding;
-    const expandedWidth = visualWidth + 2 * selectionPadding;
-    const expandedHeight = visualHeight + 2 * selectionPadding;
+    const expandedWidth = width + 2 * selectionPadding;
+    const expandedHeight = height + 2 * selectionPadding;
 
     removeSelection();
 
@@ -618,17 +629,18 @@ function addSelectionOutline() {
     outline.setAttribute("height", expandedHeight);
     outline.setAttribute("fill", "none");
     outline.setAttribute("stroke", "#5B57D1");
-    outline.setAttribute("stroke-width", Math.max(1, visualWidth * 0.02));
-    outline.setAttribute("stroke-dasharray", `${Math.max(3, visualWidth * 0.04)} ${Math.max(2, visualWidth * 0.02)}`);
+    outline.setAttribute("stroke-width", Math.max(1, width * 0.02));
+    outline.setAttribute("stroke-dasharray", `${Math.max(3, width * 0.04)} ${Math.max(2, width * 0.02)}`);
     outline.setAttribute("style", "pointer-events: none;");
     outline.setAttribute("class", "selection-outline");
     outline.setAttribute("transform", `rotate(${rotation}, ${centerX}, ${centerY})`);
 
     svg.appendChild(outline);
 
-    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, visualWidth, rotation);
-    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, visualWidth, rotation);
+    addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width, rotation);
+    addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width, rotation);
 }
+
 
 function selectIcon(event) {
     if (!isSelectionToolActive) return;
@@ -902,10 +914,9 @@ function resizeIcon(event) {
         updateAttachedArrows(selectedIcon);
     }
 
-    removeSelection();
+    // Update the selection outline to reflect the new size immediately
     addSelectionOutline();
 }
-
 
 function startDrag(event) {
     if (!isSelectionToolActive || !selectedIcon) return;
