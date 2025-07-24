@@ -197,11 +197,30 @@ document.getElementById("importImage").addEventListener('click', () => {
     isImageToolActive = true;
     console.log('isImageToolActive set to:', isImageToolActive);
 
-    // Try different image paths - adjust based on your file structure
-    const hardcodedImagePath = 'test.jpg'; // Remove the './' 
-    // Or try: '/test.jpg' or 'Images/test.jpg' depending on your folder structure
-    loadHardcodedImage(hardcodedImagePath);
+    // Create a file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*'; // Accept all image types
+    fileInput.style.display = 'none'; // Hide the input element
+    
+    // Add the input to the document temporarily
+    document.body.appendChild(fileInput);
+    
+    // Handle file selection
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            handleImageUpload(file);
+        }
+        
+        // Clean up - remove the input element
+        document.body.removeChild(fileInput);
+    });
+    
+    // Trigger the file picker
+    fileInput.click();
 });
+
 
 const loadHardcodedImage = (imagePath) => {
     console.log('Loading hardcoded image:', imagePath);
@@ -225,13 +244,39 @@ const loadHardcodedImage = (imagePath) => {
 };
 
 const handleImageUpload = (file) => {
-    if (!file || !isImageToolActive) return; // Also check isImageToolActive
+    if (!file || !isImageToolActive) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        console.error('Selected file is not an image');
+        alert('Please select a valid image file.');
+        return;
+    }
+
+    
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+        console.error('File size too large');
+        alert('Image file is too large. Please select an image smaller than 10MB.');
+        return;
+    }
+
+    console.log('Processing image file:', file.name, 'Size:', file.size, 'Type:', file.type);
 
     const reader = new FileReader();
+    
     reader.onload = (e) => {
-        imageToPlace = e.target.result; // The data URL itself becomes the image source
+        imageToPlace = e.target.result; 
         isDraggingImage = true;
+        console.log('Image loaded and ready to place');
     };
+    
+    reader.onerror = (error) => {
+        console.error('Error reading file:', error);
+        alert('Error reading the image file. Please try again.');
+        isImageToolActive = false;
+    };
+    
     reader.readAsDataURL(file);
 };
 
