@@ -6,8 +6,8 @@ import path from 'path';
 import fs from 'fs';
 
 const PORT = 3002;
-const ICONS_FOLDER = path.join('icons');
-const METADATA_FILE = path.join('icons.json');
+const ICONS_FOLDER = path.join('ICONS');
+const METADATA_FILE = path.join('ICON_CONT/info/icons.json');
 
 const app = express();
 app.use(cors());
