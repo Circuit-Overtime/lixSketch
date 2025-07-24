@@ -20,7 +20,7 @@ let iconRotation = 0;
 let aspect_ratio_lock = true;
 const minIconSize = 25;
 const miniatureSize = 40;
-const placedIconSize = 24;
+const placedIconSize = 40;
 let draggedShapeInitialFrameIcon = null;
 let hoveredFrameIcon = null;
 
@@ -299,6 +299,7 @@ document.getElementById("importIcon").addEventListener('click', () => {
 
 
 function getSVGCoordsFromMouse(e) {
+    const svg = getSVGElement(); 
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -535,9 +536,11 @@ const handleMouseDownIcon = async (e) => {
         finalIconGroup.addEventListener('click', selectIcon);
         finalIconGroup.addEventListener('mousedown', (e) => {
             if (isSelectionToolActive) {
-                selectIcon({ target: finalIconGroup, stopPropagation: () => e.stopPropagation() });
+                e.preventDefault();
+                selectIcon(e);
             }
         });
+        
 
         if (hoveredFrameIcon) {
             
@@ -645,14 +648,48 @@ function addSelectionOutline() {
     addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width, rotation);
 }
 
+function checkDragStart(event) {
+    // Start dragging on first mouse move
+    document.removeEventListener('mousemove', checkDragStart);
+    document.removeEventListener('mouseup', cancelDragPrep);
+    startDrag(event);
+}
+
+function cancelDragPrep(event) {
+    // Cancel drag preparation if mouse is released without moving
+    document.removeEventListener('mousemove', checkDragStart);
+    document.removeEventListener('mouseup', cancelDragPrep);
+}
+
+
+function startDrag(event) {
+    console.log("start dragging icon");
+    if (!isSelectionToolActive || !selectedIcon) return;
+    
+    isDragging = true;
+
+    let iconShape = null;
+    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+        iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
+    }
+
+    if (iconShape) {
+        draggedShapeInitialFrameIcon = iconShape.parentFrame || null;
+
+        if (iconShape.parentFrame) {
+            iconShape.parentFrame.temporarilyRemoveFromFrame(iconShape);
+        }
+    }
+
+    // Add event listeners for dragging
+    document.addEventListener('mousemove', dragIcon);
+    document.addEventListener('mouseup', stopDrag);
+}
+
 function selectIcon(event) {
     if (!isSelectionToolActive) return;
 
     event.stopPropagation();
-
-    if (selectedIcon) {
-        removeSelection();
-    }
 
     let targetIcon = event.target.closest('[type="icon"]');
     if (!targetIcon) {
@@ -664,6 +701,28 @@ function selectIcon(event) {
             }
             current = current.parentElement;
         }
+    }
+
+    // If clicking on the same icon that's already selected, prepare for potential drag
+    if (selectedIcon === targetIcon) {
+        // Store drag preparation data
+        originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
+        originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
+        originalWidth = parseFloat(selectedIcon.getAttribute('width')) || placedIconSize;
+        originalHeight = parseFloat(selectedIcon.getAttribute('height')) || placedIconSize;
+
+        const { x, y } = getSVGCoordsFromMouse(event);
+        dragOffsetX = x - originalX;
+        dragOffsetY = y - originalY;
+
+        // Add listeners for potential drag start
+        document.addEventListener('mousemove', checkDragStart);
+        document.addEventListener('mouseup', cancelDragPrep);
+        return;
+    }
+
+    if (selectedIcon) {
+        removeSelection();
     }
 
     selectedIcon = targetIcon;
@@ -691,10 +750,6 @@ function selectIcon(event) {
     originalHeight = parseFloat(selectedIcon.getAttribute('height')) || placedIconSize;
 
     console.log('Icon selected with dimensions:', { originalX, originalY, originalWidth, originalHeight });
-
-    selectedIcon.addEventListener('mousedown', startDrag);
-    selectedIcon.addEventListener('mouseup', stopDrag);
-    selectedIcon.addEventListener('mouseleave', stopDrag);
 }
 
 
@@ -924,49 +979,7 @@ function resizeIcon(event) {
     addSelectionOutline();
 }
 
-function startDrag(event) {
-    if (!isSelectionToolActive || !selectedIcon) return;
 
-    event.preventDefault();
-    event.stopPropagation();
-
-    isDragging = true;
-
-    const bbox = selectedIcon.getBoundingClientRect();
-    const svg = getSVGElement();
-    const svgRect = svg.getBoundingClientRect();
-    
-    // Convert screen coordinates to SVG coordinates
-    const viewBox = svg.viewBox.baseVal;
-    const scaleX = viewBox.width / svgRect.width;
-    const scaleY = viewBox.height / svgRect.height;
-    
-    originalX = viewBox.x + (bbox.left - svgRect.left) * scaleX;
-    originalY = viewBox.y + (bbox.top - svgRect.top) * scaleY;
-    originalWidth = bbox.width * scaleX;
-    originalHeight = bbox.height * scaleY;
-
-    let iconShape = null;
-    if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-        iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
-    }
-
-    if (iconShape) {
-        draggedShapeInitialFrameIcon = iconShape.parentFrame || null;
-
-        if (iconShape.parentFrame) {
-            iconShape.parentFrame.temporarilyRemoveFromFrame(iconShape);
-        }
-    }
-
-    const { x, y } = getSVGCoordsFromMouse(event);
-    dragOffsetX = x - originalX;
-    dragOffsetY = y - originalY;
-
-    // Add event listeners to document instead of just SVG
-    document.addEventListener('mousemove', dragIcon);
-    document.addEventListener('mouseup', stopDrag);
-}
 
 function dragIcon(event) {
     if (!isDragging || !selectedIcon) return;
@@ -981,10 +994,15 @@ function dragIcon(event) {
     selectedIcon.setAttribute('data-shape-x', newX);
     selectedIcon.setAttribute('data-shape-y', newY);
 
+    // Use the stored viewBox dimensions for correct scaling
     const width = parseFloat(selectedIcon.getAttribute('width')) || 100;
-    const scale = width / 24;
+    const height = parseFloat(selectedIcon.getAttribute('height')) || 100;
+    const vbWidth = parseFloat(selectedIcon.getAttribute('data-viewbox-width')) || 24;
+    const vbHeight = parseFloat(selectedIcon.getAttribute('data-viewbox-height')) || 24;
+    const scale = width / Math.max(vbWidth, vbHeight);
     const localCenterX = width / 2 / scale;
-    const localCenterY = width / 2 / scale;
+    const localCenterY = height / 2 / scale;
+    
     selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation}, ${localCenterX}, ${localCenterY})`);
 
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
@@ -1005,9 +1023,16 @@ function dragIcon(event) {
 }
 
 function stopDrag(event) {
-    stopInteracting();
+    if (!isDragging) return;
+    
+    console.log("stop dragging icon");
+    isDragging = false;
+    
+    // Remove drag event listeners
     document.removeEventListener('mousemove', dragIcon);
     document.removeEventListener('mouseup', stopDrag);
+    
+    stopInteracting();
 }
 
 function startRotation(event) {
@@ -1420,4 +1445,4 @@ async function searchAndRenderIcons(query) {
 
 
 renderIconsFromServer()
-export { handleMouseDownIcon, handleMouseMoveIcon, handleMouseUpIcon };
+export { handleMouseDownIcon, handleMouseMoveIcon, handleMouseUpIcon, startDrag, stopDrag}
