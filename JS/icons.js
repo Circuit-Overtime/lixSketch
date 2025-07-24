@@ -295,12 +295,6 @@ document.getElementById("importIcon").addEventListener('click', () => {
 
 
 function getSVGCoordsFromMouse(e) {
-    const svg = getSVGElement();
-    if (!svg) {
-        console.error('SVG element not found');
-        return { x: 0, y: 0 };
-    }
-
     const viewBox = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -601,14 +595,20 @@ function addSelectionOutline() {
 
     // Get the actual bounding box of the icon using its ID
     const bbox = iconElement.getBoundingClientRect();
-    console.log('Bounding box:', bbox);
-    const x = bbox.x;
-    const y = bbox.y;
-    const width = bbox.width;
-    const height = bbox.height;
+    const svgRect = svg.getBoundingClientRect();
+    
+    // Convert screen coordinates to SVG coordinates
+    const viewBox = svg.viewBox.baseVal;
+    const scaleX = viewBox.width / svgRect.width;
+    const scaleY = viewBox.height / svgRect.height;
+    
+    const x = viewBox.x + (bbox.left - svgRect.left) * scaleX;
+    const y = viewBox.y + (bbox.top - svgRect.top) * scaleY;
+    const width = bbox.width * scaleX;
+    const height = bbox.height * scaleY;
     
     const rotation = parseFloat(selectedIcon.getAttribute('data-shape-rotation')) || 0;
-    console.log(x, y, width, height, rotation);
+    console.log('SVG coordinates:', x, y, width, height, rotation);
     
     const centerX = x + width / 2;
     const centerY = y + height / 2;
@@ -640,7 +640,6 @@ function addSelectionOutline() {
     addResizeAnchors(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width, rotation);
     addRotationAnchor(expandedX, expandedY, expandedWidth, expandedHeight, centerX, centerY, width, rotation);
 }
-
 
 function selectIcon(event) {
     if (!isSelectionToolActive) return;
@@ -936,7 +935,6 @@ function startDrag(event) {
         iconShape = shapes.find(shape => shape.shapeName === 'icon' && shape.element === selectedIcon);
     }
 
-
     if (iconShape) {
         draggedShapeInitialFrameIcon = iconShape.parentFrame || null;
 
@@ -949,10 +947,8 @@ function startDrag(event) {
     dragOffsetX = x - originalX;
     dragOffsetY = y - originalY;
 
-    const svg = getSVGElement();
-    if (svg) {
-        svg.addEventListener('mousemove', dragIcon);
-    }
+    // Add event listeners to document instead of just SVG
+    document.addEventListener('mousemove', dragIcon);
     document.addEventListener('mouseup', stopDrag);
 }
 
@@ -994,6 +990,7 @@ function dragIcon(event) {
 
 function stopDrag(event) {
     stopInteracting();
+    document.removeEventListener('mousemove', dragIcon);
     document.removeEventListener('mouseup', stopDrag);
 }
 
@@ -1164,13 +1161,18 @@ function stopInteracting() {
     isDragging = false;
     isRotatingIcon = false;
 
+    // Remove all event listeners from both SVG and document
     const svg = getSVGElement();
     if (svg) {
         svg.removeEventListener('mousemove', dragIcon);
         svg.removeEventListener('mousemove', resizeIcon);
         svg.removeEventListener('mousemove', rotateIcon);
     }
-
+    
+    document.removeEventListener('mousemove', dragIcon);
+    document.removeEventListener('mousemove', resizeIcon);
+    document.removeEventListener('mousemove', rotateIcon);
+    
     currentAnchor = null;
     startRotationMouseAngle = null;
     startIconRotation = null;
