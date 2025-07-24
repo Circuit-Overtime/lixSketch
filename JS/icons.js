@@ -20,7 +20,7 @@ let iconRotation = 0;
 let aspect_ratio_lock = true;
 const minIconSize = 25;
 const miniatureSize = 40;
-const placedIconSize = 40;
+const placedIconSize = 24;
 let draggedShapeInitialFrameIcon = null;
 let hoveredFrameIcon = null;
 
@@ -103,7 +103,9 @@ class IconShape {
     set rotation(value) {
         this.element.setAttribute('data-shape-rotation', value);
 
-        const scale = this.width / 24;
+        const vbWidth = parseFloat(this.element.getAttribute('data-viewbox-width')) || 24;
+        const vbHeight = parseFloat(this.element.getAttribute('data-viewbox-height')) || 24;
+        const scale = this.width / Math.max(vbWidth, vbHeight);
         const localCenterX = this.width / 2 / scale;
         const localCenterY = this.height / 2 / scale;
 
@@ -115,7 +117,9 @@ class IconShape {
         this.x += dx;
         this.y += dy;
 
-        const scale = this.width / 24;
+        const vbWidth = parseFloat(this.element.getAttribute('data-viewbox-width')) || 24;
+        const vbHeight = parseFloat(this.element.getAttribute('data-viewbox-height')) || 24;
+        const scale = this.width / Math.max(vbWidth, vbHeight);
         const localCenterX = this.width / 2 / scale;
         const localCenterY = this.height / 2 / scale;
 
@@ -468,11 +472,11 @@ const handleMouseDownIcon = async (e) => {
             }
         }
 
-        // Calculate scale to make it 24x24 on canvas (placedIconSize = 50, so scale = 50/24 ≈ 2.08)
+        // Calculate scale to make it 24x24 on canvas
         const scale = placedIconSize / Math.max(vbWidth, vbHeight);
-        
-        // Set transform to position and scale the icon
-        finalIconGroup.setAttribute("transform", `translate(${finalX}, ${finalY}) scale(${scale})`);
+        const localCenterX = placedIconSize / 2 / scale;
+        const localCenterY = placedIconSize / 2 / scale;
+        finalIconGroup.setAttribute('transform', `translate(${finalX}, ${finalY}) scale(${scale}) rotate(0, ${localCenterX}, ${localCenterY})`);
         finalIconGroup.setAttribute('data-viewbox-width', vbWidth);
         finalIconGroup.setAttribute('data-viewbox-height', vbHeight);
 
@@ -844,10 +848,13 @@ function resizeIcon(event) {
     let newX = originalX;
     let newY = originalY;
 
+    // Use smaller scaling factor to make resizing more responsive to mouse movement
+    const scaleFactor = 1.0; // Reduced from implicit larger scaling
+
     switch (currentAnchor.style.cursor) {
         case "nw-resize":
-            newWidth = originalWidth - deltaX;
-            newHeight = originalHeight - deltaY;
+            newWidth = Math.max(minIconSize, originalWidth - deltaX * scaleFactor);
+            newHeight = Math.max(minIconSize, originalHeight - deltaY * scaleFactor);
             if (aspect_ratio_lock) {
                 const scale = Math.min(newWidth / originalWidth, newHeight / originalHeight);
                 newWidth = originalWidth * scale;
@@ -857,8 +864,8 @@ function resizeIcon(event) {
             newY = originalY + (originalHeight - newHeight);
             break;
         case "ne-resize":
-            newWidth = originalWidth + deltaX;
-            newHeight = originalHeight - deltaY;
+            newWidth = Math.max(minIconSize, originalWidth + deltaX * scaleFactor);
+            newHeight = Math.max(minIconSize, originalHeight - deltaY * scaleFactor);
             if (aspect_ratio_lock) {
                 const scale = Math.max(newWidth / originalWidth, newHeight / originalHeight);
                 newWidth = originalWidth * scale;
@@ -868,8 +875,8 @@ function resizeIcon(event) {
             newY = originalY + (originalHeight - newHeight);
             break;
         case "sw-resize":
-            newWidth = originalWidth - deltaX;
-            newHeight = originalHeight + deltaY;
+            newWidth = Math.max(minIconSize, originalWidth - deltaX * scaleFactor);
+            newHeight = Math.max(minIconSize, originalHeight + deltaY * scaleFactor);
             if (aspect_ratio_lock) {
                 const scale = Math.max(newWidth / originalWidth, newHeight / originalHeight);
                 newWidth = originalWidth * scale;
@@ -879,8 +886,8 @@ function resizeIcon(event) {
             newY = originalY;
             break;
         case "se-resize":
-            newWidth = originalWidth + deltaX;
-            newHeight = originalHeight + deltaY;
+            newWidth = Math.max(minIconSize, originalWidth + deltaX * scaleFactor);
+            newHeight = Math.max(minIconSize, originalHeight + deltaY * scaleFactor);
             if (aspect_ratio_lock) {
                 const scale = Math.max(newWidth / originalWidth, newHeight / originalHeight);
                 newWidth = originalWidth * scale;
@@ -890,9 +897,6 @@ function resizeIcon(event) {
             newY = originalY;
             break;
     }
-
-    newWidth = Math.max(minIconSize, newWidth);
-    newHeight = Math.max(minIconSize, newHeight);
 
     selectedIcon.setAttribute('width', newWidth);
     selectedIcon.setAttribute('height', newHeight);
@@ -904,7 +908,10 @@ function resizeIcon(event) {
     selectedIcon.setAttribute('data-shape-width', newWidth);
     selectedIcon.setAttribute('data-shape-height', newHeight);
 
-    const scale = newWidth / 24;
+    // Fix the scaling calculation to use the original viewBox dimensions
+    const vbWidth = parseFloat(selectedIcon.getAttribute('data-viewbox-width')) || 24;
+    const vbHeight = parseFloat(selectedIcon.getAttribute('data-viewbox-height')) || 24;
+    const scale = newWidth / Math.max(vbWidth, vbHeight);
     const localCenterX = newWidth / 2 / scale;
     const localCenterY = newHeight / 2 / scale;
     selectedIcon.setAttribute('transform', `translate(${newX}, ${newY}) scale(${scale}) rotate(${iconRotation}, ${localCenterX}, ${localCenterY})`);
@@ -925,10 +932,19 @@ function startDrag(event) {
 
     isDragging = true;
 
-    originalX = parseFloat(selectedIcon.getAttribute('x')) || 0;
-    originalY = parseFloat(selectedIcon.getAttribute('y')) || 0;
-    originalWidth = parseFloat(selectedIcon.getAttribute('width')) || 100;
-    originalHeight = parseFloat(selectedIcon.getAttribute('height')) || 100;
+    const bbox = selectedIcon.getBoundingClientRect();
+    const svg = getSVGElement();
+    const svgRect = svg.getBoundingClientRect();
+    
+    // Convert screen coordinates to SVG coordinates
+    const viewBox = svg.viewBox.baseVal;
+    const scaleX = viewBox.width / svgRect.width;
+    const scaleY = viewBox.height / svgRect.height;
+    
+    originalX = viewBox.x + (bbox.left - svgRect.left) * scaleX;
+    originalY = viewBox.y + (bbox.top - svgRect.top) * scaleY;
+    originalWidth = bbox.width * scaleX;
+    originalHeight = bbox.height * scaleY;
 
     let iconShape = null;
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
@@ -1045,7 +1061,10 @@ function rotateIcon(event) {
     iconRotation = iconRotation % 360;
     if (iconRotation < 0) iconRotation += 360;
 
-    const scale = iconWidth / 24;
+    // Use the original viewBox dimensions instead of recalculating scale
+    const vbWidth = parseFloat(selectedIcon.getAttribute('data-viewbox-width')) || 24;
+    const vbHeight = parseFloat(selectedIcon.getAttribute('data-viewbox-height')) || 24;
+    const scale = iconWidth / Math.max(vbWidth, vbHeight);
     const localCenterX = iconWidth / 2 / scale;
     const localCenterY = iconHeight / 2 / scale;
 
