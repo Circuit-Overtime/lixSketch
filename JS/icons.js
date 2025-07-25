@@ -286,11 +286,19 @@ function wrapIconElement(element) {
 }
 
 document.getElementById("importIcon").addEventListener('click', () => {
-    console.log('Import icon clicked');
+    
 
     const iconContainer = document.getElementById('iconsToolBar');
     if (iconContainer) {
-        iconContainer.classList.remove('hidden');
+        if(iconContainer.classList.contains('hidden')) {
+            iconContainer.classList.remove('hidden');
+            iconSearchInput.focus();
+        }
+        else 
+        {
+            iconContainer.classList.add('hidden');
+        }
+        
     }
 });
 
