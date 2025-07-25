@@ -14,7 +14,17 @@
     padding: 5px 20px;
     background: #232323;
     border-radius: 15px;
+    transition: 0.5s;
+    filter: blur(0px);
+    opacity: 1;
     z-index: 100;
+}
+.paintBrushToolBar.hidden 
+{
+    opacity: 0;
+    pointer-events: none;
+    filter: blur(10px);
+    transition: 0.5s;
 }
 .paintBrushToolBar .strokeColors 
 {

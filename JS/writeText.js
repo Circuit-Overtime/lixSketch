@@ -36,6 +36,7 @@ let rotationStartTransform = null;
 let initialHandlePosRelGroup = null;
 let initialGroupTx = 0;
 let initialGroupTy = 0;
+let codeEditor = true;
 
 // Frame attachment variables
 let draggedShapeInitialFrameText = null;
@@ -296,7 +297,11 @@ function addText(event) {
     textElement.setAttribute("white-space", "pre");
     textElement.setAttribute("dominant-baseline", "hanging");
     textElement.textContent = "";
-
+    if (codeEditor) {
+    textElement.setAttribute('data-code-mode', 'true');
+    } else {
+        textElement.removeAttribute('data-code-mode');
+    }
     gElement.setAttribute("data-x", x);
     gElement.setAttribute("data-y", y);
     textElement.setAttribute("data-initial-size", textSize);
@@ -331,6 +336,9 @@ function addText(event) {
 
 function makeTextEditable(textElement, groupElement) {
     console.log("Making text editable");
+
+    // Hide the SVG group immediately so only the textarea/editor is visible
+    groupElement.style.display = "none";
 
     if (document.querySelector("textarea.svg-text-editor")) {
         console.log("Already editing.");
@@ -368,6 +376,65 @@ function makeTextEditable(textElement, groupElement) {
     input.style.whiteSpace = "pre-wrap";
     input.style.minHeight = "1.2em";
     input.style.zIndex = "10000";
+
+    if (textElement.getAttribute('data-code-mode') === 'true' || codeEditor) {
+        input.classList.add('svg-code-editor-bg');
+        input.style.fontFamily = "'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace";
+        input.style.background = '#22272e';
+        input.style.color = '#d1d5da';
+        input.style.fontSize = '15px';
+        input.spellcheck = false;
+        // Add a <pre><code> overlay for live highlighting
+        let codeOverlay = document.createElement('pre');
+        codeOverlay.className = 'svg-code-highlighted hljs';
+        codeOverlay.style.position = 'absolute';
+        codeOverlay.style.pointerEvents = 'none';
+        codeOverlay.style.margin = '0';
+        codeOverlay.style.padding = '8px 12px';
+        codeOverlay.style.borderRadius = '6px';
+        codeOverlay.style.background = 'transparent';
+        codeOverlay.style.zIndex = '10001';
+        codeOverlay.style.fontFamily = input.style.fontFamily;
+        codeOverlay.style.fontSize = input.style.fontSize;
+        codeOverlay.style.lineHeight = input.style.lineHeight;
+        codeOverlay.style.whiteSpace = 'pre';
+        codeOverlay.style.width = 'auto';
+        codeOverlay.style.height = 'auto';
+        codeOverlay.style.left = input.style.left;
+        codeOverlay.style.top = input.style.top;
+        codeOverlay.style.minHeight = input.style.minHeight;
+        codeOverlay.style.minWidth = input.style.minWidth;
+        codeOverlay.style.color = input.style.color;
+        document.body.appendChild(codeOverlay);
+        input._codeOverlay = codeOverlay;
+
+        // Sync overlay position and size
+        function syncOverlay() {
+            codeOverlay.style.left = input.style.left;
+            codeOverlay.style.top = input.style.top;
+            codeOverlay.style.width = input.offsetWidth + 'px';
+            codeOverlay.style.height = input.offsetHeight + 'px';
+        }
+        // Highlight function
+        function highlightCode() {
+            let code = input.value;
+            // Use highlight.js auto-detect
+            codeOverlay.innerHTML = window.hljs.highlightAuto(code).value;
+            syncOverlay();
+        }
+        input.addEventListener('input', highlightCode);
+        input.addEventListener('scroll', () => {
+            codeOverlay.scrollTop = input.scrollTop;
+            codeOverlay.scrollLeft = input.scrollLeft;
+        });
+        setTimeout(highlightCode, 0);
+        setTimeout(syncOverlay, 0);
+
+        // Remove overlay on finish
+        input._removeOverlay = () => {
+            if (codeOverlay && codeOverlay.parentNode) codeOverlay.parentNode.removeChild(codeOverlay);
+        };
+    }
 
     const svgRect = svg.getBoundingClientRect();
 
@@ -485,14 +552,13 @@ function makeTextEditable(textElement, groupElement) {
     };
     document.addEventListener('mousedown', handleClickOutside, true);
     input.handleClickOutside = handleClickOutside;
-
-    groupElement.style.display = "none";
 }
+
 
 function renderText(input, textElement, deleteIfEmpty = false) {
     if (!input || !document.body.contains(input)) {
-         console.warn("RenderText called but input textarea is already removed.");
-         return;
+        console.warn("RenderText called but input textarea is already removed.");
+        return;
     }
 
     const text = input.value || "";
@@ -501,9 +567,9 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     if (input.handleClickOutside) {
         document.removeEventListener('mousedown', input.handleClickOutside, true);
     }
-
+    if (input._removeOverlay) input._removeOverlay();
     document.body.removeChild(input);
-
+    gElement.style.display = "block";
     if (!gElement || !textElement) {
         console.error("RenderText cannot find original group or text element.");
         return;
@@ -512,7 +578,7 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     if (!gElement.parentNode) {
         console.warn("RenderText: Group element no longer attached to SVG.");
         if (selectedElement === gElement) {
-             deselectElement();
+            deselectElement();
         }
         return;
     }
@@ -545,7 +611,57 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             selectedElement = null;
             removeSelectionFeedback();
         }
-    } else {
+        return;
+    }
+
+    if (textElement.getAttribute('data-code-mode') === 'true') {
+        
+        while (textElement.firstChild) textElement.removeChild(textElement.firstChild);
+
+        // Split text into lines
+        const lines = text.split('\n');
+        const x = textElement.getAttribute("x") || 0;
+
+        lines.forEach((line, index) => {
+            // Highlight each line separately
+            let highlightedLine = window.hljs.highlightAuto(line).value || " ";
+            let tempDiv = document.createElement('div');
+            tempDiv.innerHTML = highlightedLine || " ";
+
+            // Create a parent tspan for the line
+            let parentTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            parentTspan.setAttribute("x", x);
+            parentTspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
+
+            // For each node in the tempDiv, create a child tspan
+            tempDiv.childNodes.forEach(node => {
+                let childTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                if (node.nodeType === Node.TEXT_NODE) {
+                    childTspan.textContent = node.textContent || " ";
+                } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN") {
+                    childTspan.textContent = node.textContent || " ";
+                    childTspan.setAttribute("class", node.className);
+                }
+                parentTspan.appendChild(childTspan);
+            });
+
+            textElement.appendChild(parentTspan);
+        });
+
+        // Set code editor background and font
+        textElement.setAttribute('style', "font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace; background: #22272e; fill: #d1d5da;");
+        gElement.style.display = 'block';
+
+        // Update attached arrows after text content change
+        updateAttachedArrows(gElement);
+
+        if (selectedElement === gElement) {
+            setTimeout(updateSelectionFeedback, 0);
+        }
+    }
+
+    // --- NORMAL TEXT MODE ---
+    else {
         while (textElement.firstChild) {
             textElement.removeChild(textElement.firstChild);
         }
@@ -581,15 +697,13 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     }
 }
 
+
 function createSelectionFeedback(groupElement) {
     if (!groupElement) return;
     removeSelectionFeedback();
 
     const textElement = groupElement.querySelector('text');
-    if (!textElement) {
-         console.warn("Cannot create selection feedback: text element not found in group.");
-         return;
-    }
+    if (!textElement) return;
 
     const bbox = textElement.getBBox();
 
@@ -1628,5 +1742,25 @@ textAlignOptions.forEach((span) => {
     });
 });
 
+document.querySelectorAll('.textCodeSpan').forEach(span => {
+    span.addEventListener('click', (event) => {
+        event.stopPropagation();
+        document.querySelectorAll('.textCodeSpan').forEach(el => el.classList.remove('selected'));
+        span.classList.add('selected');
+        codeEditor = span.getAttribute('data-id') === 'true';
+        // Optionally, update selected text element to code mode immediately
+        if (selectedElement) {
+            const textElement = selectedElement.querySelector('text');
+            if (textElement) {
+                textElement.setAttribute('data-code-mode', codeEditor ? 'true' : 'false');
+                setTimeout(updateSelectionFeedback, 0);
+            }
+        }
+    });
+});
 
+document.getElementById("textFontOptionsExpander").addEventListener("click", (event) => {
+    event.stopPropagation();
+    document.getElementById("textFont").classList.toggle("hidden");
+})
 export { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp };

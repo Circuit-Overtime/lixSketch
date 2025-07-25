@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LixSketch</title>
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
     <script src="https://unpkg.com/boxicons@2.1.4/dist/boxicons.js"></script>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link href='https://cdn.boxicons.com/fonts/basic/boxicons.min.css' rel='stylesheet'>
@@ -17,7 +17,8 @@
     <link rel="stylesheet" href="/CSS/circleSidebar.css">
     <link rel="stylesheet" href="/CSS/lineSidebar.css">
     <link rel="stylesheet" href="/CSS/paintbrushSidebar.css">
-    <link rel="stylesheet" href="/CSS/textSidebar.css">
+    <!-- <link rel="stylesheet" href="/CSS/textSidebar.css"> -->
+    <link rel="stylesheet" href="/CSS/textToolBar.css">
       <link rel="stylesheet" href="/CSS/arrowSidebar.css">
     <link rel="icon" type="image/x-icon" href="Images/logo.png">
 </head>
@@ -173,58 +174,58 @@
   
           </div>
 
-        <div class="textSideBar hidden" id="textSideBar">
 
-            <p class="textColorLabel">Text Color</p>
-            <div class="textColor">
+        <div class="textFont hidden" id="textFont">
+              <span class="textFontSpan lixFont selected" data-id="lixFont"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="1.25"><path clip-rule="evenodd" d="m7.643 15.69 7.774-7.773a2.357 2.357 0 1 0-3.334-3.334L4.31 12.357a3.333 3.333 0 0 0-.977 2.357v1.953h1.953c.884 0 1.732-.352 2.357-.977Z"></path><path d="m11.25 5.417 3.333 3.333"></path></g></svg> <p> LixFont</p> </span>
+              <span class="textFontSpan lixDefault " data-id="lixDefault"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5.833 16.667v-10a3.333 3.333 0 0 1 3.334-3.334h1.666a3.333 3.333 0 0 1 3.334 3.334v10M5.833 10.833h8.334"></path></g></svg> <p> lixDefault </p></span>
+              <span class="textFontSpan lixCode" data-id="lixCode"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5.833 6.667 2.5 10l3.333 3.333M14.167 6.667 17.5 10l-3.333 3.333M11.667 3.333 8.333 16.667"></path></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg> <p>LixCode</p> </span>
+              <span class="textFontSpan lixFancy" data-id="lixFancy"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 12h10"></path><path d="M7 5v14"></path><path d="M17 5v14"></path><path d="M15 19h4"></path><path d="M15 5h4"></path><path d="M5 19h4"></path><path d="M5 5h4"></path></g></svg> <p>LixFancy</p> </span>
+              <div class="alignmentOptions">
+                <div class="textAlign">
+                <span class="textAlignSpan left selected" data-id="left"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="4" y1="8" x2="20" y2="8"></line><line x1="4" y1="12" x2="12" y2="12"></line><line x1="4" y1="16" x2="16" y2="16"></line></g></svg> </span>
+                <span class="textAlignSpan center" data-id="center"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="4" y1="8" x2="20" y2="8"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="6" y1="16" x2="18" y2="16"></line></g></svg> </span>
+                <span class="textAlignSpan right" data-id="right"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="4" y1="8" x2="20" y2="8"></line><line x1="10" y1="12" x2="20" y2="12"></line><line x1="8" y1="16" x2="20" y2="16"></line></g></svg> </span>
+                <span class="textAlignSpan justify" data-id="justify"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" style="fill: rgb(249, 241, 241);"><path d="M4 7h16v2H4zm0-4h16v2H4zm0 8h16v2H4zm0 4h16v2H4zm2 4h12v2H6z"></path></svg> </span>
+            </div>
+              </div>
+        </div>
+
+        <div class="textToolBar" id="textToolBar">
+          <div class="textColor">
                 <span class="textColorSpan white selected" data-id="#fff"></span>
                 <span class="textColorSpan red" data-id="#FF8383"></span>
                 <span class="textColorSpan green" data-id="#3A994C"></span>
                 <span class="textColorSpan skyBlue" data-id="#56A2E8"></span>
                 <span class="textColorSpan darkYellow" data-id="#FFD700"></span>
             </div>
-        
-            
-            <p class="textFontLabel">Text Font</p>
-            <div class="textFont">
-                <span class="textFontSpan lixFont selected" data-id="lixFont"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="1.25"><path clip-rule="evenodd" d="m7.643 15.69 7.774-7.773a2.357 2.357 0 1 0-3.334-3.334L4.31 12.357a3.333 3.333 0 0 0-.977 2.357v1.953h1.953c.884 0 1.732-.352 2.357-.977Z"></path><path d="m11.25 5.417 3.333 3.333"></path></g></svg> </span>
-                <span class="textFontSpan lixDefault " data-id="lixDefault"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5.833 16.667v-10a3.333 3.333 0 0 1 3.334-3.334h1.666a3.333 3.333 0 0 1 3.334 3.334v10M5.833 10.833h8.334"></path></g></svg> </span>
-                <span class="textFontSpan lixCode" data-id="lixCode"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5.833 6.667 2.5 10l3.333 3.333M14.167 6.667 17.5 10l-3.333 3.333M11.667 3.333 8.333 16.667"></path></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg> </span>
-                <span class="textFontSpan lixFancy" data-id="lixFancy"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M7 12h10"></path><path d="M7 5v14"></path><path d="M17 5v14"></path><path d="M15 19h4"></path><path d="M15 5h4"></path><path d="M5 19h4"></path><path d="M5 5h4"></path></g></svg> </span>
-            </div>
-        
-          <p class="textSizeLabel">Text Font Size</p>
-            <div class="textSize">
+             <div class="ToolSpacer"></div>
+
+             <div class="textFontOptionsExpander" id="textFontOptionsExpander">
+              <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="1.25"><path clip-rule="evenodd" d="m7.643 15.69 7.774-7.773a2.357 2.357 0 1 0-3.334-3.334L4.31 12.357a3.333 3.333 0 0 0-.977 2.357v1.953h1.953c.884 0 1.732-.352 2.357-.977Z"></path><path d="m11.25 5.417 3.333 3.333"></path></g></svg>
+              <ion-icon name="caret-down"></ion-icon>
+             </div>
+
+          <div class="ToolSpacer"></div>
+           <div class="textSize">
                 <span class="textSizeSpan small" data-id="15"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)"><path d="M14.167 6.667a3.333 3.333 0 0 0-3.334-3.334H9.167a3.333 3.333 0 0 0 0 6.667h1.666a3.333 3.333 0 0 1 0 6.667H9.167a3.333 3.333 0 0 1-3.334-3.334" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg> </span>
                 <span class="textSizeSpan medium selected" data-id="25"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)"><path d="M5 16.667V3.333L10 15l5-11.667v13.334" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg> </span>
                 <span class="textSizeSpan large" data-id="35"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g clip-path="url(#a)"><path d="M5.833 3.333v13.334h8.334" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h20v20H0z"></path></clipPath></defs></svg> </span>
                 <span class="textSizeSpan xtralarge" data-id="55"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" class="" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m1.667 3.333 6.666 13.334M8.333 3.333 1.667 16.667M11.667 3.333v13.334h6.666" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"></path></svg> </span>
             </div> 
-            
-            <p class="textAlignLabel">Text Align</p>
-            <div class="textAlign">
-                <span class="textAlignSpan left selected" data-id="left"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="4" y1="8" x2="20" y2="8"></line><line x1="4" y1="12" x2="12" y2="12"></line><line x1="4" y1="16" x2="16" y2="16"></line></g></svg> </span>
-                <span class="textAlignSpan center" data-id="center"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="4" y1="8" x2="20" y2="8"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="6" y1="16" x2="18" y2="16"></line></g></svg> </span>
-                <span class="textAlignSpan right" data-id="right"> <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><line x1="4" y1="8" x2="20" y2="8"></line><line x1="10" y1="12" x2="20" y2="12"></line><line x1="8" y1="16" x2="20" y2="16"></line></g></svg> </span>
-                <span class="textAlignSpan justify" data-id="justify"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" style="fill: rgb(249, 241, 241);"><path d="M4 7h16v2H4zm0-4h16v2H4zm0 8h16v2H4zm0 4h16v2H4zm2 4h12v2H6z"></path></svg> </span>
-            </div>
-        
-            <p class="textCodeLabel">Code Mode</p>
-          <div class="textCode">
-              <span class="textCodeSpan off" data-id="false">
-                  <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                      <path d="M5.833 16.667v-10a3.333 3.333 0 0 1 3.334-3.334h1.666a3.333 3.333 0 0 1 3.334 3.334v10M5.833 10.833h8.334" stroke-width="1.25"/>
-                  </svg>
-              </span>
-              <span class="textCodeSpan on selected" data-id="true">
-                  <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                      <path d="M5.833 6.667 2.5 10l3.333 3.333M14.167 6.667 17.5 10l-3.333 3.333M11.667 3.333 8.333 16.667" stroke-width="1.25"/>
-                  </svg>
-              </span>
-          </div>
-            
-        
-        </div> 
+        <div class="ToolSpacer"></div>
+        <div class="textCode">
+            <span class="textCodeSpan off" data-id="false">
+                <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                    <path d="M5.833 16.667v-10a3.333 3.333 0 0 1 3.334-3.334h1.666a3.333 3.333 0 0 1 3.334 3.334v10M5.833 10.833h8.334" stroke-width="1.25"/>
+                </svg>
+            </span>
+            <span class="textCodeSpan on selected" data-id="true">
+                <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                    <path d="M5.833 6.667 2.5 10l3.333 3.333M14.167 6.667 17.5 10l-3.333 3.333M11.667 3.333 8.333 16.667" stroke-width="1.25"/>
+                </svg>
+            </span>
+        </div>
+        </div>
 
         <div class="arrowSideBar hidden" id="arrowSideBar">
             <div class="arrowHeadLabel">Arrow Head</div>
@@ -269,7 +270,7 @@
 
         </div>
         
-        <div class="paintBrushToolBar" id="paintBrushToolBar">
+        <div class="paintBrushToolBar hidden" id="paintBrushToolBar">
           <div class="strokeColors">
             <span class="strokeColorSpan white selected" data-id="#fff"></span>
             <span class="strokeColorSpan red" data-id="#FF8383"></span>

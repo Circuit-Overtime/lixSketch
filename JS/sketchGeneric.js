@@ -68,7 +68,7 @@ const lineSideBar = document.getElementById("lineSideBar");
 const squareSideBar = document.getElementById("squareSideBar");
 const circleSideBar = document.getElementById("circleSideBar");
 const arrowSideBar = document.getElementById("arrowSideBar");
-const textSideBar = document.getElementById("textSideBar");
+const textSideBar = document.getElementById("textToolBar");
 
 const ACTION_CREATE = "create";
 const ACTION_DELETE = "delete";
@@ -234,7 +234,7 @@ function disableAllSideBars()
   squareSideBar.classList.add("hidden");
   circleSideBar.classList.add("hidden");
   arrowSideBar.classList.add("hidden");
-  // textSideBar.classList.add("hidden");
+  textSideBar.classList.add("hidden");
 }
 function disableAllTools() 
 {

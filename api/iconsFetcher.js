@@ -26,6 +26,11 @@ let fuse = null;
 
 // Load and index metadata
 function loadMetadata() {
+    // Clear heap memory by dereferencing previous objects
+    metadata = null;
+    fuse = null;
+    global.gc && global.gc(); 
+
     const raw = fs.readFileSync(METADATA_FILE, 'utf-8');
     metadata = JSON.parse(raw);
 

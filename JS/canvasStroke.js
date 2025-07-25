@@ -9,7 +9,7 @@ let isDrawingStroke = false;
 let currentStroke = null;
 let strokeOpacity = 1; 
 
-// Add dragging and resizing variables
+
 let isDraggingStroke = false;
 let isResizingStroke = false;
 let isRotatingStroke = false;
