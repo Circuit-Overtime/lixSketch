@@ -7,6 +7,7 @@ let strokeThickness = 2;
 let points = [];
 let isDrawingStroke = false;
 let currentStroke = null;
+let strokeOpacity = 1; 
 
 // Add dragging and resizing variables
 let isDraggingStroke = false;
@@ -28,6 +29,8 @@ let lastPoint = null;
 let lastTime = 0;
 const minDistance = 2; // Minimum distance between points
 const maxDistance = 15; // Maximum distance for interpolation
+let isdraggingOpacity = false;
+
 
 function getSvgCoordinates(event) {
     const rect = svg.getBoundingClientRect();
@@ -70,13 +73,14 @@ function getSvgPathFromStroke(stroke) {
 class FreehandStroke {
     constructor(points = [], options = {}) {
         this.points = points;
-        this.rawPoints = []; // Store original points for better smoothing
+        this.rawPoints = []; 
         this.options = {
             stroke: strokeColor,
             strokeWidth: strokeThickness,
             fill: "none",
             strokeLinecap: "round",
             strokeLinejoin: "round",
+            strokeOpacity: strokeOpacity,
             ...options
         };
         this.element = null;
@@ -281,6 +285,7 @@ class FreehandStroke {
         path.setAttribute('fill', this.options.fill);
         path.setAttribute('stroke-linecap', this.options.strokeLinecap);
         path.setAttribute('stroke-linejoin', this.options.strokeLinejoin);
+        path.setAttribute('stroke-opacity', this.options.strokeOpacity);
         this.element = path;
         this.group.appendChild(path);
 
@@ -396,6 +401,13 @@ class FreehandStroke {
                 span.classList.remove('selected');
             }
         });
+
+        const opacitySlider = document.getElementById("strokeOpacity");
+        const opacityValue = document.getElementById("opacityContainerValue");
+        if (opacitySlider && opacityValue) {
+            opacitySlider.value = (this.options.strokeOpacity * 100).toFixed(0);
+            opacityValue.textContent = (this.options.strokeOpacity * 100).toFixed(0);
+        }
     }
 
     contains(x, y) {
@@ -1032,7 +1044,35 @@ strokeThicknesses.forEach(span => {
     });
 });
 
-// Clone functions for undo/redo
+
+document.getElementById("strokeOpacity").addEventListener("mousedown", (event) => {
+    isdraggingOpacity = true;
+});
+
+document.getElementById("strokeOpacity").addEventListener("mousemove", (event) => {
+    if(isdraggingOpacity) 
+    {
+        const slider = document.getElementById("strokeOpacity");
+        const rect = slider.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const percent = Math.max(0, Math.min(100, (mouseX / rect.width) * 100));
+        document.getElementById("opacityContainerValue").textContent = percent.toFixed(0);
+        const opacity = percent / 100; 
+        if (currentShape instanceof FreehandStroke && currentShape.isSelected) {
+            const oldOptions = {...currentShape.options};
+            currentShape.options.strokeOpacity = opacity; 
+            currentShape.draw();
+            pushOptionsChangeAction(currentShape, oldOptions);
+        } else {
+            strokeOpacity = opacity; 
+        }
+    }
+});
+
+document.getElementById("strokeOpacity").addEventListener("mouseup", (event) => {
+    isdraggingOpacity = false;
+});
+
 function cloneOptions(options) {
     return JSON.parse(JSON.stringify(options));
 }
