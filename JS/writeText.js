@@ -335,116 +335,96 @@ function makeTextEditable(textElement, groupElement) {
     input.setAttribute("autocapitalize", "off");
 
     input.style.cssText = `
-        scrollbar-width: none;
-        overflow: hidden;
-        resize: none;
-        position: absolute;
-        outline: none;
-        padding: 20px 24px;
-        box-sizing: border-box;
-        margin: 0;
-        white-space: pre-wrap;
-        z-index: 10000; 
-        height: 30px !important;
-        background-color: transparent;
-        border: none;
-        font-size: ${textElement.getAttribute("font-size")};
-        font-family: ${textElement.getAttribute("font-family")};
-        color: ${textElement.getAttribute("fill")};
-        text-align: ${(textElement.getAttribute("text-anchor") === "middle") ? "center" :
-                      (textElement.getAttribute("text-anchor") === "end") ? "right" : "left"};
-        overflow-y: hidden;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-        ms-overflow-style: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    `;
+    scrollbar-width: none;
+    overflow: hidden;
+    resize: none;
+    position: absolute;
+    outline: none;
+    box-sizing: border-box;
+    margin: 0;
+    white-space: pre;
+    z-index: 10000; 
+    min-height: 54px !important;
+    background-color: transparent;
+    border: none;
+    font-size: ${textElement.getAttribute("font-size")};
+    font-family: ${textElement.getAttribute("font-family")};
+    color: ${textElement.getAttribute("fill")};
+    text-align: ${(textElement.getAttribute("text-anchor") === "middle") ? "center" :
+                  (textElement.getAttribute("text-anchor") === "end") ? "right" : "left"};
+    overflow-y: hidden;
+    overflow-x: hidden;
+    line-height: ${textElement.getAttribute("font-size")};
+    -webkit-overflow-scrolling: touch;
+    ms-overflow-style: none;
+    display: block;
+`;
 
     let textContent = "";
 
+    
     if (textElement.getAttribute('data-code-mode') === 'true' || codeEditor) {
         input.classList.add('svg-code-editor-bg');
-        input.style.cssText += `
-            font-family: lixCode;
-            background: #242424;
-            color: ${textColor};
-            caret-color: ${textColor};
-            font-size: ${textSize};
-            border-radius: 12px;
-            border: 2px solid #666;
-            height: 60px !important;
-        `;
-
-        if (textElement.childNodes.length > 0) {
-            textContent = Array.from(textElement.childNodes).map(parentTspan => {
-                return Array.from(parentTspan.childNodes).map(childTspan => {
-                    return (childTspan.textContent || "")
-                        .replace(/ /g, '\u00A0')
-                        .replace(/\t/g, '\t');
-                }).join('');
-            }).join('\n');
-        } else {
-            textContent = (textElement.textContent || "")
-                .replace(/ /g, '\u00A0')
-                .replace(/\t/g, '\t');
-        }
-        input.value = textContent;
-
-        
+    
+        // Create overlay
         let codeOverlay = document.createElement('pre');
         let codeNode = document.createElement('code');
         codeNode.className = 'hljs';
         codeOverlay.appendChild(codeNode);
-
-        codeOverlay.className = 'svg-code-highlighted';
-        codeOverlay.style.cssText = `
-            position: absolute;
-            pointer-events: none;
-            margin: 0;
-            border-radius: 6px;
-            background: #242424;
-            z-index: 9999;
-            font-family: ${input.style.fontFamily};
-            font-size: ${input.style.fontSize};
-            white-space: pre-wrap;
-            width: auto;
-            height: auto;
-            left: ${input.style.left};
-            top: ${input.style.top};
-            overflow: hidden;
-            display: block !important;
-        `; 
-
+    
+        codeOverlay.className = 'svg-code-highlighted syntax-highlight-overlay';
+    
+        // Set overlay position and size to match textarea
+        codeOverlay.style.position = 'absolute';
+        codeOverlay.style.left = input.style.left;
+        codeOverlay.style.top = input.style.top;
+        codeOverlay.style.width = input.offsetWidth + 'px';
+        codeOverlay.style.height = input.offsetHeight + 'px';
+        codeOverlay.style.fontSize = input.style.fontSize;
+        codeOverlay.style.fontFamily = input.style.fontFamily;
+        codeOverlay.style.lineHeight = input.style.lineHeight;
+        codeOverlay.style.padding = input.style.padding;
+        codeOverlay.style.margin = input.style.margin;
+        codeOverlay.style.display = 'flex';
+        codeOverlay.style.alignItems = 'center'; // vertical centering
+    
+        codeNode.style.width = '100%';
+        codeNode.style.display = 'block';
+    
         document.body.appendChild(codeOverlay);
-
+    
         input._codeOverlay = codeOverlay;
         input._codeNode = codeNode;
-
+    
         function syncOverlay() {
             codeOverlay.style.left = input.style.left;
             codeOverlay.style.top = input.style.top;
             codeOverlay.style.width = input.offsetWidth + 'px';
             codeOverlay.style.height = input.offsetHeight + 'px';
+            codeOverlay.style.fontSize = input.style.fontSize;
+            codeOverlay.style.fontFamily = input.style.fontFamily;
+            codeOverlay.style.lineHeight = input.style.lineHeight;
+            codeOverlay.style.padding = input.style.padding;
+            codeOverlay.style.margin = input.style.margin;
         }
-
+    
         function highlightCode() {
             let code = input.value;
             let result = window.hljs.highlightAuto(code);
-            codeNode.innerHTML = result.value; 
-            codeNode.className = `hljs language-${result.language || ''}`; 
+            codeNode.innerHTML = result.value;
+            codeNode.className = `hljs language-${result.language || ''}`;
             syncOverlay();
         }
-
+    
         input.addEventListener('input', highlightCode);
+        input.addEventListener('keydown', syncOverlay);
         input.addEventListener('scroll', () => {
             codeOverlay.scrollTop = input.scrollTop;
             codeOverlay.scrollLeft = input.scrollLeft;
         });
         setTimeout(highlightCode, 0);
         setTimeout(syncOverlay, 0);
-
+    
         input._removeOverlay = () => {
             if (codeOverlay && codeOverlay.parentNode) codeOverlay.parentNode.removeChild(codeOverlay);
         };
@@ -490,7 +470,7 @@ function makeTextEditable(textElement, groupElement) {
 
     const adjustHeight = () => {
         input.style.height = 'auto';
-        input.style.height = (input.scrollHeight - 30) + 'px';
+        input.style.height = Math.max(input.scrollHeight, 54) + 'px';
         const maxHeight = svgRect.height - (screenPt.y);
         if (input.scrollHeight > maxHeight) {
             input.style.height = maxHeight + 'px';
@@ -604,9 +584,10 @@ function renderText(input, textElement, deleteIfEmpty = false) {
         return;
     }
 
+    
     if (textElement.getAttribute('data-code-mode') === 'true') {
         while (textElement.firstChild) textElement.removeChild(textElement.firstChild);
-    
+
         const lines = text.split('\n');
         const x = parseFloat(textElement.getAttribute("x")) || 0;
         const y = parseFloat(textElement.getAttribute("y")) || 0;
@@ -615,12 +596,12 @@ function renderText(input, textElement, deleteIfEmpty = false) {
         const padding = 12;
         const backgroundColor = "#242424";
         const borderColor = "#666";
-        const borderRadius = 6;
-    
+        const borderRadius = 12;
+
         // Measure max line width
         let tempSVG = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         document.body.appendChild(tempSVG);
-        let maxWidth = 0;
+        let maxWidth = 550;
         lines.forEach(line => {
             let tempText = document.createElementNS("http://www.w3.org/2000/svg", "text");
             tempText.setAttribute("font-size", textSize);
@@ -631,7 +612,7 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             tempSVG.removeChild(tempText);
         });
         document.body.removeChild(tempSVG);
-    
+
         // Create or update background rect in parent group
         let rect = gElement.querySelector('rect[data-bg="true"]');
         if (!rect) {
@@ -639,21 +620,24 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             rect.setAttribute("data-bg", "true");
             gElement.insertBefore(rect, textElement); // Insert behind text
         }
-    
+
         const totalHeight = lines.length * lineHeight;
-        rect.setAttribute("x", x - padding);
-        rect.setAttribute("y", y - padding);
+        const minRectHeight = 30; // Match textarea min-height
+        const rectHeight = Math.max(totalHeight + 2 * padding, minRectHeight + 2 * padding);
+
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
         rect.setAttribute("width", maxWidth + 2 * padding);
-        rect.setAttribute("height", totalHeight + 2 * padding);
+        rect.setAttribute("height", rectHeight);
         rect.setAttribute("rx", borderRadius);
         rect.setAttribute("fill", backgroundColor);
         rect.setAttribute("stroke", borderColor);
         rect.setAttribute("stroke-width", "2");
-    
-        // Adjust text Y so it's vertically centered inside the rect
-        const centeredY = y - padding + (rect.getBBox().height - totalHeight) / 2;
-    
-        // Render syntax-highlighted lines
+
+        // Calculate centeredY for vertical centering
+        const centeredY = y + padding + (rectHeight - totalHeight) / 2 - (fontSizeNum * 0.4);
+
+        // Render syntax-highlighted lines, vertically centered
         lines.forEach((line, index) => {
             const highlightedLine = window.hljs.highlightAuto(line).value || " ";
             const tempDiv = document.createElement('div');
@@ -661,11 +645,11 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             tempDiv.style.position = 'absolute';
             tempDiv.style.visibility = 'hidden';
             document.body.appendChild(tempDiv);
-    
+
             const parentTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-            parentTspan.setAttribute("x", x);
-            parentTspan.setAttribute("y", (totalHeight + 2 * padding) / 2); 
-    
+            parentTspan.setAttribute("x", x + padding);
+            parentTspan.setAttribute("y", centeredY + index * lineHeight);
+
             tempDiv.childNodes.forEach(node => {
                 const childTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
                 if (node.nodeType === Node.TEXT_NODE) {
@@ -684,12 +668,12 @@ function renderText(input, textElement, deleteIfEmpty = false) {
                 childTspan.setAttribute("font-size", textSize);
                 parentTspan.appendChild(childTspan);
             });
-    
+
             textElement.appendChild(parentTspan);
             document.body.removeChild(tempDiv);
         });
     }
-    
+
 
     else {
         while (textElement.firstChild) {
@@ -1449,32 +1433,35 @@ const handleTextMouseDown = function (e) {
         const targetGroup = e.target.closest('g[data-type="text-group"]');
 
         if (targetGroup) {
-             if (e.target.closest('.resize-handle')) {
-                 return;
+             if (e.target.closest('.resize-handle') || e.target.closest('.rotate-anchor')) {
+                 return; // Let resize/rotate handlers deal with this
              }
 
             if (targetGroup === selectedElement) {
+                // If it's the selected element, start dragging
                 startDrag(e);
             } else {
+                // If it's a different text group, select it and then start dragging
                 selectElement(targetGroup);
                 startDrag(e);
             }
         } else {
+            // Clicked on empty space, deselect
             deselectElement();
         }
 
     } else if (isTextToolActive && e.button === 0) {
          const targetGroup = e.target.closest('g[data-type="text-group"]');
 
-        if (targetGroup && (e.target.tagName === "text" || e.target.tagName === "tspan")) {
+        if (targetGroup) {
+            // If any part of the text group is clicked, make the text editable
             let textEl = targetGroup.querySelector('text');
-
-            if (textEl && targetGroup) {
+            if (textEl) {
                 console.log("Editing existing text. Group:", targetGroup, "TextEl:", textEl);
                 makeTextEditable(textEl, targetGroup);
-                e.stopPropagation();
+                e.stopPropagation(); // Prevent further handling like creating new text
             } else {
-                 console.warn("Could not find text element or group for editing, creating new text instead.");
+                 console.warn("Could not find text element inside the group for editing, creating new text instead.");
                  deselectElement();
                  addText(e);
             }
@@ -1498,8 +1485,8 @@ const handleTextMouseMove = function (e) {
         svg.style.cursor = 'text';
     } else if (isSelectionToolActive) {
         const targetGroup = e.target.closest('g[data-type="text-group"]');
-        if (targetGroup) {
-            svg.style.cursor = 'move';
+        if (targetGroup && !e.target.closest('.resize-handle') && !e.target.closest('.rotate-anchor')) {
+            svg.style.cursor = 'grab'; // Changed to 'grab' to indicate draggable
         } else {
             svg.style.cursor = 'default';
         }
@@ -1516,17 +1503,22 @@ const handleTextMouseMove = function (e) {
         };
         
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            let foundFrame = null;
             shapes.forEach(frame => {
                 if (frame.shapeName === 'frame') {
                     if (frame.isShapeInFrame(tempTextBounds)) {
-                        frame.highlightFrame();
-                        hoveredFrameText = frame;
+                        foundFrame = frame;
                     } else if (hoveredFrameText === frame) {
                         frame.removeHighlight();
-                        hoveredFrameText = null;
                     }
                 }
             });
+            if (foundFrame && hoveredFrameText !== foundFrame) {
+                foundFrame.highlightFrame();
+            } else if (!foundFrame && hoveredFrameText) {
+                hoveredFrameText.removeHighlight();
+            }
+            hoveredFrameText = foundFrame;
         }
     }
 };

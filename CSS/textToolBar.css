@@ -354,4 +354,8 @@
     transform: scale(1.1); 
 }  
 
+pre::-webkit-scrollbar
+{
+    display: none;
+}
 
