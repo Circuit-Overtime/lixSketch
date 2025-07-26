@@ -406,10 +406,11 @@ function adjustCodeEditorSize(editor) {
     }
 }
 
-function makeCodeEditable(codeElement, groupElement) {
+
+function makeCodeEditable(codeElement, groupElement, clickEvent = null) {
     console.log("Making code editable");
 
-    if (document.querySelector("textarea.svg-code-editor")) {
+    if (document.querySelector(".svg-code-editor")) {
         console.log("Already editing another code block.");
         return;
     }
@@ -421,140 +422,165 @@ function makeCodeEditable(codeElement, groupElement) {
     // Hide the selection feedback for the element being edited
     removeCodeSelectionFeedback();
 
-    let input = document.createElement("textarea");
+    // Create a container div for the code editor
+    let editorContainer = document.createElement("div");
+    editorContainer.className = "svg-code-container";
+    editorContainer.style.position = "absolute";
+    editorContainer.style.zIndex = "10000";
+    editorContainer.style.backgroundColor = "#1e1e1e";
+    editorContainer.style.border = "1px solid #666";
+    editorContainer.style.borderRadius = "4px";
+    editorContainer.style.padding = "8px";
+    editorContainer.style.fontFamily = "monospace";
+    editorContainer.style.overflow = "hidden";
+
+    // Create the actual code editor
+    let input = document.createElement("div");
     input.className = "svg-code-editor";
-
-    let codeContent = "";
-    const tspans = codeElement.querySelectorAll('tspan tspan');
-    if (tspans.length > 0) {
-        tspans.forEach((tspan, index) => {
-            codeContent += tspan.textContent.replace(/ /g, '\u00A0');
-            if (index < tspans.length - 1) {
-                codeContent += "\n";
-            }
-        });
-    } else {
-        codeContent = codeElement.textContent.replace(/ /g, '\u00A0');
-    }
-
-    input.value = codeContent;
-    input.style.position = "absolute";
+    input.contentEditable = true;
     input.style.outline = "none";
-    input.style.padding = "8px";
-    input.style.margin = "0";
-    input.style.boxSizing = "border-box";
-    input.style.overflow = "hidden";
-    input.style.resize = "none";
+    input.style.minHeight = "20px";
+    input.style.maxHeight = "400px";
+    input.style.overflowY = "auto";
     input.style.whiteSpace = "pre";
-    input.style.width = "auto";
-    input.style.height = "auto";
-    input.style.overflow = "visible";
-    input.style.minHeight = "1.2em";
-    input.style.zIndex = "10000";
-    input.style.fontFamily = "monospace";
+    input.style.fontFamily = "Consolas, 'Courier New', monospace";
+    input.style.fontSize = codeElement.getAttribute("font-size") || codeTextSize;
+    input.style.color = "#d4d4d4";
+    input.style.lineHeight = "1.4";
     input.style.tabSize = "4";
+    input.style.background = "transparent";
 
+    // FIXED: Use the improved text extraction
+    let codeContent = extractTextFromCodeElement(codeElement);
+    console.log("Extracted code content:", JSON.stringify(codeContent)); // Debug log
+
+    // Set initial content with plain text (no highlighting initially)
+    input.textContent = codeContent;
+
+    editorContainer.appendChild(input);
+
+    // Position the editor
     const svgRect = svg.getBoundingClientRect();
-
-    let groupTransformMatrix = svg.createSVGMatrix();
-    if (groupElement && groupElement.transform && groupElement.transform.baseVal) {
-        const transformList = groupElement.transform.baseVal;
-        if (transformList.numberOfItems > 0) {
-            const consolidatedTransform = transformList.consolidate();
-            if (consolidatedTransform) {
-                groupTransformMatrix = consolidatedTransform.matrix;
+    let left = svgRect.left, top = svgRect.top;
+    if (clickEvent) {
+        left += clickEvent.clientX - svgRect.left;
+        top += clickEvent.clientY - svgRect.top;
+    } else {
+        // fallback to code block position if no click event
+        let groupTransformMatrix = svg.createSVGMatrix();
+        if (groupElement && groupElement.transform && groupElement.transform.baseVal) {
+            const transformList = groupElement.transform.baseVal;
+            if (transformList.numberOfItems > 0) {
+                const consolidatedTransform = transformList.consolidate();
+                if (consolidatedTransform) {
+                    groupTransformMatrix = consolidatedTransform.matrix;
+                }
             }
         }
+        const codeBBox = codeElement.getBBox();
+        let pt = svg.createSVGPoint();
+        pt.x = codeBBox.x - 8;
+        pt.y = codeBBox.y - 8;
+        let screenPt = pt.matrixTransform(groupTransformMatrix.multiply(svg.getScreenCTM()));
+        left = screenPt.x + svgRect.left;
+        top = screenPt.y + svgRect.top;
     }
+    editorContainer.style.left = `${left}px`;
+    editorContainer.style.top = `${top}px`;
 
-    const codeBBox = codeElement.getBBox();
+    document.body.appendChild(editorContainer);
 
-    let pt = svg.createSVGPoint();
-    pt.x = codeBBox.x - 8; // Account for padding
-    pt.y = codeBBox.y - 8;
+    // Auto-resize function
+    const adjustSize = () => {
+        const maxWidth = svgRect.width - (left - svgRect.left);
+        const maxHeight = svgRect.height - (top - svgRect.top);
 
-    let screenPt = pt.matrixTransform(groupTransformMatrix.multiply(svg.getScreenCTM()));
+        let newWidth = Math.max(300, Math.min(input.scrollWidth + 20, maxWidth));
+        let newHeight = Math.max(40, Math.min(input.scrollHeight + 20, maxHeight));
 
-    input.style.left = `${screenPt.x + svgRect.left}px`;
-    input.style.top = `${screenPt.y + svgRect.top}px`;
+        editorContainer.style.width = newWidth + 'px';
+        editorContainer.style.height = newHeight + 'px';
 
-    const currentFontSize = codeElement.getAttribute("font-size") || codeTextSize;
-    const currentFontFamily = codeElement.getAttribute("font-family") || codeTextFont;
-    const currentFill = codeElement.getAttribute("fill") || codeTextColor;
-    const currentAnchor = codeElement.getAttribute("text-anchor") || "start";
-    
-    input.style.fontSize = currentFontSize;
-    input.style.fontFamily = currentFontFamily;
-    input.style.color = currentFill;
-    input.style.lineHeight = "1.2em";
-    input.style.textAlign = currentAnchor === "middle" ? "center" : currentAnchor === "end" ? "right" : "left";
-    input.style.backgroundColor = "#212121"; // Match the background color
-    input.style.border = "1px solid #666";
-    input.style.borderRadius = "4px";
-
-    document.body.appendChild(input);
-
-    // Auto-resize functions
-    const adjustHeight = () => {
-        input.style.height = 'auto';
-        input.style.height = input.scrollHeight + 'px';
-        const maxHeight = svgRect.height - (screenPt.y);
-        if (input.scrollHeight > maxHeight) {
-            input.style.height = maxHeight + 'px';
+        if (input.scrollHeight > input.clientHeight) {
             input.style.overflowY = 'auto';
         } else {
             input.style.overflowY = 'hidden';
         }
     };
 
-    const adjustWidth = () => {
-        input.style.width = 'auto';
-        const maxWidth = svgRect.width - (screenPt.x);
-        if (input.scrollWidth > maxWidth) {
-            input.style.width = maxWidth + 'px';
-            input.style.overflowX = 'auto';
-        } else {
-            input.style.width = input.scrollWidth + 20 + 'px';
-            input.style.overflowX = 'hidden';
-        }
-    };
-    
-    adjustHeight();
-    adjustWidth();
+    adjustSize();
 
     setTimeout(() => {
         input.focus();
-        input.select();
+        // Select all content
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        // Apply initial syntax highlighting after focus
+        applySyntaxHighlightingImproved(input);
     }, 50);
 
-    input.addEventListener('input', adjustHeight);
-    input.addEventListener('input', adjustWidth);
+    // Input handling with duplicate prevention
+    let highlightingTimeout = null;
+    let isHighlighting = false;
+    let lastContent = input.textContent;
 
-    // Handle tab key for indentation
+    input.addEventListener('input', function(e) {
+        if (isHighlighting) return;
+
+        if (highlightingTimeout) {
+            clearTimeout(highlightingTimeout);
+            highlightingTimeout = null;
+        }
+
+        const currentContent = input.textContent || input.innerText || '';
+        
+        if (currentContent === lastContent) return;
+
+        highlightingTimeout = setTimeout(() => {
+            const contentAtTimeout = input.textContent || input.innerText || '';
+            if (contentAtTimeout !== lastContent && !isHighlighting) {
+                applySyntaxHighlightingImproved(input);
+                lastContent = contentAtTimeout;
+                adjustSize();
+            }
+            highlightingTimeout = null;
+        }, 300);
+    });
+
+    // Handle special keys
     input.addEventListener("keydown", function (e) {
         if (e.key === "Tab") {
             e.preventDefault();
-            const start = input.selectionStart;
-            const end = input.selectionEnd;
-            input.value = input.value.substring(0, start) + "\t" + input.value.substring(end);
-            input.selectionStart = input.selectionEnd = start + 1;
-            adjustHeight();
-            adjustWidth();
-        } else if (e.key === "Enter" && !e.shiftKey) {
+            document.execCommand('insertText', false, '\t');
+        } else if (e.key === "Enter" && e.ctrlKey) {
             e.preventDefault();
-            renderCode(input, codeElement, true);
+            renderCodeFromEditor(input, codeElement, true);
         } else if (e.key === "Escape") {
             e.preventDefault();
-            renderCode(input, codeElement, true);
+            renderCodeFromEditor(input, codeElement, true);
         }
     });
 
+    // Store references
     input.originalCodeElement = codeElement;
     input.codeGroup = groupElement;
+    input.isHighlighting = () => isHighlighting;
+    input.setHighlighting = (state) => { isHighlighting = state; };
+    input.clearHighlightTimeout = () => {
+        if (highlightingTimeout) {
+            clearTimeout(highlightingTimeout);
+            highlightingTimeout = null;
+        }
+    };
 
     const handleClickOutside = (event) => {
-        if (!input.contains(event.target)) {
-            renderCode(input, codeElement, true);
+        if (!editorContainer.contains(event.target)) {
+            input.clearHighlightTimeout();
+            renderCodeFromEditor(input, codeElement, true);
             document.removeEventListener('mousedown', handleClickOutside, true);
         }
     };
@@ -562,6 +588,409 @@ function makeCodeEditable(codeElement, groupElement) {
     input.handleClickOutside = handleClickOutside;
 
     groupElement.style.display = "none";
+}
+
+
+function applySyntaxHighlightingImproved(editor) {
+    if (!window.hljs) {
+        console.warn("Highlight.js not loaded");
+        return;
+    }
+
+    // Prevent multiple highlighting processes
+    if (editor.isHighlighting && editor.isHighlighting()) {
+        return;
+    }
+
+    // Set highlighting flag
+    if (editor.setHighlighting) {
+        editor.setHighlighting(true);
+    }
+
+    try {
+        // Get current cursor position more reliably
+        const selection = window.getSelection();
+        let cursorOffset = 0;
+        let cursorNode = null;
+        let cursorNodeOffset = 0;
+        
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            cursorNode = range.startContainer;
+            cursorNodeOffset = range.startOffset;
+            
+            // Calculate absolute cursor position
+            cursorOffset = getCursorOffset(editor, cursorNode, cursorNodeOffset);
+        }
+
+        // Get the plain text content
+        const code = editor.textContent || editor.innerText || '';
+        
+        // Only apply highlighting if content is not empty
+        if (!code.trim()) {
+            return;
+        }
+        
+        // Auto-detect language and highlight
+        const result = window.hljs.highlightAuto(code);
+        
+        // Only update if the content is actually different
+        const newHTML = result.value;
+        if (editor.innerHTML !== newHTML) {
+            // Apply highlighted HTML
+            editor.innerHTML = newHTML;
+
+            // Restore cursor position more accurately
+            restoreCursorPositionImproved(editor, cursorOffset);
+        }
+
+        // Add detected language info (optional)
+        if (result.language) {
+            editor.setAttribute('data-language', result.language);
+        }
+    } catch (error) {
+        console.warn("Error in syntax highlighting:", error);
+    } finally {
+        // Always clear the highlighting flag
+        if (editor.setHighlighting) {
+            editor.setHighlighting(false);
+        }
+    }
+}
+
+
+function restoreCursorPositionImproved(editor, targetOffset) {
+    if (targetOffset < 0) return;
+    
+    try {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        
+        let currentOffset = 0;
+        let targetNode = null;
+        let targetNodeOffset = 0;
+        
+        const walker = document.createTreeWalker(
+            editor,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+            const nodeLength = node.textContent.length;
+            
+            if (currentOffset + nodeLength >= targetOffset) {
+                targetNode = node;
+                targetNodeOffset = Math.max(0, Math.min(targetOffset - currentOffset, nodeLength));
+                break;
+            }
+            
+            currentOffset += nodeLength;
+        }
+        
+        if (targetNode) {
+            range.setStart(targetNode, targetNodeOffset);
+            range.collapse(true);
+            
+            selection.removeAllRanges();
+            selection.addRange(range);
+        } else {
+            // Fallback: place cursor at end
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+    } catch (error) {
+        console.warn("Could not restore cursor position:", error);
+        // Final fallback: just focus the editor
+        try {
+            editor.focus();
+        } catch (focusError) {
+            console.warn("Could not focus editor:", focusError);
+        }
+    }
+}
+
+// FIXED: More accurate cursor offset calculation
+function getCursorOffset(container, node, offset) {
+    let cursorOffset = 0;
+    
+    if (!node || !container.contains(node)) {
+        return 0;
+    }
+    
+    const walker = document.createTreeWalker(
+        container,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+    );
+    
+    let currentNode;
+    while (currentNode = walker.nextNode()) {
+        if (currentNode === node) {
+            return cursorOffset + Math.max(0, Math.min(offset, currentNode.textContent.length));
+        }
+        cursorOffset += currentNode.textContent.length;
+    }
+    
+    return cursorOffset;
+}
+
+
+function extractTextFromCodeElement(codeElement) {
+    if (!codeElement) return "";
+    
+    let codeContent = "";
+    const childNodes = codeElement.childNodes;
+    
+    // If there are no child nodes, return empty
+    if (childNodes.length === 0) {
+        return codeElement.textContent || "";
+    }
+    
+    for (let i = 0; i < childNodes.length; i++) {
+        const node = childNodes[i];
+        
+        if (node.nodeType === Node.TEXT_NODE) {
+            // Direct text content
+            codeContent += node.textContent;
+        } else if (node.tagName === 'tspan') {
+            // Handle tspan elements - get all text content from this tspan
+            const tspanText = node.textContent || "";
+            codeContent += tspanText;
+            
+            // Add newline after each tspan except the last one
+            // This assumes each tspan represents a line
+            if (i < childNodes.length - 1) {
+                const nextNode = childNodes[i + 1];
+                if (nextNode && nextNode.tagName === 'tspan') {
+                    codeContent += "\n";
+                }
+            }
+        }
+    }
+    
+    // Clean up the content - replace non-breaking spaces and normalize
+    return codeContent.replace(/\u00A0/g, ' ').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+// FIXED: Improved renderCodeFromEditor function
+function renderCodeFromEditor(input, codeElement, deleteIfEmpty = false) {
+    const editorContainer = input.closest('.svg-code-container');
+    if (!editorContainer || !document.body.contains(editorContainer)) {
+        console.warn("RenderCode called but editor container is already removed.");
+        return;
+    }
+
+    // Get plain text content from the contenteditable div
+    // FIXED: Use textContent instead of innerHTML to avoid HTML artifacts
+    const code = input.textContent || input.innerText || "";
+    const gElement = input.codeGroup;
+
+    // Clean up event listeners
+    if (input.handleClickOutside) {
+        document.removeEventListener('mousedown', input.handleClickOutside, true);
+    }
+
+    // Clear any pending highlighting timeouts
+    if (input.clearHighlightTimeout) {
+        input.clearHighlightTimeout();
+    }
+
+    document.body.removeChild(editorContainer);
+
+    if (!gElement || !codeElement) {
+        console.error("RenderCode cannot find original group or code element.");
+        return;
+    }
+
+    if (!gElement.parentNode) {
+        console.warn("RenderCode: Group element no longer attached to SVG.");
+        if (selectedCodeBlock === gElement) {
+            deselectCodeBlock();
+        }
+        return;
+    }
+
+    if (deleteIfEmpty && code.trim() === "") {
+        // Find the CodeShape wrapper
+        let codeShape = null;
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            codeShape = shapes.find(shape => shape.shapeName === 'code' && shape.group === gElement);
+            if (codeShape) {
+                const idx = shapes.indexOf(codeShape);
+                if (idx !== -1) shapes.splice(idx, 1);
+            }
+        }
+
+        pushDeleteActionWithAttachments({
+            type: 'code',
+            element: codeShape || gElement,
+            shapeName: 'code'
+        });
+
+        if (typeof cleanupAttachments === 'function') {
+            cleanupAttachments(gElement);
+        }
+
+        svg.removeChild(gElement);
+        if (selectedCodeBlock === gElement) {
+            selectedCodeBlock = null;
+            removeCodeSelectionFeedback();
+        }
+    } else {
+        // FIXED: Clear existing content completely before adding new content
+        while (codeElement.firstChild) {
+            codeElement.removeChild(codeElement.firstChild);
+        }
+
+        // Reset text content to empty to ensure clean slate
+        codeElement.textContent = "";
+
+        // Apply syntax highlighting and create SVG tspans
+        const highlightedCode = applySyntaxHighlightingToSVG(code);
+        createHighlightedSVGText(highlightedCode, codeElement);
+
+        // Update background rectangle to fit content
+        updateCodeBackground(gElement, codeElement);
+
+        gElement.style.display = 'block';
+
+        // Update attached arrows after code content change
+        if (typeof updateAttachedArrows === 'function') {
+            updateAttachedArrows(gElement);
+        }
+
+        if (selectedCodeBlock === gElement) {
+            setTimeout(updateCodeSelectionFeedback, 0);
+        }
+    }
+
+    if (selectedTool && selectedTool.classList.contains('bxs-pointer') && gElement.parentNode === svg) {
+        selectCodeBlock(gElement);
+    } else if (selectedCodeBlock === gElement) {
+        deselectCodeBlock();
+    }
+}
+
+// FIXED: Improved createHighlightedSVGText function
+function createHighlightedSVGText(highlightResult, parentElement) {
+    if (!highlightResult || !highlightResult.value) {
+        return;
+    }
+
+    const lines = highlightResult.value.split('\n');
+    const x = parentElement.getAttribute("x") || 0;
+
+    lines.forEach((line, index) => {
+        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        tspan.setAttribute("x", x);
+        tspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
+        
+        if (line.trim()) {
+            // Create highlighted tspans for non-empty lines
+            createHighlightedTspans(line, tspan, x);
+            
+            // If no child tspans were created (plain text), set the text content
+            if (tspan.childNodes.length === 0) {
+                tspan.textContent = line;
+            }
+        } else {
+            // Empty line - add a space to maintain line height
+            tspan.textContent = " ";
+        }
+        
+        parentElement.appendChild(tspan);
+    });
+}
+
+
+
+
+
+
+function applySyntaxHighlightingToSVG(code) {
+    if (!window.hljs) {
+        return { value: code, language: null };
+    }
+    
+    return window.hljs.highlightAuto(code);
+}
+
+
+function applySyntaxHighlighting(editor) {
+    if (!window.hljs) {
+        console.warn("Highlight.js not loaded");
+        return;
+    }
+
+    // Get the plain text content
+    const code = editor.textContent || editor.innerText;
+    
+    // Auto-detect language and highlight
+    const result = window.hljs.highlightAuto(code);
+    
+    // Store cursor position
+    const selection = window.getSelection();
+    let cursorPos = 0;
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        cursorPos = range.startOffset;
+    }
+
+    // Apply highlighted HTML
+    editor.innerHTML = result.value;
+
+    // Restore cursor position
+    restoreCursorPosition(editor, cursorPos);
+
+    // Add detected language info (optional)
+    if (result.language) {
+        editor.setAttribute('data-language', result.language);
+        console.log(`Detected language: ${result.language}`);
+    }
+}
+
+function restoreCursorPosition(editor, position) {
+    try {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        
+        let textNode = null;
+        let currentPos = 0;
+        
+        // Find the text node at the desired position
+        const walker = document.createTreeWalker(
+            editor,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        while (walker.nextNode()) {
+            const node = walker.currentNode;
+            const textLength = node.textContent.length;
+            
+            if (currentPos + textLength >= position) {
+                textNode = node;
+                break;
+            }
+            currentPos += textLength;
+        }
+        
+        if (textNode) {
+            range.setStart(textNode, Math.min(position - currentPos, textNode.textContent.length));
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    } catch (error) {
+        console.warn("Could not restore cursor position:", error);
+    }
 }
 
 
@@ -665,65 +1094,78 @@ function renderCode(input, codeElement, deleteIfEmpty = false) {
 }
 
 
-function createHighlightedTspans(highlightedHtml, parentElement, x, dy) {
-    // Create a temporary div to parse the highlighted HTML
+function createHighlightedTspans(highlightedHtml, parentTspan, x) {
+    if (!highlightedHtml || !parentTspan) return;
+    
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = highlightedHtml;
     
-    let currentTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-    currentTspan.setAttribute("x", x);
-    currentTspan.setAttribute("dy", dy);
-    
     // Process all nodes in the highlighted HTML
-    processHighlightedNodes(tempDiv, currentTspan, parentElement, x);
-    
-    // If currentTspan has content, add it to parent
-    if (currentTspan.textContent || currentTspan.childNodes.length > 0) {
-        parentElement.appendChild(currentTspan);
-    }
+    processHighlightedNodes(tempDiv, parentTspan);
 }
 
-// Recursive function to process highlighted nodes
-function processHighlightedNodes(node, currentTspan, parentElement, x) {
+
+
+function processHighlightedNodes(node, parentTspan) {
+    if (!node || !parentTspan) return;
+    
     for (let child of node.childNodes) {
         if (child.nodeType === Node.TEXT_NODE) {
-            // Add text content to current tspan
+            // Direct text content - add to parent tspan
             if (child.textContent) {
-                currentTspan.textContent += child.textContent;
+                if (parentTspan.textContent) {
+                    parentTspan.textContent += child.textContent;
+                } else {
+                    parentTspan.textContent = child.textContent;
+                }
             }
         } else if (child.nodeType === Node.ELEMENT_NODE) {
-            // Create a new tspan for styled content
+            // Create a new nested tspan for styled content
             let styledTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-            styledTspan.textContent = child.textContent;
+            styledTspan.textContent = child.textContent || "";
             
-            // Apply syntax highlighting colors based on class
+            // Apply comprehensive syntax highlighting colors
             const className = child.className || '';
-            if (className.includes('hljs-keyword')) {
-                styledTspan.setAttribute("fill", "#569cd6"); 
-            } else if (className.includes('hljs-string')) {
-                styledTspan.setAttribute("fill", "#ce9178"); 
-            } else if (className.includes('hljs-comment')) {
-                styledTspan.setAttribute("fill", "#6a9955"); 
-            } else if (className.includes('hljs-number')) {
-                styledTspan.setAttribute("fill", "#b5cea8"); 
-            } else if (className.includes('hljs-function')) {
-                styledTspan.setAttribute("fill", "#dcdcaa"); 
-            } else if (className.includes('hljs-variable')) {
-                styledTspan.setAttribute("fill", "#9cdcfe"); 
-            } else if (className.includes('hljs-type')) {
-                styledTspan.setAttribute("fill", "#4ec9b0"); 
-            } else if (className.includes('hljs-operator')) {
-                styledTspan.setAttribute("fill", "#d4d4d4"); 
-            } else {
-                styledTspan.setAttribute("fill", codeTextColor); // Default color
-            }
+            applyHighlightColor(styledTspan, className);
             
-            // Add the styled tspan to current tspan
-            currentTspan.appendChild(styledTspan);
+            parentTspan.appendChild(styledTspan);
         }
     }
 }
 
+
+
+function applyHighlightColor(tspan, className) {
+    // VS Code Dark Theme colors
+    if (className.includes('hljs-keyword') || className.includes('hljs-built_in')) {
+        tspan.setAttribute("fill", "#569cd6"); // Blue
+    } else if (className.includes('hljs-string') || className.includes('hljs-template-string')) {
+        tspan.setAttribute("fill", "#ce9178"); // Orange
+    } else if (className.includes('hljs-comment')) {
+        tspan.setAttribute("fill", "#6a9955"); // Green
+        tspan.setAttribute("font-style", "italic");
+    } else if (className.includes('hljs-number') || className.includes('hljs-literal')) {
+        tspan.setAttribute("fill", "#b5cea8"); // Light green
+    } else if (className.includes('hljs-function') || className.includes('hljs-title')) {
+        tspan.setAttribute("fill", "#dcdcaa"); // Yellow
+    } else if (className.includes('hljs-variable') || className.includes('hljs-name')) {
+        tspan.setAttribute("fill", "#9cdcfe"); // Light blue
+    } else if (className.includes('hljs-type') || className.includes('hljs-class')) {
+        tspan.setAttribute("fill", "#4ec9b0"); // Teal
+    } else if (className.includes('hljs-operator') || className.includes('hljs-punctuation')) {
+        tspan.setAttribute("fill", "#d4d4d4"); // Light gray
+    } else if (className.includes('hljs-property') || className.includes('hljs-attribute')) {
+        tspan.setAttribute("fill", "#92c5f8"); // Light blue
+    } else if (className.includes('hljs-tag')) {
+        tspan.setAttribute("fill", "#569cd6"); // Blue for HTML tags
+    } else if (className.includes('hljs-meta') || className.includes('hljs-doctag')) {
+        tspan.setAttribute("fill", "#9b9b9b"); // Gray
+    } else if (className.includes('hljs-regexp')) {
+        tspan.setAttribute("fill", "#d16969"); // Red
+    } else {
+        tspan.setAttribute("fill", codeTextColor); // Default color
+    }
+}
 
 
 function createCodeSelectionFeedback(groupElement) {
@@ -1544,7 +1986,7 @@ const handleCodeMouseDown = function (e) {
 
             if (codeElement && (e.target.tagName === "text" || e.target.tagName === "tspan")) {
                 console.log("Editing existing code. Group:", targetGroup);
-                makeCodeEditable(codeElement, targetGroup);
+                makeCodeEditable(codeElement, targetGroup, e); // Pass click event for position
                 e.stopPropagation();
             } else {
                  console.warn("Could not find code element for editing, creating new code block instead.");
@@ -1558,6 +2000,7 @@ const handleCodeMouseDown = function (e) {
         }
     }
 };
+
 
 // 8. UPDATE updateAttachedArrows function:
 function updateAttachedArrows(codeGroup) {
@@ -1760,4 +2203,60 @@ codeTextAlignOptions.forEach((span) => {
 });
 
 
+
+const editorStyles = `
+.svg-code-container {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+}
+
+.svg-code-editor {
+    scrollbar-width: thin;
+    scrollbar-color: #666 #2d2d2d;
+}
+
+.svg-code-editor::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.svg-code-editor::-webkit-scrollbar-track {
+    background: #2d2d2d;
+    border-radius: 4px;
+}
+
+.svg-code-editor::-webkit-scrollbar-thumb {
+    background: #666;
+    border-radius: 4px;
+}
+
+.svg-code-editor::-webkit-scrollbar-thumb:hover {
+    background: #888;
+}
+
+/* Language detection indicator */
+.svg-code-container::after {
+    content: attr(data-language);
+    position: absolute;
+    top: -20px;
+    right: 0;
+    background: #007acc;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: monospace;
+    opacity: 0.8;
+}
+`;
+
+// Inject styles if they don't exist
+if (!document.getElementById('code-editor-styles')) {
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'code-editor-styles';
+    styleSheet.textContent = editorStyles;
+    document.head.appendChild(styleSheet);
+}
+
 export { handleCodeMouseDown, handleCodeMouseMove, handleCodeMouseUp };
+
