@@ -425,15 +425,19 @@ function makeCodeEditable(codeElement, groupElement) {
     input.className = "svg-code-editor";
 
     let codeContent = "";
-    const tspans = Array.from(codeElement.querySelectorAll('tspan tspan'));
+    const tspans = codeElement.querySelectorAll('tspan tspan');
     if (tspans.length > 0) {
-        codeContent = tspans.map(tspan => tspan.textContent).join('\n');
+        tspans.forEach((tspan, index) => {
+            codeContent += tspan.textContent.replace(/ /g, '\u00A0');
+            if (index < tspans.length - 1) {
+                codeContent += "\n";
+            }
+        });
     } else {
-        codeContent = codeElement.textContent;
+        codeContent = codeElement.textContent.replace(/ /g, '\u00A0');
     }
+
     input.value = codeContent;
-
-
     input.style.position = "absolute";
     input.style.outline = "none";
     input.style.padding = "8px";
@@ -622,18 +626,20 @@ function renderCode(input, codeElement, deleteIfEmpty = false) {
         }
 
         // Split into lines and create tspans with syntax highlighting
-        const lines = code.split(/\r?\n/);
+        const lines = code.split("\n");
         const x = codeElement.getAttribute("x") || 0;
 
         lines.forEach((line, index) => {
             if (window.hljs && line.trim()) {
+                // Get syntax highlighting for the line
                 const result = window.hljs.highlightAuto(line);
                 createHighlightedTspans(result.value, codeElement, x, index === 0 ? "0" : "1.2em");
             } else {
+                // Create plain tspan for empty lines or when hljs is not available
                 let tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
                 tspan.setAttribute("x", x);
                 tspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
-                tspan.textContent = line || " ";
+                tspan.textContent = line.replace(/\u00A0/g, ' ') || " ";
                 codeElement.appendChild(tspan);
             }
         });
@@ -848,11 +854,11 @@ function updateCodeSelectionFeedback() {
     const wasHidden = selectedCodeBlock.style.display === 'none';
     if (wasHidden) selectedCodeBlock.style.display = 'block';
 
-    const bbox = foreignObject.getBBox();
+    const bbox = codeElement.getBBox(); // Fix: use codeElement, not undefined foreignObject
 
     if (wasHidden) selectedCodeBlock.style.display = 'none';
 
-    if (bbox.width === 0 && bbox.height === 0 && foreignObject.querySelector('.svg-code-editor')?.textContent.trim() !== "") {
+    if (bbox.width === 0 && bbox.height === 0 && codeElement.textContent.trim() !== "") {
         console.warn("BBox calculation resulted in zero dimensions. Feedback may be incorrect.");
     }
 
@@ -899,6 +905,8 @@ function updateCodeSelectionFeedback() {
     }
 }
 
+
+
 function startCodeRotation(event) {
     if (!selectedCodeBlock || event.button !== 0) return;
     event.preventDefault();
@@ -908,10 +916,10 @@ function startCodeRotation(event) {
     isCodeDragging = false;
     isCodeResizing = false;
 
-    const foreignObject = selectedCodeBlock.querySelector('foreignObject');
-    if (!foreignObject) return;
+    const codeElement = selectedCodeBlock.querySelector('text'); // Fix: use text element instead of foreignObject
+    if (!codeElement) return;
 
-    const bbox = foreignObject.getBBox();
+    const bbox = codeElement.getBBox();
     const centerX = bbox.x + bbox.width / 2;
     const centerY = bbox.y + bbox.height / 2;
 
@@ -933,9 +941,10 @@ function startCodeRotation(event) {
 
     svg.style.cursor = 'grabbing';
 
-    window.addEventListener('mousemove', handleCodeMouseMove);
+    window.addEventListener('mousemove', handleCodeMouseMove); // Fix: use window instead of svg
     window.addEventListener('mouseup', handleCodeMouseUp);
 }
+
 
 function removeCodeSelectionFeedback() {
     if (selectedCodeBlock) {
@@ -986,9 +995,9 @@ function deselectCodeBlock() {
 function startCodeDrag(event) {
     if (!selectedCodeBlock || event.button !== 0) return;
 
-     if (event.target.closest('.resize-handle')) {
-         return;
-     }
+    if (event.target.closest('.resize-handle')) {
+        return;
+    }
 
     isCodeDragging = true;
     isCodeResizing = false;
@@ -1015,87 +1024,255 @@ function startCodeDrag(event) {
         
         // Temporarily remove from frame clipping if dragging
         if (codeShape.parentFrame) {
-            draggedCodeInitialFrame.temporarilyRemoveFromFrame(codeShape);
+            codeShape.parentFrame.temporarilyRemoveFromFrame(codeShape);
         }
     }
 
     svg.style.cursor = 'grabbing';
 
-    svg.addEventListener('mousemove', handleCodeMouseMove);
-    svg.addEventListener('mouseup', handleCodeMouseUp);
+    window.addEventListener('mousemove', handleCodeMouseMove); // Fix: use window
+    window.addEventListener('mouseup', handleCodeMouseUp);   // Fix: use window
 }
 
 function startCodeResize(event, anchor) {
-  if (!selectedCodeBlock || event.button !== 0) return;
-  event.preventDefault();
-  event.stopPropagation();
+    if (!selectedCodeBlock || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
 
-  isCodeResizing = true;
-  isCodeDragging = false;
-  currentCodeResizeHandle = anchor;
+    isCodeResizing = true;
+    isCodeDragging = false;
+    currentCodeResizeHandle = anchor;
 
-  const foreignObject = selectedCodeBlock.querySelector('foreignObject');
-  const codeEditor = foreignObject.querySelector('.svg-code-editor');
+    
+    const codeElement = selectedCodeBlock.querySelector('text');
+    if (!codeElement) {
+        console.error("Cannot start resize: code element not found.");
+        isCodeResizing = false;
+        return;
+    }
 
-  if (!foreignObject || !codeEditor) {
-       console.error("Cannot start resize: foreignObject or code editor not found.");
-       isCodeResizing = false;
-       return;
-  }
+    startCodeBBox = codeElement.getBBox();
+    startCodeFontSize = parseFloat(codeElement.getAttribute("font-size") || 25);
+    if (isNaN(startCodeFontSize)) startCodeFontSize = 25;
 
-  startCodeBBox = foreignObject.getBBox(); // BBox of the foreignObject
-  startCodeFontSize = parseFloat(codeEditor.style.fontSize) || 30;
-  if (isNaN(startCodeFontSize)) startCodeFontSize = 30;
+    startCodePoint = getSVGCoordinates(event, selectedCodeBlock);
 
-  startCodePoint = getSVGCoordinates(event, selectedCodeBlock);
+    const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
+    initialCodeGroupTx = currentTransform ? currentTransform.matrix.e : 0;
+    initialCodeGroupTy = currentTransform ? currentTransform.matrix.f : 0;
 
-  const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
-  initialCodeGroupTx = currentTransform ? currentTransform.matrix.e : 0;
-  initialCodeGroupTy = currentTransform ? currentTransform.matrix.f : 0;
+    const padding = 3;
+    const startX = startCodeBBox.x - padding;
+    const startY = startCodeBBox.y - padding;
+    const startWidth = startCodeBBox.width + 2 * padding;
+    const startHeight = startCodeBBox.height + 2 * padding;
 
-  const padding = 3; // Padding for selection handles relative to BBox
-  const startX = startCodeBBox.x - padding;
-  const startY = startCodeBBox.y - padding;
-  const startWidth = startCodeBBox.width + 2 * padding;
-  const startHeight = startCodeBBox.height + 2 * padding;
+    let hx = startX;
+    let hy = startY;
+    if (anchor.includes('e')) { hx = startX + startWidth; }
+    if (anchor.includes('s')) { hy = startY + startHeight; }
+    initialCodeHandlePosRelGroup = { x: hx, y: hy };
 
-  let hx = startX;
-  let hy = startY;
-  if (anchor.includes('e')) { hx = startX + startWidth; }
-  if (anchor.includes('s')) { hy = startY + startHeight; }
-  initialCodeHandlePosRelGroup = { x: hx, y: hy };
+    svg.style.cursor = codeResizeHandles[anchor]?.style.cursor || 'default';
 
-  svg.style.cursor = codeResizeHandles[anchor]?.style.cursor || 'default';
-
-  svg.addEventListener('mousemove', handleCodeMouseMove);
-  svg.addEventListener('mouseup', handleCodeMouseUp);
+    window.addEventListener('mousemove', handleCodeMouseMove); 
+    window.addEventListener('mouseup', handleCodeMouseUp);   
 }
 
 
 
-const handleCodeMouseMove = function (e) {
+
+const handleCodeMouseMove = (event) => {
+    if (!selectedCodeBlock) return;
+    event.preventDefault();
+
     // Keep lastMousePos in screen coordinates for other functions
     const svgRect = svg.getBoundingClientRect();
     lastMousePos = {
-        x: e.clientX - svgRect.left, 
-        y: e.clientY - svgRect.top
+        x: event.clientX - svgRect.left, 
+        y: event.clientY - svgRect.top
     };
 
-    // Handle cursor changes for code tool
-    if (isCodeToolActive) {
-        svg.style.cursor = 'text';
-    } else if (isSelectionToolActive) {
-        const targetGroup = e.target.closest('g[data-type="code-group"]');
-        if (targetGroup) {
-            svg.style.cursor = 'move';
+    if (isCodeDragging) {
+        const currentPoint = getSVGCoordinates(event);
+        const newTranslateX = currentPoint.x - codeDragOffsetX;
+        const newTranslateY = currentPoint.y - codeDragOffsetY;
+
+        const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
+        if (currentTransform) {
+            const matrix = currentTransform.matrix;
+            const angle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+
+            const codeElement = selectedCodeBlock.querySelector('text');
+            if (codeElement) {
+                const bbox = codeElement.getBBox();
+                const centerX = bbox.x + bbox.width / 2;
+                const centerY = bbox.y + bbox.height / 2;
+
+                selectedCodeBlock.setAttribute('transform',
+                    `translate(${newTranslateX}, ${newTranslateY}) rotate(${angle}, ${centerX}, ${centerY})`
+                );
+            } else {
+                selectedCodeBlock.setAttribute('transform', `translate(${newTranslateX}, ${newTranslateY})`);
+            }
         } else {
-            svg.style.cursor = 'default';
+            selectedCodeBlock.setAttribute('transform', `translate(${newTranslateX}, ${newTranslateY})`);
         }
+
+        // Update frame containment for CodeShape wrapper
+        if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+            const codeShape = shapes.find(shape => shape.shapeName === 'code' && shape.group === selectedCodeBlock);
+            if (codeShape) {
+                codeShape.updateFrameContainment();
+            }
+        }
+
+        // Update attached arrows during dragging
+        updateAttachedArrows(selectedCodeBlock);
+
+    } else if (isCodeResizing) {
+        const codeElement = selectedCodeBlock.querySelector('text');
+        if (!codeElement || !startCodeBBox || startCodeFontSize === null || !startCodePoint || !initialCodeHandlePosRelGroup) return;
+
+        const currentPoint = getSVGCoordinates(event, selectedCodeBlock);
+
+        const startX = startCodeBBox.x;
+        const startY = startCodeBBox.y;
+        const startWidth = startCodeBBox.width;
+        const startHeight = startCodeBBox.height;
+
+        let anchorX, anchorY;
+
+        switch (currentCodeResizeHandle) {
+            case 'nw':
+                anchorX = startX + startWidth;
+                anchorY = startY + startHeight;
+                break;
+            case 'ne':
+                anchorX = startX;
+                anchorY = startY + startHeight;
+                break;
+            case 'sw':
+                anchorX = startX + startWidth;
+                anchorY = startY;
+                break;
+            case 'se':
+                anchorX = startX;
+                anchorY = startY;
+                break;
+        }
+
+        const newWidth = Math.abs(currentPoint.x - anchorX);
+        const newHeight = Math.abs(currentPoint.y - anchorY);
+
+        const chosenScale = newHeight / startHeight;
+
+        const minScale = 0.1;
+        const maxScale = 10.0;
+        const clampedScale = Math.max(minScale, Math.min(chosenScale, maxScale));
+
+        const newFontSize = startCodeFontSize * clampedScale;
+        const minFontSize = 5;
+        const finalFontSize = Math.max(newFontSize, minFontSize);
+
+        codeElement.setAttribute("font-size", `${finalFontSize}px`);
+
+        const currentBBox = codeElement.getBBox();
+
+        let newAnchorX, newAnchorY;
+
+        switch (currentCodeResizeHandle) {
+            case 'nw':
+                newAnchorX = currentBBox.x + currentBBox.width;
+                newAnchorY = currentBBox.y + currentBBox.height;
+                break;
+            case 'ne':
+                newAnchorX = currentBBox.x;
+                newAnchorY = currentBBox.y + currentBBox.height;
+                break;
+            case 'sw':
+                newAnchorX = currentBBox.x + currentBBox.width;
+                newAnchorY = currentBBox.y;
+                break;
+            case 'se':
+                newAnchorX = currentBBox.x;
+                newAnchorY = currentBBox.y;
+                break;
+        }
+
+        const deltaX = anchorX - newAnchorX;
+        const deltaY = anchorY - newAnchorY;
+
+        const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
+        if (currentTransform) {
+            const matrix = currentTransform.matrix;
+            const angle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+
+            const newGroupTx = initialCodeGroupTx + deltaX;
+            const newGroupTy = initialCodeGroupTy + deltaY;
+
+            const centerX = currentBBox.x + currentBBox.width / 2;
+            const centerY = currentBBox.y + currentBBox.height / 2;
+
+            selectedCodeBlock.setAttribute('transform',
+                `translate(${newGroupTx}, ${newGroupTy}) rotate(${angle}, ${centerX}, ${centerY})`
+            );
+        } else {
+            const newGroupTx = initialCodeGroupTx + deltaX;
+            const newGroupTy = initialCodeGroupTy + deltaY;
+            selectedCodeBlock.setAttribute('transform', `translate(${newGroupTx}, ${newGroupTy})`);
+        }
+
+        // Update background to fit new text size
+        updateCodeBackground(selectedCodeBlock, codeElement);
+
+        // Update attached arrows during resizing
+        updateAttachedArrows(selectedCodeBlock);
+
+        clearTimeout(selectedCodeBlock.updateFeedbackTimeout);
+        selectedCodeBlock.updateFeedbackTimeout = setTimeout(() => {
+            updateCodeSelectionFeedback();
+            delete selectedCodeBlock.updateFeedbackTimeout;
+        }, 0);
+
+    } else if (isCodeRotating) {
+        const codeElement = selectedCodeBlock.querySelector('text');
+        if (!codeElement) return;
+
+        const bbox = codeElement.getBBox();
+        const centerX = bbox.x + bbox.width / 2;
+        const centerY = bbox.y + bbox.height / 2;
+
+        const mousePos = getSVGCoordinates(event);
+
+        let centerPoint = svg.createSVGPoint();
+        centerPoint.x = centerX;
+        centerPoint.y = centerY;
+
+        const groupTransform = selectedCodeBlock.transform.baseVal.consolidate();
+        if (groupTransform) {
+            centerPoint = centerPoint.matrixTransform(groupTransform.matrix);
+        }
+
+        const currentAngle = Math.atan2(mousePos.y - centerPoint.y, mousePos.x - centerPoint.x) * 180 / Math.PI;
+
+        const rotationDiff = currentAngle - codeRotationStartAngle;
+
+        const newTransform = `translate(${codeRotationStartTransform.e}, ${codeRotationStartTransform.f}) rotate(${rotationDiff}, ${centerX}, ${centerY})`;
+        selectedCodeBlock.setAttribute('transform', newTransform);
+
+        // Update attached arrows during rotation
+        updateAttachedArrows(selectedCodeBlock);
+
+        updateCodeSelectionFeedback();
     }
 
-    // Frame highlighting logic for code tool (similar to writeText)
+    // Handle cursor changes for code tool
     if (isCodeToolActive && !isCodeDragging && !isCodeResizing && !isCodeRotating) {
-        const { x, y } = getSVGCoordinates(e);
+        svg.style.cursor = 'text';
+        
+        // Frame highlighting logic for code tool
+        const { x, y } = getSVGCoordinates(event);
         
         const tempCodeBounds = {
             x: x - 275, 
@@ -1117,16 +1294,179 @@ const handleCodeMouseMove = function (e) {
                 }
             });
         }
+    } else if (isSelectionToolActive && !isCodeDragging && !isCodeResizing && !isCodeRotating) {
+        const targetGroup = event.target.closest('g[data-type="code-group"]');
+        if (targetGroup) {
+            svg.style.cursor = 'move';
+        } else {
+            svg.style.cursor = 'default';
+        }
     }
 };
 
+// Add this complete mouse up handler
+const handleCodeMouseUp = (event) => {
+    if (event.button !== 0) return;
 
-const handleCodeMouseUp = function (e) {
+    if (isCodeDragging && selectedCodeBlock) {
+        const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
+        if (currentTransform) {
+            const finalTranslateX = currentTransform.matrix.e;
+            const finalTranslateY = currentTransform.matrix.f;
+
+            const initialX = parseFloat(selectedCodeBlock.getAttribute("data-x")) || 0;
+            const initialY = parseFloat(selectedCodeBlock.getAttribute("data-y")) || 0;
+
+            // Find the CodeShape wrapper for frame tracking
+            let codeShape = null;
+            if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
+                codeShape = shapes.find(shape => shape.shapeName === 'code' && shape.group === selectedCodeBlock);
+            }
+
+            // Add frame information for undo tracking
+            const oldPosWithFrame = {
+                x: initialX,
+                y: initialY,
+                rotation: extractRotationFromTransform(selectedCodeBlock) || 0,
+                parentFrame: draggedCodeInitialFrame
+            };
+            const newPosWithFrame = {
+                x: finalTranslateX,
+                y: finalTranslateY,
+                rotation: extractRotationFromTransform(selectedCodeBlock) || 0,
+                parentFrame: codeShape ? codeShape.parentFrame : null
+            };
+
+            const stateChanged = initialX !== finalTranslateX || initialY !== finalTranslateY;
+            const frameChanged = oldPosWithFrame.parentFrame !== newPosWithFrame.parentFrame;
+
+            if (stateChanged || frameChanged) {
+                pushTransformAction(
+                    {
+                        type: 'code',
+                        element: selectedCodeBlock,
+                        shapeName: 'code'
+                    },
+                    oldPosWithFrame,
+                    newPosWithFrame
+                );
+            }
+
+            // Handle frame containment changes after drag
+            if (codeShape) {
+                const finalFrame = hoveredCodeFrame;
+                
+                // If shape moved to a different frame
+                if (draggedCodeInitialFrame !== finalFrame) {
+                    // Remove from initial frame
+                    if (draggedCodeInitialFrame) {
+                        draggedCodeInitialFrame.removeShapeFromFrame(codeShape);
+                    }
+                    
+                    // Add to new frame
+                    if (finalFrame) {
+                        finalFrame.addShapeToFrame(codeShape);
+                    }
+                    
+                    // Track the frame change for undo
+                    if (frameChanged) {
+                        pushFrameAttachmentAction(finalFrame || draggedCodeInitialFrame, codeShape, 
+                            finalFrame ? 'attach' : 'detach', draggedCodeInitialFrame);
+                    }
+                } else if (draggedCodeInitialFrame) {
+                    // Shape stayed in same frame, restore clipping
+                    draggedCodeInitialFrame.restoreToFrame(codeShape);
+                }
+            }
+
+            selectedCodeBlock.setAttribute("data-x", finalTranslateX);
+            selectedCodeBlock.setAttribute("data-y", finalTranslateY);
+            console.log("Code Drag End - Final Pos:", finalTranslateX, finalTranslateY);
+        }
+
+        draggedCodeInitialFrame = null;
+
+    } else if (isCodeResizing && selectedCodeBlock) {
+        const codeElement = selectedCodeBlock.querySelector('text');
+        if (codeElement) {
+            const finalFontSize = codeElement.getAttribute("font-size");
+            const initialFontSize = startCodeFontSize;
+
+            const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
+            if (currentTransform && initialFontSize !== parseFloat(finalFontSize)) {
+                const finalTranslateX = currentTransform.matrix.e;
+                const finalTranslateY = currentTransform.matrix.f;
+
+                pushTransformAction(
+                    {
+                        type: 'code',
+                        element: selectedCodeBlock,
+                        shapeName: 'code'
+                    },
+                    {
+                        x: initialCodeGroupTx,
+                        y: initialCodeGroupTy,
+                        fontSize: initialFontSize,
+                        rotation: extractRotationFromTransform(selectedCodeBlock) || 0
+                    },
+                    {
+                        x: finalTranslateX,
+                        y: finalTranslateY,
+                        fontSize: parseFloat(finalFontSize),
+                        rotation: extractRotationFromTransform(selectedCodeBlock) || 0
+                    }
+                );
+
+                selectedCodeBlock.setAttribute("data-x", finalTranslateX);
+                selectedCodeBlock.setAttribute("data-y", finalTranslateY);
+                console.log("Code Resize End - Final Font Size:", finalFontSize);
+            }
+
+            clearTimeout(selectedCodeBlock.updateFeedbackTimeout);
+            updateCodeSelectionFeedback();
+        }
+    } else if (isCodeRotating && selectedCodeBlock) {
+        const currentTransform = selectedCodeBlock.transform.baseVal.consolidate();
+        if (currentTransform && codeRotationStartTransform) {
+            const initialRotation = Math.atan2(codeRotationStartTransform.b, codeRotationStartTransform.a) * 180 / Math.PI;
+            const finalRotation = extractRotationFromTransform(selectedCodeBlock) || 0;
+
+            if (Math.abs(initialRotation - finalRotation) > 1) {
+                pushTransformAction(
+                    {
+                        type: 'code',
+                        element: selectedCodeBlock,
+                        shapeName: 'code'
+                    },
+                    {
+                        x: codeRotationStartTransform.e,
+                        y: codeRotationStartTransform.f,
+                        rotation: initialRotation
+                    },
+                    {
+                        x: currentTransform.matrix.e,
+                        y: currentTransform.matrix.f,
+                        rotation: finalRotation
+                    }
+                );
+            }
+
+            console.log("Code Rotation End");
+        }
+        updateCodeSelectionFeedback();
+    }
+
+    // Clear frame highlighting
+    if (hoveredCodeFrame) {
+        hoveredCodeFrame.removeHighlight();
+        hoveredCodeFrame = null;
+    }
+
     // Handle code deselection when clicking outside
     if (isSelectionToolActive) {
-        const targetGroup = e.target.closest('g[data-type="code-group"]');
-        const isResizeHandle = e.target.closest('.resize-handle');
-        const isRotateAnchor = e.target.closest('.rotate-anchor');
+        const targetGroup = event.target.closest('g[data-type="code-group"]');
+        const isResizeHandle = event.target.closest('.resize-handle');
+        const isRotateAnchor = event.target.closest('.rotate-anchor');
         
         // If we didn't click on code block or its controls, deselect
         if (!targetGroup && !isResizeHandle && !isRotateAnchor && selectedCodeBlock) {
@@ -1134,11 +1474,25 @@ const handleCodeMouseUp = function (e) {
         }
     }
 
-    // Clear frame highlighting when done with code tool operations
-    if (hoveredCodeFrame) {
-        hoveredCodeFrame.removeHighlight();
-        hoveredCodeFrame = null;
-    }
+    isCodeDragging = false;
+    isCodeResizing = false;
+    isCodeRotating = false;
+    currentCodeResizeHandle = null;
+    startCodePoint = null;
+    startCodeBBox = null;
+    startCodeFontSize = null;
+    codeDragOffsetX = undefined;
+    codeDragOffsetY = undefined;
+    initialCodeHandlePosRelGroup = null;
+    initialCodeGroupTx = 0;
+    initialCodeGroupTy = 0;
+    codeRotationStartAngle = 0;
+    codeRotationStartTransform = null;
+
+    svg.style.cursor = 'default';
+
+    svg.removeEventListener('mousemove', handleCodeMouseMove);
+    svg.removeEventListener('mouseup', handleCodeMouseUp);
 };
 
 
