@@ -10,9 +10,9 @@ import {
 import { cleanupAttachments } from './drawArrow.js';
 
 let codeTextSize = "25px";
-let codeTextFont = "lixCode"; // Assuming a monospaced font for code
+let codeTextFont = "lixCode"; 
 let codeTextColor = "#fff";
-let codeTextAlign = "left"; // Code is typically left-aligned
+let codeTextAlign = "left"; 
 
 let codeTextColorOptions = document.querySelectorAll(".textColorSpan");
 let codeTextFontOptions = document.querySelectorAll(".textFontSpan");
@@ -103,9 +103,9 @@ class CodeShape {
     }
     
     get width() {
-        const codeBlockContainer = this.group.querySelector('foreignObject');
-        if (codeBlockContainer) {
-            return parseFloat(codeBlockContainer.getAttribute('width')) || codeBlockContainer.getBBox().width;
+        const codeElement = this.group.querySelector('text');
+        if (codeElement) {
+            return codeElement.getBBox().width;
         }
         return 0;
     }
@@ -124,9 +124,9 @@ class CodeShape {
     }
     
     get height() {
-        const codeBlockContainer = this.group.querySelector('foreignObject');
-        if (codeBlockContainer) {
-            return parseFloat(codeBlockContainer.getAttribute('height')) || codeBlockContainer.getBBox().height;
+        const codeElement = this.group.querySelector('text');
+        if (codeElement) {
+            return codeElement.getBBox().height;
         }
         return 0;
     }
@@ -213,10 +213,10 @@ class CodeShape {
     }
 
     contains(x, y) {
-        const codeBlockContainer = this.group.querySelector('foreignObject');
-        if (!codeBlockContainer) return false;
+        const codeElement = this.group.querySelector('text');
+        if (!codeElement) return false;
         
-        const bbox = codeBlockContainer.getBBox();
+        const bbox = codeElement.getBBox();
         const padding = 8; // Selection padding
         
         const CTM = this.group.getCTM();
@@ -285,6 +285,7 @@ function getSVGCoordinates(event, element = svg) {
     }
 }
 
+
 function addCodeBlock(event) {
     let { x, y } = getSVGCoordinates(event);
 
@@ -292,61 +293,51 @@ function addCodeBlock(event) {
     gElement.setAttribute("data-type", "code-group");
     gElement.setAttribute("transform", `translate(${x}, ${y})`);
 
-    const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-    foreignObject.setAttribute('x', '0');
-    foreignObject.setAttribute('y', '0');
-    foreignObject.setAttribute('width', '550'); 
-    foreignObject.setAttribute('height', '60');  
-    foreignObject.setAttribute("data-initial-width", '550'); 
-    foreignObject.setAttribute("data-initial-height", '60');  
+    // Create background rectangle for code block
+    let backgroundRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    backgroundRect.setAttribute("class", "code-background");
+    backgroundRect.setAttribute("x", -10); // Padding
+    backgroundRect.setAttribute("y", -10); // Padding
+    backgroundRect.setAttribute("width", 300); // Initial width
+    backgroundRect.setAttribute("height", 60); // Initial height
+    backgroundRect.setAttribute("fill", "#212121"); // Dark background
+    backgroundRect.setAttribute("stroke", "#666");
+    backgroundRect.setAttribute("stroke-width", "1");
+    backgroundRect.setAttribute("rx", "4"); // Rounded corners
+    backgroundRect.setAttribute("ry", "4");
+    gElement.appendChild(backgroundRect);
 
-    const codeContainer = document.createElement('div');
-    codeContainer.className = 'svg-code-container';
-    codeContainer.style.width = '100%';
-    codeContainer.style.height = '100%';
-    codeContainer.style.padding = '10px';
-    codeContainer.style.borderRadius = '8px';
-    codeContainer.style.backgroundColor = '#242424'; // Dark background
-    codeContainer.style.border = '2px solid #666';
-    codeContainer.style.boxSizing = 'border-box';
-    codeContainer.style.display = 'flex';
-    codeContainer.style.flexDirection = 'column';
-    codeContainer.style.minWidth = '550px';
-    codeContainer.style.minHeight = '60px';
-    codeContainer.style.position = 'relative'; 
+    // Create SVG text element
+    let codeElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    let textAlignElement = "start";
+    if (codeTextAlign === "center") textAlignElement = "middle";
+    else if (codeTextAlign === "right") textAlignElement = "end";
 
+    codeElement.setAttribute("x", 0);
+    codeElement.setAttribute("y", 0);
+    codeElement.setAttribute("fill", codeTextColor);
+    codeElement.setAttribute("font-size", codeTextSize);
+    codeElement.setAttribute("font-family", codeTextFont);
+    codeElement.setAttribute("text-anchor", textAlignElement);
+    codeElement.setAttribute("cursor", "text");
+    codeElement.setAttribute("white-space", "pre");
+    codeElement.setAttribute("dominant-baseline", "hanging");
+    codeElement.textContent = "";
 
-    const codeEditor = document.createElement('pre'); // Use pre for code formatting
-    codeEditor.className = 'svg-code-editor';
-    codeEditor.contentEditable = 'true';
-    codeEditor.spellcheck = 'false';
-    codeEditor.setAttribute('data-placeholder', 'Start typing code...');
-    codeEditor.setAttribute("data-gramm", "false"); 
-    codeEditor.setAttribute("data-enable-grammarly", "false"); 
-    codeEditor.style.outline = 'none';
-    codeEditor.style.border = 'none';
-    codeEditor.style.backgroundColor = 'transparent';
-    codeEditor.style.color = codeTextColor;
-    codeEditor.style.fontSize = codeTextSize;
-    codeEditor.style.fontFamily = codeTextFont;
-    codeEditor.style.lineHeight = '1.2em';
-    codeEditor.style.overflow = 'auto'; // Enable scrolling for code
-    codeEditor.style.whiteSpace = 'pre-wrap';
-    codeEditor.style.wordWrap = 'break-word';
-    codeEditor.style.tabSize = '4';
-    codeEditor.style.flexGrow = '1';
-    codeEditor.style.margin = '0'; // Remove default pre margin
-    codeEditor.style.padding = '0';
-
-    codeContainer.appendChild(codeEditor);
-    foreignObject.appendChild(codeContainer);
-    gElement.appendChild(foreignObject);
+    gElement.setAttribute("data-x", x);
+    gElement.setAttribute("data-y", y);
+    codeElement.setAttribute("data-initial-size", codeTextSize);
+    codeElement.setAttribute("data-initial-font", codeTextFont);
+    codeElement.setAttribute("data-initial-color", codeTextColor);
+    codeElement.setAttribute("data-initial-align", codeTextAlign);
+    codeElement.setAttribute("data-type", "code");
+    gElement.appendChild(codeElement);
     svg.appendChild(gElement);
     
-    // Attach ID to both group and foreignObject
+    // Attach ID to both group and code element
     const shapeID = `code-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
     gElement.setAttribute('id', shapeID);
-    foreignObject.setAttribute('id', `${shapeID}-foreignObject`);
+    codeElement.setAttribute('id', `${shapeID}-code`);
     
     // Create CodeShape wrapper for frame functionality
     const codeShape = wrapCodeElement(gElement);
@@ -362,16 +353,7 @@ function addCodeBlock(event) {
         shapeName: 'code'
     });
 
-    makeCodeEditable(codeEditor, gElement, foreignObject);
-}
-
-// Function to initialize highlight.js
-function initializeHighlighter(element) {
-    if (window.hljs) {
-        window.hljs.highlightElement(element);
-    } else {
-        console.warn("highlight.js not loaded. Syntax highlighting will not work.");
-    }
+    makeCodeEditable(codeElement, gElement);
 }
 
 // Function to update highlight.js on content change
@@ -382,51 +364,52 @@ function updateSyntaxHighlighting(editor) {
 }
 
 function adjustCodeEditorSize(editor) {
-    // Get the foreignObject and its container
     const foreignObject = editor.closest('foreignObject');
     const codeContainer = editor.closest('.svg-code-container');
-
     if (!foreignObject || !codeContainer) return;
 
-    // Temporarily set overflow to auto to get scrollHeight
-    editor.style.overflow = 'auto';
+    const svgRect = svg.getBoundingClientRect();
+
+    // Allow textarea to expand freely
+    editor.style.overflow = 'visible';
     editor.style.height = 'auto';
     editor.style.width = 'auto';
+    editor.style.whiteSpace = 'pre'; // No wrapping
 
-    // Calculate minimum content width/height
-    let minContentWidth = editor.scrollWidth + codeContainer.paddingLeft + codeContainer.paddingRight;
-    let minContentHeight = editor.scrollHeight + codeContainer.paddingTop + codeContainer.paddingBottom;
+    // Calculate content size
+    let minContentWidth = editor.scrollWidth + (parseFloat(codeContainer.style.paddingLeft) || 0) + (parseFloat(codeContainer.style.paddingRight) || 0);
+    let minContentHeight = editor.scrollHeight + (parseFloat(codeContainer.style.paddingTop) || 0) + (parseFloat(codeContainer.style.paddingBottom) || 0);
 
-    // Set foreignObject dimensions based on content
-    // We need to ensure foreignObject's width/height is at least its content
-    let newWidth = Math.max(minContentWidth, parseFloat(foreignObject.getAttribute('width')) || 300);
-    let newHeight = Math.max(minContentHeight, parseFloat(foreignObject.getAttribute('height')) || 100);
-    
+    // Clamp to SVG bounds
+    const editorRect = editor.getBoundingClientRect();
+    const maxWidth = svgRect.width - (editorRect.left - svgRect.left);
+    const maxHeight = svgRect.height - (editorRect.top - svgRect.top);
+
+    let newWidth = Math.min(Math.max(minContentWidth, 50), maxWidth);
+    let newHeight = Math.min(Math.max(minContentHeight, 30), maxHeight);
+
     foreignObject.setAttribute('width', newWidth);
     foreignObject.setAttribute('height', newHeight);
 
-    // Apply the determined dimensions to the internal editor for scrolling
     editor.style.width = `${newWidth - (parseFloat(codeContainer.style.paddingLeft) || 0) - (parseFloat(codeContainer.style.paddingRight) || 0)}px`;
     editor.style.height = `${newHeight - (parseFloat(codeContainer.style.paddingTop) || 0) - (parseFloat(codeContainer.style.paddingBottom) || 0)}px`;
 
-    // Reset overflow based on content vs container size
+    // Overflow only if content exceeds container
     if (editor.scrollHeight > editor.clientHeight || editor.scrollWidth > editor.clientWidth) {
         editor.style.overflow = 'auto';
     } else {
         editor.style.overflow = 'hidden';
     }
 
-    // Update the visual selection feedback
     if (selectedCodeBlock && selectedCodeBlock.contains(foreignObject)) {
         updateCodeSelectionFeedback();
     }
 }
 
-
-function makeCodeEditable(codeEditor, groupElement, foreignObject) {
+function makeCodeEditable(codeElement, groupElement) {
     console.log("Making code editable");
 
-    if (document.querySelector(".svg-code-editor[contenteditable='true']")) {
+    if (document.querySelector("textarea.svg-code-editor")) {
         console.log("Already editing another code block.");
         return;
     }
@@ -438,86 +421,183 @@ function makeCodeEditable(codeEditor, groupElement, foreignObject) {
     // Hide the selection feedback for the element being edited
     removeCodeSelectionFeedback();
 
-    codeEditor.focus();
-    // Select all content
-    const range = document.createRange();
-    range.selectNodeContents(codeEditor);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
+    let input = document.createElement("textarea");
+    input.className = "svg-code-editor";
 
-    // Initial highlight
-    initializeHighlighter(codeEditor);
+    let codeContent = "";
+    const tspans = codeElement.querySelectorAll('tspan');
+    if (tspans.length > 0) {
+        tspans.forEach((tspan, index) => {
+            codeContent += tspan.textContent.replace(/ /g, '\u00A0');
+            if (index < tspans.length - 1) {
+                codeContent += "\n";
+            }
+        });
+    } else {
+        codeContent = codeElement.textContent.replace(/ /g, '\u00A0');
+    }
 
-    // Adjust size initially
-    adjustCodeEditorSize(codeEditor);
+    input.value = codeContent;
+    input.style.position = "absolute";
+    input.style.outline = "none";
+    input.style.padding = "8px";
+    input.style.margin = "0";
+    input.style.boxSizing = "border-box";
+    input.style.overflow = "hidden";
+    input.style.resize = "none";
+    input.style.whiteSpace = "pre";
+    input.style.width = "auto";
+    input.style.height = "auto";
+    input.style.overflow = "visible";
+    input.style.minHeight = "1.2em";
+    input.style.zIndex = "10000";
+    input.style.fontFamily = "monospace";
+    input.style.tabSize = "4";
 
-    // Event listeners for resizing while typing
-    codeEditor.addEventListener('input', () => {
-        updateSyntaxHighlighting(codeEditor);
-        adjustCodeEditorSize(codeEditor);
-        updateAttachedArrows(groupElement); // Update arrows on content change
-    });
-    codeEditor.addEventListener('keydown', (e) => {
-        // Allow tab for indentation, prevent default behavior
-        if (e.key === 'Tab') {
+    const svgRect = svg.getBoundingClientRect();
+
+    let groupTransformMatrix = svg.createSVGMatrix();
+    if (groupElement && groupElement.transform && groupElement.transform.baseVal) {
+        const transformList = groupElement.transform.baseVal;
+        if (transformList.numberOfItems > 0) {
+            const consolidatedTransform = transformList.consolidate();
+            if (consolidatedTransform) {
+                groupTransformMatrix = consolidatedTransform.matrix;
+            }
+        }
+    }
+
+    const codeBBox = codeElement.getBBox();
+
+    let pt = svg.createSVGPoint();
+    pt.x = codeBBox.x - 8; // Account for padding
+    pt.y = codeBBox.y - 8;
+
+    let screenPt = pt.matrixTransform(groupTransformMatrix.multiply(svg.getScreenCTM()));
+
+    input.style.left = `${screenPt.x + svgRect.left}px`;
+    input.style.top = `${screenPt.y + svgRect.top}px`;
+
+    const currentFontSize = codeElement.getAttribute("font-size") || codeTextSize;
+    const currentFontFamily = codeElement.getAttribute("font-family") || codeTextFont;
+    const currentFill = codeElement.getAttribute("fill") || codeTextColor;
+    const currentAnchor = codeElement.getAttribute("text-anchor") || "start";
+    
+    input.style.fontSize = currentFontSize;
+    input.style.fontFamily = currentFontFamily;
+    input.style.color = currentFill;
+    input.style.lineHeight = "1.2em";
+    input.style.textAlign = currentAnchor === "middle" ? "center" : currentAnchor === "end" ? "right" : "left";
+    input.style.backgroundColor = "#212121"; // Match the background color
+    input.style.border = "1px solid #666";
+    input.style.borderRadius = "4px";
+
+    document.body.appendChild(input);
+
+    // Auto-resize functions
+    const adjustHeight = () => {
+        input.style.height = 'auto';
+        input.style.height = input.scrollHeight + 'px';
+        const maxHeight = svgRect.height - (screenPt.y);
+        if (input.scrollHeight > maxHeight) {
+            input.style.height = maxHeight + 'px';
+            input.style.overflowY = 'auto';
+        } else {
+            input.style.overflowY = 'hidden';
+        }
+    };
+
+    const adjustWidth = () => {
+        input.style.width = 'auto';
+        const maxWidth = svgRect.width - (screenPt.x);
+        if (input.scrollWidth > maxWidth) {
+            input.style.width = maxWidth + 'px';
+            input.style.overflowX = 'auto';
+        } else {
+            input.style.width = input.scrollWidth + 20 + 'px';
+            input.style.overflowX = 'hidden';
+        }
+    };
+    
+    adjustHeight();
+    adjustWidth();
+
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 50);
+
+    input.addEventListener('input', adjustHeight);
+    input.addEventListener('input', adjustWidth);
+
+    // Handle tab key for indentation
+    input.addEventListener("keydown", function (e) {
+        if (e.key === "Tab") {
             e.preventDefault();
-            const start = codeEditor.selectionStart;
-            const end = codeEditor.selectionEnd;
-
-            const originalText = codeEditor.textContent;
-            codeEditor.textContent = originalText.substring(0, start) + '\t' + originalText.substring(end);
-
-            // Restore cursor position
-            codeEditor.selectionStart = codeEditor.selectionEnd = start + 1;
-            
-            updateSyntaxHighlighting(codeEditor);
-            adjustCodeEditorSize(codeEditor);
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            input.value = input.value.substring(0, start) + "\t" + input.value.substring(end);
+            input.selectionStart = input.selectionEnd = start + 1;
+            adjustHeight();
+            adjustWidth();
+        } else if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            renderCode(input, codeElement, true);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            renderCode(input, codeElement, true);
         }
     });
 
-    codeEditor.originalGroup = groupElement;
-    codeEditor.originalForeignObject = foreignObject;
+    input.originalCodeElement = codeElement;
+    input.codeGroup = groupElement;
 
     const handleClickOutside = (event) => {
-        if (!foreignObject.contains(event.target) && event.target !== codeEditor) {
-            renderCode(codeEditor, true);
+        if (!input.contains(event.target)) {
+            renderCode(input, codeElement, true);
             document.removeEventListener('mousedown', handleClickOutside, true);
         }
     };
     document.addEventListener('mousedown', handleClickOutside, true);
-    codeEditor.handleClickOutside = handleClickOutside;
+    input.handleClickOutside = handleClickOutside;
 
-    // Prevent pointer events on the group itself while editing
-    groupElement.style.pointerEvents = 'none';
-    foreignObject.style.pointerEvents = 'all'; // Re-enable pointer events for the foreignObject
+    groupElement.style.display = "none";
 }
 
-function renderCode(editor, deleteIfEmpty = false) {
-    if (!editor || !editor.parentNode) {
-         console.warn("RenderCode called but editor is already removed.");
+
+function renderCode(input, codeElement, deleteIfEmpty = false) {
+    if (!input || !document.body.contains(input)) {
+         console.warn("RenderCode called but input textarea is already removed.");
          return;
     }
 
-    const groupElement = editor.originalGroup;
-    const foreignObject = editor.originalForeignObject;
+    const code = input.value || "";
+    const gElement = input.codeGroup;
 
-    if (editor.handleClickOutside) {
-        document.removeEventListener('mousedown', editor.handleClickOutside, true);
+    if (input.handleClickOutside) {
+        document.removeEventListener('mousedown', input.handleClickOutside, true);
     }
 
-    if (!groupElement || !foreignObject) {
-        console.error("RenderCode cannot find original group or foreignObject.");
+    document.body.removeChild(input);
+
+    if (!gElement || !codeElement) {
+        console.error("RenderCode cannot find original group or code element.");
         return;
     }
 
-    const codeContent = editor.textContent;
+    if (!gElement.parentNode) {
+        console.warn("RenderCode: Group element no longer attached to SVG.");
+        if (selectedCodeBlock === gElement) {
+             deselectCodeBlock();
+        }
+        return;
+    }
 
-    if (deleteIfEmpty && codeContent.trim() === "") {
+    if (deleteIfEmpty && code.trim() === "") {
         // Find the CodeShape wrapper
         let codeShape = null;
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
-            codeShape = shapes.find(shape => shape.shapeName === 'code' && shape.group === groupElement);
+            codeShape = shapes.find(shape => shape.shapeName === 'code' && shape.group === gElement);
             if (codeShape) {
                 const idx = shapes.indexOf(codeShape);
                 if (idx !== -1) shapes.splice(idx, 1);
@@ -526,60 +606,150 @@ function renderCode(editor, deleteIfEmpty = false) {
 
         pushDeleteActionWithAttachments({
             type: 'code',
-            element: codeShape || groupElement,
+            element: codeShape || gElement,
             shapeName: 'code'
         });
 
         if (typeof cleanupAttachments === 'function') {
-            cleanupAttachments(groupElement);
+            cleanupAttachments(gElement);
         }
 
-        svg.removeChild(groupElement);
-        if (selectedCodeBlock === groupElement) {
+        svg.removeChild(gElement);
+        if (selectedCodeBlock === gElement) {
             selectedCodeBlock = null;
             removeCodeSelectionFeedback();
         }
     } else {
-        // Re-enable pointer events on the group after editing
-        groupElement.style.pointerEvents = 'all';
-        foreignObject.style.pointerEvents = 'all';
+        // Clear existing content
+        while (codeElement.firstChild) {
+            codeElement.removeChild(codeElement.firstChild);
+        }
 
-        // Re-apply highlight to the final content
-        updateSyntaxHighlighting(editor);
-        adjustCodeEditorSize(editor);
+        // Split into lines and create tspans with syntax highlighting
+        const lines = code.split("\n");
+        const x = codeElement.getAttribute("x") || 0;
+
+        lines.forEach((line, index) => {
+            if (window.hljs && line.trim()) {
+                // Get syntax highlighting for the line
+                const result = window.hljs.highlightAuto(line);
+                createHighlightedTspans(result.value, codeElement, x, index === 0 ? "0" : "1.2em");
+            } else {
+                // Create plain tspan for empty lines or when hljs is not available
+                let tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                tspan.setAttribute("x", x);
+                tspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
+                tspan.textContent = line.replace(/\u00A0/g, ' ') || " ";
+                codeElement.appendChild(tspan);
+            }
+        });
+
+        // Update background rectangle to fit content
+        updateCodeBackground(gElement, codeElement);
+
+        gElement.style.display = 'block';
 
         // Update attached arrows after code content change
-        updateAttachedArrows(groupElement);
+        updateAttachedArrows(gElement);
 
-        if (selectedCodeBlock === groupElement) {
+        if (selectedCodeBlock === gElement) {
             setTimeout(updateCodeSelectionFeedback, 0);
         }
     }
 
-    if (selectedTool && selectedTool.classList.contains('bxs-pointer') && groupElement.parentNode === svg) {
-        selectCodeBlock(groupElement);
-    } else if (selectedCodeBlock === groupElement) {
+    if (selectedTool && selectedTool.classList.contains('bxs-pointer') && gElement.parentNode === svg) {
+        selectCodeBlock(gElement);
+    } else if (selectedCodeBlock === gElement) {
         deselectCodeBlock();
     }
 }
+
+
+function createHighlightedTspans(highlightedHtml, parentElement, x, dy) {
+    // Create a temporary div to parse the highlighted HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = highlightedHtml;
+    
+    let currentTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+    currentTspan.setAttribute("x", x);
+    currentTspan.setAttribute("dy", dy);
+    
+    // Process all nodes in the highlighted HTML
+    processHighlightedNodes(tempDiv, currentTspan, parentElement, x);
+    
+    // If currentTspan has content, add it to parent
+    if (currentTspan.textContent || currentTspan.childNodes.length > 0) {
+        parentElement.appendChild(currentTspan);
+    }
+}
+
+// Recursive function to process highlighted nodes
+function processHighlightedNodes(node, currentTspan, parentElement, x) {
+    for (let child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+            // Add text content to current tspan
+            if (child.textContent) {
+                currentTspan.textContent += child.textContent;
+            }
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+            // Create a new tspan for styled content
+            let styledTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            styledTspan.textContent = child.textContent;
+            
+            // Apply syntax highlighting colors based on class
+            const className = child.className || '';
+            if (className.includes('hljs-keyword')) {
+                styledTspan.setAttribute("fill", "#569cd6"); 
+            } else if (className.includes('hljs-string')) {
+                styledTspan.setAttribute("fill", "#ce9178"); 
+            } else if (className.includes('hljs-comment')) {
+                styledTspan.setAttribute("fill", "#6a9955"); 
+            } else if (className.includes('hljs-number')) {
+                styledTspan.setAttribute("fill", "#b5cea8"); 
+            } else if (className.includes('hljs-function')) {
+                styledTspan.setAttribute("fill", "#dcdcaa"); 
+            } else if (className.includes('hljs-variable')) {
+                styledTspan.setAttribute("fill", "#9cdcfe"); 
+            } else if (className.includes('hljs-type')) {
+                styledTspan.setAttribute("fill", "#4ec9b0"); 
+            } else if (className.includes('hljs-operator')) {
+                styledTspan.setAttribute("fill", "#d4d4d4"); 
+            } else {
+                styledTspan.setAttribute("fill", codeTextColor); // Default color
+            }
+            
+            // Add the styled tspan to current tspan
+            currentTspan.appendChild(styledTspan);
+        }
+    }
+}
+
 
 
 function createCodeSelectionFeedback(groupElement) {
     if (!groupElement) return;
     removeCodeSelectionFeedback();
 
-    const foreignObject = groupElement.querySelector('foreignObject');
-    if (!foreignObject) return;
+    const backgroundRect = groupElement.querySelector('.code-background');
+    if (!backgroundRect) {
+         console.warn("Cannot create selection feedback: background rect not found in group.");
+         return;
+    }
 
-    const bbox = foreignObject.getBBox();
+    // Use background rect dimensions for selection feedback
+    const x = parseFloat(backgroundRect.getAttribute('x'));
+    const y = parseFloat(backgroundRect.getAttribute('y'));
+    const width = parseFloat(backgroundRect.getAttribute('width'));
+    const height = parseFloat(backgroundRect.getAttribute('height'));
+
     const padding = 8;
     const handleSize = 10;
     const handleOffset = handleSize / 2;
 
-    const selX = bbox.x - padding;
-    const selY = bbox.y - padding;
-    const selWidth = bbox.width + 2 * padding;
-    const selHeight = bbox.height + 2 * padding;
+    const selX = x - padding;
+    const selY = y - padding;
+    const selWidth = width + 2 * padding;
+    const selHeight = height + 2 * padding;
 
     // Draw selection outline (polyline)
     const outlinePoints = [
@@ -601,7 +771,7 @@ function createCodeSelectionFeedback(groupElement) {
     codeSelectionBox.setAttribute("pointer-events", "none");
     groupElement.appendChild(codeSelectionBox);
 
-    // Add 4 resize anchors (rects)
+    // Add resize handles and rotation anchor (rest of the function remains the same)
     const handlesData = [
         { name: 'nw', x: selX, y: selY, cursor: 'nwse-resize' },
         { name: 'ne', x: selX + selWidth, y: selY, cursor: 'nesw-resize' },
@@ -633,7 +803,7 @@ function createCodeSelectionFeedback(groupElement) {
         });
     });
 
-    // Add rotation anchor (circle)
+    // Add rotation anchor
     const rotationAnchorPos = { x: selX + selWidth / 2, y: selY - 30 };
     const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     rotationAnchor.setAttribute('cx', rotationAnchorPos.x);
@@ -656,26 +826,29 @@ function createCodeSelectionFeedback(groupElement) {
             startCodeRotation(e);
         }
     });
+}
 
-    rotationAnchor.addEventListener('mouseover', function() {
-        if (!isCodeResizing && !isCodeDragging) {
-            this.style.cursor = 'grab';
-        }
-    });
 
-    rotationAnchor.addEventListener('mouseout', function() {
-        if (!isCodeResizing && !isCodeDragging) {
-            this.style.cursor = 'default';
-        }
-    });
+function updateCodeBackground(groupElement, codeElement) {
+    const backgroundRect = groupElement.querySelector('.code-background');
+    if (!backgroundRect || !codeElement) return;
+
+    const textBBox = codeElement.getBBox();
+    const padding = 10;
+
+    // Update background dimensions to fit text content
+    backgroundRect.setAttribute("x", textBBox.x - padding);
+    backgroundRect.setAttribute("y", textBBox.y - padding);
+    backgroundRect.setAttribute("width", textBBox.width + (padding * 2));
+    backgroundRect.setAttribute("height", textBBox.height + (padding * 2));
 }
 
 
 function updateCodeSelectionFeedback() {
     if (!selectedCodeBlock || !codeSelectionBox) return;
 
-    const foreignObject = selectedCodeBlock.querySelector('foreignObject');
-    if (!foreignObject) return;
+    const codeElement = selectedCodeBlock.querySelector('text');
+    if (!codeElement) return;
 
     // Temporarily set display to 'block' if it was hidden to get correct bbox
     const wasHidden = selectedCodeBlock.style.display === 'none';
@@ -931,8 +1104,8 @@ const handleCodeMouseMove = function (e) {
         const { x, y } = getSVGCoordinates(e);
         
         const tempCodeBounds = {
-            x: x - 275, // Half of 550px width
-            y: y - 30,  // Half of 60px height
+            x: x - 275, 
+            y: y - 30, 
             width: 550,
             height: 60
         };
@@ -984,18 +1157,17 @@ function extractRotationFromTransform(element) {
     return 0;
 }
 
-// EXPORTED EVENT HANDLERS
 const handleCodeMouseDown = function (e) {
-    const activeEditor = document.querySelector(".svg-code-editor[contenteditable='true']");
-    if (activeEditor && (activeEditor.contains(e.target) || activeEditor.originalForeignObject.contains(e.target))) {
+    const activeEditor = document.querySelector("textarea.svg-code-editor");
+    if (activeEditor && activeEditor.contains(e.target)) {
          return;
     }
     if (activeEditor && !activeEditor.contains(e.target)) {
-         let groupElement = activeEditor.originalGroup;
-         if (groupElement) {
-            renderCode(activeEditor, true);
+         let codeElement = activeEditor.originalCodeElement;
+         if (codeElement) {
+            renderCode(activeEditor, codeElement, true);
          } else if (document.body.contains(activeEditor)){
-             activeEditor.remove();
+             document.body.removeChild(activeEditor);
          }
     }
 
@@ -1020,15 +1192,14 @@ const handleCodeMouseDown = function (e) {
 
     } else if (isCodeToolActive  && e.button === 0) { 
         if (targetGroup) {
-            const foreignObject = targetGroup.querySelector('foreignObject');
-            const codeEditor = foreignObject.querySelector('.svg-code-editor');
+            const codeElement = targetGroup.querySelector('text');
 
-            if (codeEditor && foreignObject) {
+            if (codeElement && (e.target.tagName === "text" || e.target.tagName === "tspan")) {
                 console.log("Editing existing code. Group:", targetGroup);
-                makeCodeEditable(codeEditor, targetGroup, foreignObject);
+                makeCodeEditable(codeElement, targetGroup);
                 e.stopPropagation();
             } else {
-                 console.warn("Could not find code editor or foreignObject for editing, creating new code block instead.");
+                 console.warn("Could not find code element for editing, creating new code block instead.");
                  deselectCodeBlock();
                  addCodeBlock(e);
             }
@@ -1040,8 +1211,7 @@ const handleCodeMouseDown = function (e) {
     }
 };
 
-
-
+// 8. UPDATE updateAttachedArrows function:
 function updateAttachedArrows(codeGroup) {
     // Fix: Check the data-type attribute instead of type property
     if (!codeGroup || codeGroup.getAttribute('data-type') !== 'code-group') return;
@@ -1056,7 +1226,6 @@ function updateAttachedArrows(codeGroup) {
         }
     });
 }
-
 
 codeTextColorOptions.forEach((span) => {
     span.addEventListener("click", (event) => {
