@@ -425,19 +425,15 @@ function makeCodeEditable(codeElement, groupElement) {
     input.className = "svg-code-editor";
 
     let codeContent = "";
-    const tspans = codeElement.querySelectorAll('tspan');
+    const tspans = Array.from(codeElement.querySelectorAll('tspan tspan'));
     if (tspans.length > 0) {
-        tspans.forEach((tspan, index) => {
-            codeContent += tspan.textContent.replace(/ /g, '\u00A0');
-            if (index < tspans.length - 1) {
-                codeContent += "\n";
-            }
-        });
+        codeContent = tspans.map(tspan => tspan.textContent).join('\n');
     } else {
-        codeContent = codeElement.textContent.replace(/ /g, '\u00A0');
+        codeContent = codeElement.textContent;
     }
-
     input.value = codeContent;
+
+
     input.style.position = "absolute";
     input.style.outline = "none";
     input.style.padding = "8px";
@@ -626,20 +622,18 @@ function renderCode(input, codeElement, deleteIfEmpty = false) {
         }
 
         // Split into lines and create tspans with syntax highlighting
-        const lines = code.split("\n");
+        const lines = code.split(/\r?\n/);
         const x = codeElement.getAttribute("x") || 0;
 
         lines.forEach((line, index) => {
             if (window.hljs && line.trim()) {
-                // Get syntax highlighting for the line
                 const result = window.hljs.highlightAuto(line);
                 createHighlightedTspans(result.value, codeElement, x, index === 0 ? "0" : "1.2em");
             } else {
-                // Create plain tspan for empty lines or when hljs is not available
                 let tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
                 tspan.setAttribute("x", x);
                 tspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
-                tspan.textContent = line.replace(/\u00A0/g, ' ') || " ";
+                tspan.textContent = line || " ";
                 codeElement.appendChild(tspan);
             }
         });
