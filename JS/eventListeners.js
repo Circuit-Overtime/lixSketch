@@ -8,6 +8,7 @@ import { handleTextMouseDown, handleTextMouseMove, handleTextMouseUp } from './w
 import { handleMouseDownFrame, handleMouseMoveFrame, handleMouseUpFrame } from './frameHolder.js';
 import { handleMultiSelectionMouseDown, handleMultiSelectionMouseMove, handleMultiSelectionMouseUp, multiSelection, isMultiSelecting} from './selection.js';
 import { handleMouseDownIcon, handleMouseMoveIcon, handleMouseUpIcon } from './icons.js';
+import { handleCodeMouseDown, handleCodeMouseMove, handleCodeMouseUp } from './writeCode.js';
 
 const handleMainMouseDown = (e) => {
     if (isSquareToolActive) {
@@ -33,6 +34,9 @@ const handleMainMouseDown = (e) => {
     }
     else if (isIconToolActive) {
         handleMouseDownIcon(e);
+    }
+    else if (isCodeToolActive) {
+        handleCodeMouseDown(e);
     }
     else if (isSelectionToolActive) {
         // Try multi-selection first when selection tool is active
@@ -65,6 +69,9 @@ const handleMainMouseDown = (e) => {
         else if (currentShape?.shapeName === 'icon') {
             handleMouseDownIcon(e);
         }
+        else if( currentShape?.shapeName === 'code') {
+            handleCodeMouseDown(e);
+        }
         else {
             const originalCurrentShape = currentShape;
             handleMouseDownRect(e);
@@ -84,6 +91,8 @@ const handleMainMouseDown = (e) => {
             handleMouseDownFrame(e);
             if (currentShape && currentShape !== originalCurrentShape) return;
             handleMouseDownIcon(e);
+            if (currentShape && currentShape !== originalCurrentShape) return;
+            handleCodeMouseDown(e);
             if (currentShape && currentShape !== originalCurrentShape) return;
             if (currentShape === originalCurrentShape) {
                 if (currentShape) {
@@ -120,6 +129,9 @@ const handleMainMouseMove = (e) => {
     else if (isIconToolActive) {
         handleMouseMoveIcon(e);
     }
+    else if (isCodeToolActive) {
+        handleCodeMouseMove(e);
+    }
     else if (isSelectionToolActive) {
         // Handle multi-selection operations first - these take priority
         if (isMultiSelecting || multiSelection.isDragging || multiSelection.isResizing || multiSelection.isRotating) {
@@ -153,6 +165,10 @@ const handleMainMouseMove = (e) => {
         else if (currentShape?.shapeName === 'icon') {
             handleMouseMoveIcon(e);
         }
+        else if (currentShape?.shapeName === 'code') {
+            handleCodeMouseMove(e);
+        }
+
         else {
             // Try multi-selection mouse move for cursor updates
             if (handleMultiSelectionMouseMove(e)) {
@@ -168,6 +184,7 @@ const handleMainMouseMove = (e) => {
             handleTextMouseMove(e);
             handleMouseMoveFrame(e);
             handleMouseMoveIcon(e);
+            handleCodeMouseMove(e);
         }
     }
 };
@@ -197,6 +214,10 @@ const handleMainMouseUp = (e) => {
     else if (isIconToolActive) {
         handleMouseUpIcon(e);
     }
+    else if (isCodeToolActive) {
+        handleCodeMouseUp(e);
+    }
+
     else if (isSelectionToolActive) {
         // Handle multi-selection operations first - these take priority
         if (isMultiSelecting || multiSelection.isDragging || multiSelection.isResizing || multiSelection.isRotating) {
@@ -230,6 +251,10 @@ const handleMainMouseUp = (e) => {
         else if (currentShape?.shapeName === 'icon') {
             handleMouseUpIcon(e);
         }
+        else if (currentShape?.shapeName === 'code') {
+            handleCodeMouseUp(e);
+        }
+
         else {
             handleMultiSelectionMouseUp(e);
             handleMouseUpRect(e);
@@ -241,6 +266,7 @@ const handleMainMouseUp = (e) => {
             handleTextMouseUp(e);
             handleMouseUpFrame(e);
             handleMouseUpIcon(e);
+            handleCodeMouseUp(e);
         }
     }
 };

@@ -1,4 +1,4 @@
-let selectedTool = document.querySelector(".bx-text");
+let selectedTool = document.querySelector(".bx-folder-code");
 let history = [];
 let redoStack = [];
 let shapes = [];
@@ -60,8 +60,8 @@ let isLineToolActive = false;
 let isSelectionToolActive = false;
 let isPanningToolActive = false;
 let isFrameToolActive = false;
-let isIconToolActive = true;
-
+let isIconToolActive = false;
+let isCodeToolActive = false;
 
 const paintBrushSideBar = document.getElementById("paintBrushToolBar");
 const lineSideBar = document.getElementById("lineSideBar");
@@ -152,6 +152,17 @@ function toolExtraPopup() {
       disSelectAllTools();
       document.querySelector(".bx-text").classList.add("selected");
       isTextToolActive = true;
+      svg.style.cursor = "text";
+      disableAllSideBars();
+      textSideBar.classList.remove("hidden");
+
+    }
+    else if(selectedTool.classList.contains("bx-folder-code"))
+    {
+      disableAllTools();
+      disSelectAllTools();
+      document.querySelector(".bx-folder-code").classList.add("selected");
+      isCodeToolActive = true;
       svg.style.cursor = "text";
       disableAllSideBars();
       textSideBar.classList.remove("hidden");
@@ -251,6 +262,7 @@ function disableAllTools()
   isPanningToolActive = false;
   isFrameToolActive = false;
   isIconToolActive = false;
+  isCodeToolActive = false;
 }
 
 

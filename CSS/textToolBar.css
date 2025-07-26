@@ -358,4 +358,7 @@ pre::-webkit-scrollbar
 {
     display: none;
 }
-
+textarea::-webkit-scrollbar
+{
+    display: none;
+}
