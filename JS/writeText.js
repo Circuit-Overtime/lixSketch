@@ -368,12 +368,12 @@ function makeTextEditable(textElement, groupElement) {
         input.classList.add('svg-code-editor-bg');
         input.style.cssText += `
             font-family: lixCode;
-            background: #22272e;
+            background: #242424;
             color: ${textColor};
             caret-color: ${textColor};
             font-size: ${textSize};
             border-radius: 12px;
-            border: 2px solid #888;
+            border: 2px solid #666;
             height: 60px !important;
         `;
 
@@ -404,7 +404,7 @@ function makeTextEditable(textElement, groupElement) {
             pointer-events: none;
             margin: 0;
             border-radius: 6px;
-            background: #22272e;
+            background: #242424;
             z-index: 9999;
             font-family: ${input.style.fontFamily};
             font-size: ${input.style.fontSize};
@@ -613,8 +613,8 @@ function renderText(input, textElement, deleteIfEmpty = false) {
         const fontSizeNum = parseFloat(textSize) || 25;
         const lineHeight = fontSizeNum * 1.2;
         const padding = 12;
-        const backgroundColor = "#22272e";
-        const borderColor = "#888";
+        const backgroundColor = "#242424";
+        const borderColor = "#666";
         const borderRadius = 6;
     
         // Measure max line width
