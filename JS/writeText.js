@@ -10,7 +10,7 @@ import {
 } from './undoAndRedo.js';
 import { cleanupAttachments } from './drawArrow.js';
 
-let textSize = "30px";
+let textSize = "25px";
 let textFont = "lixFont";
 let textColor = "#fff";
 let textAlign = "left";
@@ -38,29 +38,24 @@ let initialGroupTx = 0;
 let initialGroupTy = 0;
 let codeEditor = true;
 
-// Frame attachment variables
 let draggedShapeInitialFrameText = null;
 let hoveredFrameText = null;
 
 setTextReferences(selectedElement, updateSelectionFeedback, svg);
 
-// Text class to make it consistent with other shapes for frame functionality
 class TextShape {
     constructor(groupElement) {
         this.group = groupElement;
         this.shapeName = 'text';
         this.shapeID = groupElement.getAttribute('id') || `text-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
         
-        // Frame attachment properties
         this.parentFrame = null;
         
-        // Update group attributes
         this.group.setAttribute('type', 'text');
         this.group.shapeName = 'text';
         this.group.shapeID = this.shapeID;
     }
     
-    // Position and dimension properties for frame compatibility
     get x() {
         const transform = this.group.transform.baseVal.consolidate();
         return transform ? transform.matrix.e : parseFloat(this.group.getAttribute('data-x')) || 0;
@@ -112,8 +107,6 @@ class TextShape {
     }
     
     set width(value) {
-        // Text width is determined by content and font size, not directly settable
-        // This is here for frame compatibility but doesn't change the text
     }
     
     get height() {
@@ -125,8 +118,6 @@ class TextShape {
     }
     
     set height(value) {
-        // Text height is determined by content and font size, not directly settable
-        // This is here for frame compatibility but doesn't change the text
     }
     
     get rotation() {
@@ -154,25 +145,20 @@ class TextShape {
         this.x = currentX + dx;
         this.y = currentY + dy;
         
-        // Only update frame containment if we're actively dragging the shape itself
-        // and not being moved by a parent frame
         if (isDragging && !this.isBeingMovedByFrame) {
             this.updateFrameContainment();
         }
         
-        // Update attached arrows
         if (typeof updateAttachedArrows === 'function') {
             updateAttachedArrows(this.group);
         }
     }
 
     updateFrameContainment() {
-        // Don't update if we're being moved by a frame
         if (this.isBeingMovedByFrame) return;
         
         let targetFrame = null;
         
-        // Find which frame this shape is over
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             shapes.forEach(shape => {
                 if (shape.shapeName === 'frame' && shape.isShapeInFrame(this)) {
@@ -181,12 +167,10 @@ class TextShape {
             });
         }
         
-        // If we have a parent frame and we're being dragged, temporarily remove clipping
         if (this.parentFrame && isDragging) {
             this.parentFrame.temporarilyRemoveFromFrame(this);
         }
         
-        // Update frame highlighting
         if (hoveredFrameText && hoveredFrameText !== targetFrame) {
             hoveredFrameText.removeHighlight();
         }
@@ -203,7 +187,7 @@ class TextShape {
         if (!textElement) return false;
         
         const bbox = textElement.getBBox();
-        const padding = 8; // Selection padding
+        const padding = 8;
         
         const CTM = this.group.getCTM();
         if (!CTM) return false;
@@ -220,15 +204,12 @@ class TextShape {
                transformedPoint.y <= bbox.y + bbox.height + padding;
     }
 
-    // Add draw method for consistency with other shapes
     draw() {
-        // Text doesn't need redrawing like other shapes, but we need this method for consistency
         if (selectedElement === this.group) {
             updateSelectionFeedback();
         }
     }
 
-    // Add methods for frame compatibility
     removeSelection() {
         if (selectedElement === this.group) {
             deselectElement();
@@ -240,7 +221,6 @@ class TextShape {
     }
 }
 
-// Convert group element to our TextShape class
 function wrapTextElement(groupElement) {
     const textShape = new TextShape(groupElement);
     return textShape;
@@ -289,7 +269,7 @@ function addText(event) {
 
     textElement.setAttribute("x", 0);
     textElement.setAttribute("y", 0);
-    textElement.setAttribute("fill", textColor);
+    
     textElement.setAttribute("font-size", textSize);
     textElement.setAttribute("font-family", textFont);
     textElement.setAttribute("text-anchor", textAlignElement);
@@ -300,27 +280,26 @@ function addText(event) {
     if (codeEditor) {
     textElement.setAttribute('data-code-mode', 'true');
     } else {
+        textElement.setAttribute("fill", textColor);
+        textElement.setAttribute('data-code-mode', 'false');
+        textElement.setAttribute("data-initial-color", textColor);
         textElement.removeAttribute('data-code-mode');
     }
     gElement.setAttribute("data-x", x);
     gElement.setAttribute("data-y", y);
     textElement.setAttribute("data-initial-size", textSize);
     textElement.setAttribute("data-initial-font", textFont);
-    textElement.setAttribute("data-initial-color", textColor);
     textElement.setAttribute("data-initial-align", textAlign);
     textElement.setAttribute("data-type", "text");
     gElement.appendChild(textElement);
     svg.appendChild(gElement);
     
-    // Attach ID to both group and text element
     const shapeID = `text-${String(Date.now()).slice(0, 8)}-${Math.floor(Math.random() * 10000)}`;
     gElement.setAttribute('id', shapeID);
     textElement.setAttribute('id', `${shapeID}-text`);
     
-    // Create TextShape wrapper for frame functionality
     const textShape = wrapTextElement(gElement);
     
-    // Add to shapes array for arrow attachment and frame functionality
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
         shapes.push(textShape);
     }
@@ -334,10 +313,10 @@ function addText(event) {
     makeTextEditable(textElement, gElement);
 }
 
+
 function makeTextEditable(textElement, groupElement) {
     console.log("Making text editable");
 
-    // Hide the SVG group immediately so only the textarea/editor is visible
     groupElement.style.display = "none";
 
     if (document.querySelector("textarea.svg-text-editor")) {
@@ -351,77 +330,113 @@ function makeTextEditable(textElement, groupElement) {
 
     let input = document.createElement("textarea");
     input.className = "svg-text-editor";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("autocapitalize", "off");
+
+    input.style.cssText = `
+        scrollbar-width: none;
+        overflow: hidden;
+        resize: none;
+        position: absolute;
+        outline: none;
+        padding: 20px 24px;
+        box-sizing: border-box;
+        margin: 0;
+        white-space: pre-wrap;
+        z-index: 10000; 
+        height: 30px !important;
+        background-color: transparent;
+        border: none;
+        font-size: ${textElement.getAttribute("font-size")};
+        font-family: ${textElement.getAttribute("font-family")};
+        color: ${textElement.getAttribute("fill")};
+        text-align: ${(textElement.getAttribute("text-anchor") === "middle") ? "center" :
+                      (textElement.getAttribute("text-anchor") === "end") ? "right" : "left"};
+        overflow-y: hidden;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        ms-overflow-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
 
     let textContent = "";
-    const tspans = textElement.querySelectorAll('tspan');
-    if (tspans.length > 0) {
-        tspans.forEach((tspan, index) => {
-            textContent += tspan.textContent.replace(/ /g, '\u00A0');
-            if (index < tspans.length - 1) {
-                textContent += "\n";
-            }
-        });
-    } else {
-        textContent = textElement.textContent.replace(/ /g, '\u00A0');
-    }
-
-    input.value = textContent;
-    input.style.position = "absolute";
-    input.style.outline = "none";
-    input.style.padding = "1px";
-    input.style.margin = "0";
-    input.style.boxSizing = "border-box";
-    input.style.overflow = "hidden";
-    input.style.resize = "none";
-    input.style.whiteSpace = "pre-wrap";
-    input.style.minHeight = "1.2em";
-    input.style.zIndex = "10000";
 
     if (textElement.getAttribute('data-code-mode') === 'true' || codeEditor) {
         input.classList.add('svg-code-editor-bg');
-        input.style.fontFamily = "'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace";
-        input.style.background = '#22272e';
-        input.style.color = '#d1d5da';
-        input.style.fontSize = '15px';
-        input.spellcheck = false;
-        // Add a <pre><code> overlay for live highlighting
-        let codeOverlay = document.createElement('pre');
-        codeOverlay.className = 'svg-code-highlighted hljs';
-        codeOverlay.style.position = 'absolute';
-        codeOverlay.style.pointerEvents = 'none';
-        codeOverlay.style.margin = '0';
-        codeOverlay.style.padding = '8px 12px';
-        codeOverlay.style.borderRadius = '6px';
-        codeOverlay.style.background = 'transparent';
-        codeOverlay.style.zIndex = '10001';
-        codeOverlay.style.fontFamily = input.style.fontFamily;
-        codeOverlay.style.fontSize = input.style.fontSize;
-        codeOverlay.style.lineHeight = input.style.lineHeight;
-        codeOverlay.style.whiteSpace = 'pre';
-        codeOverlay.style.width = 'auto';
-        codeOverlay.style.height = 'auto';
-        codeOverlay.style.left = input.style.left;
-        codeOverlay.style.top = input.style.top;
-        codeOverlay.style.minHeight = input.style.minHeight;
-        codeOverlay.style.minWidth = input.style.minWidth;
-        codeOverlay.style.color = input.style.color;
-        document.body.appendChild(codeOverlay);
-        input._codeOverlay = codeOverlay;
+        input.style.cssText += `
+            font-family: lixCode;
+            background: #22272e;
+            color: ${textColor};
+            caret-color: ${textColor};
+            font-size: ${textSize};
+            border-radius: 12px;
+            border: 2px solid #888;
+            height: 60px !important;
+        `;
 
-        // Sync overlay position and size
+        if (textElement.childNodes.length > 0) {
+            textContent = Array.from(textElement.childNodes).map(parentTspan => {
+                return Array.from(parentTspan.childNodes).map(childTspan => {
+                    return (childTspan.textContent || "")
+                        .replace(/ /g, '\u00A0')
+                        .replace(/\t/g, '\t');
+                }).join('');
+            }).join('\n');
+        } else {
+            textContent = (textElement.textContent || "")
+                .replace(/ /g, '\u00A0')
+                .replace(/\t/g, '\t');
+        }
+        input.value = textContent;
+
+        
+        let codeOverlay = document.createElement('pre');
+        let codeNode = document.createElement('code');
+        codeNode.className = 'hljs';
+        codeOverlay.appendChild(codeNode);
+
+        codeOverlay.className = 'svg-code-highlighted';
+        codeOverlay.style.cssText = `
+            position: absolute;
+            pointer-events: none;
+            margin: 0;
+            border-radius: 6px;
+            background: #22272e;
+            z-index: 9999;
+            font-family: ${input.style.fontFamily};
+            font-size: ${input.style.fontSize};
+            white-space: pre-wrap;
+            width: auto;
+            height: auto;
+            left: ${input.style.left};
+            top: ${input.style.top};
+            overflow: hidden;
+            display: block !important;
+        `; 
+
+        document.body.appendChild(codeOverlay);
+
+        input._codeOverlay = codeOverlay;
+        input._codeNode = codeNode;
+
         function syncOverlay() {
             codeOverlay.style.left = input.style.left;
             codeOverlay.style.top = input.style.top;
             codeOverlay.style.width = input.offsetWidth + 'px';
             codeOverlay.style.height = input.offsetHeight + 'px';
         }
-        // Highlight function
+
         function highlightCode() {
             let code = input.value;
-            // Use highlight.js auto-detect
-            codeOverlay.innerHTML = window.hljs.highlightAuto(code).value;
+            let result = window.hljs.highlightAuto(code);
+            codeNode.innerHTML = result.value; 
+            codeNode.className = `hljs language-${result.language || ''}`; 
             syncOverlay();
         }
+
         input.addEventListener('input', highlightCode);
         input.addEventListener('scroll', () => {
             codeOverlay.scrollTop = input.scrollTop;
@@ -430,14 +445,27 @@ function makeTextEditable(textElement, groupElement) {
         setTimeout(highlightCode, 0);
         setTimeout(syncOverlay, 0);
 
-        // Remove overlay on finish
         input._removeOverlay = () => {
             if (codeOverlay && codeOverlay.parentNode) codeOverlay.parentNode.removeChild(codeOverlay);
         };
+    } 
+    
+    else {
+        if (textElement.childNodes.length > 0) {
+            textContent = Array.from(textElement.childNodes).map(tspan => {
+                return (tspan.textContent || "")
+                    .replace(/ /g, '\u00A0')
+                    .replace(/\t/g, '\t');
+            }).join('\n');
+        } else {
+            textContent = (textElement.textContent || "")
+                .replace(/ /g, '\u00A0')
+                .replace(/\t/g, '\t');
+        }
+        input.value = textContent;
     }
 
     const svgRect = svg.getBoundingClientRect();
-
     let groupTransformMatrix = svg.createSVGMatrix();
     if (groupElement && groupElement.transform && groupElement.transform.baseVal) {
         const transformList = groupElement.transform.baseVal;
@@ -445,65 +473,28 @@ function makeTextEditable(textElement, groupElement) {
             const consolidatedTransform = transformList.consolidate();
             if (consolidatedTransform) {
                 groupTransformMatrix = consolidatedTransform.matrix;
-            } else {
-                console.warn("Could not consolidate transform for group:", groupElement);
-                try {
-                    if (transformList.length > 0) {
-                       groupTransformMatrix = transformList.getItem(0).matrix;
-                    }
-                } catch (err) {
-                    console.error("Failed to get any transform matrix.", err);
-                }
+            } else if (transformList.length > 0) {
+                groupTransformMatrix = transformList.getItem(0).matrix;
             }
-        } else {
-            console.warn("Group element transform list is empty:", groupElement);
         }
-    } else {
-         console.warn("Group element, transform, or baseVal is missing or invalid:", groupElement);
     }
 
     const textBBox = textElement.getBBox();
-
     let pt = svg.createSVGPoint();
     pt.x = textBBox.x;
     pt.y = textBBox.y;
-
     let screenPt = pt.matrixTransform(groupTransformMatrix.multiply(svg.getScreenCTM()));
 
     input.style.left = `${screenPt.x + svgRect.left}px`;
     input.style.top = `${screenPt.y + svgRect.top}px`;
 
-    const svgZoomFactor = svg.getScreenCTM() ? svg.getScreenCTM().a : 1;
-    const screenWidth = textBBox.width * svgZoomFactor;
-
-    input.style.width = "auto";
-    input.style.height = "auto";
-
-    const currentFontSize = textElement.getAttribute("font-size") || "30px";
-    const currentFontFamily = textElement.getAttribute("font-family") || "lixFont";
-    const currentFill = textElement.getAttribute("fill") || "#fff";
-    const currentAnchor = textElement.getAttribute("text-anchor") || "start";
-    input.style.width = "auto";
-    input.style.height = "auto";
-    input.style.overflow = "visible";
-    input.style.whiteSpace = "nowrap";
-    input.style.fontSize = currentFontSize;
-    input.style.fontFamily = currentFontFamily;
-    input.style.color = currentFill;
-    input.style.lineHeight = "1.2em";
-    input.style.textAlign = currentAnchor === "middle" ? "center" : currentAnchor === "end" ? "right" : "left";
-    input.style.backgroundColor = "transparent";
-    input.style.border = "none"
-    input.style.outline = "none"
-    document.body.appendChild(input);
-
     const adjustHeight = () => {
         input.style.height = 'auto';
-        input.style.height = input.scrollHeight + 'px';
+        input.style.height = (input.scrollHeight - 30) + 'px';
         const maxHeight = svgRect.height - (screenPt.y);
         if (input.scrollHeight > maxHeight) {
             input.style.height = maxHeight + 'px';
-            input.style.overflowY = 'auto';
+            input.style.overflowY = 'hidden';
         } else {
             input.style.overflowY = 'hidden';
         }
@@ -514,12 +505,14 @@ function makeTextEditable(textElement, groupElement) {
         const maxWidth = svgRect.width - (screenPt.x);
         if (input.scrollWidth > maxWidth) {
             input.style.width = maxWidth + 'px';
-            input.style.overflowX = 'auto';
+            input.style.overflowX = 'hidden';
         } else {
             input.style.width = input.scrollWidth + 'px';
             input.style.overflowX = 'hidden';
         }
     };
+
+    document.body.appendChild(input);
     adjustHeight();
     adjustWidth();
 
@@ -584,7 +577,6 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     }
 
     if (deleteIfEmpty && text.trim() === "") {
-        // Find the TextShape wrapper
         let textShape = null;
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === gElement);
@@ -594,14 +586,12 @@ function renderText(input, textElement, deleteIfEmpty = false) {
             }
         }
 
-        // Use enhanced delete action for text with arrow attachments
         pushDeleteActionWithAttachments({
             type: 'text',
             element: textShape || gElement,
             shapeName: 'text'
         });
 
-        // Clean up any arrow attachments before deleting
         if (typeof cleanupAttachments === 'function') {
             cleanupAttachments(gElement);
         }
@@ -615,52 +605,92 @@ function renderText(input, textElement, deleteIfEmpty = false) {
     }
 
     if (textElement.getAttribute('data-code-mode') === 'true') {
-        
         while (textElement.firstChild) textElement.removeChild(textElement.firstChild);
-
-        // Split text into lines
+    
         const lines = text.split('\n');
-        const x = textElement.getAttribute("x") || 0;
-
+        const x = parseFloat(textElement.getAttribute("x")) || 0;
+        const y = parseFloat(textElement.getAttribute("y")) || 0;
+        const fontSizeNum = parseFloat(textSize) || 25;
+        const lineHeight = fontSizeNum * 1.2;
+        const padding = 12;
+        const backgroundColor = "#22272e";
+        const borderColor = "#888";
+        const borderRadius = 6;
+    
+        // Measure max line width
+        let tempSVG = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        document.body.appendChild(tempSVG);
+        let maxWidth = 0;
+        lines.forEach(line => {
+            let tempText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            tempText.setAttribute("font-size", textSize);
+            tempText.setAttribute("font-family", "lixCode");
+            tempText.textContent = line || " ";
+            tempSVG.appendChild(tempText);
+            maxWidth = Math.max(maxWidth, tempText.getBBox().width);
+            tempSVG.removeChild(tempText);
+        });
+        document.body.removeChild(tempSVG);
+    
+        // Create or update background rect in parent group
+        let rect = gElement.querySelector('rect[data-bg="true"]');
+        if (!rect) {
+            rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute("data-bg", "true");
+            gElement.insertBefore(rect, textElement); // Insert behind text
+        }
+    
+        const totalHeight = lines.length * lineHeight;
+        rect.setAttribute("x", x - padding);
+        rect.setAttribute("y", y - padding);
+        rect.setAttribute("width", maxWidth + 2 * padding);
+        rect.setAttribute("height", totalHeight + 2 * padding);
+        rect.setAttribute("rx", borderRadius);
+        rect.setAttribute("fill", backgroundColor);
+        rect.setAttribute("stroke", borderColor);
+        rect.setAttribute("stroke-width", "2");
+    
+        // Adjust text Y so it's vertically centered inside the rect
+        const centeredY = y - padding + (rect.getBBox().height - totalHeight) / 2;
+    
+        // Render syntax-highlighted lines
         lines.forEach((line, index) => {
-            // Highlight each line separately
-            let highlightedLine = window.hljs.highlightAuto(line).value || " ";
-            let tempDiv = document.createElement('div');
+            const highlightedLine = window.hljs.highlightAuto(line).value || " ";
+            const tempDiv = document.createElement('div');
             tempDiv.innerHTML = highlightedLine || " ";
-
-            // Create a parent tspan for the line
-            let parentTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.visibility = 'hidden';
+            document.body.appendChild(tempDiv);
+    
+            const parentTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
             parentTspan.setAttribute("x", x);
-            parentTspan.setAttribute("dy", index === 0 ? "0" : "1.2em");
-
-            // For each node in the tempDiv, create a child tspan
+            parentTspan.setAttribute("y", (totalHeight + 2 * padding) / 2); 
+    
             tempDiv.childNodes.forEach(node => {
-                let childTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                const childTspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
                 if (node.nodeType === Node.TEXT_NODE) {
                     childTspan.textContent = node.textContent || " ";
-                } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN") {
+                    childTspan.setAttribute("fill", "#fff");
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
                     childTspan.textContent = node.textContent || " ";
                     childTspan.setAttribute("class", node.className);
+                    let color = window.getComputedStyle(node).color;
+                    if (!color || color === "rgba(0, 0, 0, 0)" || color === "inherit") {
+                        color = "#fff";
+                    }
+                    childTspan.setAttribute("fill", color);
                 }
+                childTspan.setAttribute("font-family", "lixCode");
+                childTspan.setAttribute("font-size", textSize);
                 parentTspan.appendChild(childTspan);
             });
-
+    
             textElement.appendChild(parentTspan);
+            document.body.removeChild(tempDiv);
         });
-
-        // Set code editor background and font
-        textElement.setAttribute('style', "font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace; background: #22272e; fill: #d1d5da;");
-        gElement.style.display = 'block';
-
-        // Update attached arrows after text content change
-        updateAttachedArrows(gElement);
-
-        if (selectedElement === gElement) {
-            setTimeout(updateSelectionFeedback, 0);
-        }
     }
+    
 
-    // --- NORMAL TEXT MODE ---
     else {
         while (textElement.firstChild) {
             textElement.removeChild(textElement.firstChild);
@@ -682,7 +712,6 @@ function renderText(input, textElement, deleteIfEmpty = false) {
 
         gElement.style.display = 'block';
 
-        // Update attached arrows after text content change
         updateAttachedArrows(gElement);
 
         if (selectedElement === gElement) {
@@ -980,17 +1009,14 @@ function startDrag(event) {
     dragOffsetX = startPoint.x - initialTranslateX;
     dragOffsetY = startPoint.y - initialTranslateY;
 
-    // Find the TextShape wrapper for frame functionality
     let textShape = null;
     if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
         textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === selectedElement);
     }
 
     if (textShape) {
-        // Store initial frame state
         draggedShapeInitialFrameText = textShape.parentFrame || null;
         
-        // Temporarily remove from frame clipping if dragging
         if (textShape.parentFrame) {
             textShape.parentFrame.temporarilyRemoveFromFrame(textShape);
         }
@@ -1051,7 +1077,6 @@ const handleMouseMove = (event) => {
     if (!selectedElement) return;
     event.preventDefault();
 
-    // Keep lastMousePos in screen coordinates for other functions
     const svgRect = svg.getBoundingClientRect();
     lastMousePos = {
         x: event.clientX - svgRect.left, 
@@ -1084,7 +1109,6 @@ const handleMouseMove = (event) => {
             selectedElement.setAttribute('transform', `translate(${newTranslateX}, ${newTranslateY})`);
         }
 
-        // Update frame containment for TextShape wrapper
         if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
             const textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === selectedElement);
             if (textShape) {
@@ -1092,7 +1116,6 @@ const handleMouseMove = (event) => {
             }
         }
 
-        // Update attached arrows during dragging
         updateAttachedArrows(selectedElement);
 
     } else if (isResizing) {
@@ -1188,7 +1211,6 @@ const handleMouseMove = (event) => {
             selectedElement.setAttribute('transform', `translate(${newGroupTx}, ${newGroupTy})`);
         }
 
-        // Update attached arrows during resizing
         updateAttachedArrows(selectedElement);
 
         clearTimeout(selectedElement.updateFeedbackTimeout);
@@ -1223,7 +1245,6 @@ const handleMouseMove = (event) => {
         const newTransform = `translate(${rotationStartTransform.e}, ${rotationStartTransform.f}) rotate(${rotationDiff}, ${centerX}, ${centerY})`;
         selectedElement.setAttribute('transform', newTransform);
 
-        // Update attached arrows during rotation
         updateAttachedArrows(selectedElement);
 
         updateSelectionFeedback();
@@ -1244,13 +1265,11 @@ const handleMouseUp = (event) => {
             const initialX = parseFloat(selectedElement.getAttribute("data-x")) || 0;
             const initialY = parseFloat(selectedElement.getAttribute("data-y")) || 0;
 
-            // Find the TextShape wrapper for frame tracking
             let textShape = null;
             if (typeof shapes !== 'undefined' && Array.isArray(shapes)) {
                 textShape = shapes.find(shape => shape.shapeName === 'text' && shape.group === selectedElement);
             }
 
-            // Add frame information for undo tracking
             const oldPosWithFrame = {
                 x: initialX,
                 y: initialY,
@@ -1279,29 +1298,23 @@ const handleMouseUp = (event) => {
                 );
             }
 
-            // Handle frame containment changes after drag
             if (textShape) {
                 const finalFrame = hoveredFrameText;
                 
-                // If shape moved to a different frame
                 if (draggedShapeInitialFrameText !== finalFrame) {
-                    // Remove from initial frame
                     if (draggedShapeInitialFrameText) {
                         draggedShapeInitialFrameText.removeShapeFromFrame(textShape);
                     }
                     
-                    // Add to new frame
                     if (finalFrame) {
                         finalFrame.addShapeToFrame(textShape);
                     }
                     
-                    // Track the frame change for undo
                     if (frameChanged) {
                         pushFrameAttachmentAction(finalFrame || draggedShapeInitialFrameText, textShape, 
                             finalFrame ? 'attach' : 'detach', draggedShapeInitialFrameText);
                     }
                 } else if (draggedShapeInitialFrameText) {
-                    // Shape stayed in same frame, restore clipping
                     draggedShapeInitialFrameText.restoreToFrame(textShape);
                 }
             }
@@ -1383,7 +1396,6 @@ const handleMouseUp = (event) => {
         updateSelectionFeedback();
     }
 
-    // Clear frame highlighting
     if (hoveredFrameText) {
         hoveredFrameText.removeHighlight();
         hoveredFrameText = null;
@@ -1419,7 +1431,6 @@ function extractRotationFromTransform(element) {
     return 0;
 }
 
-// EXPORTED EVENT HANDLERS
 const handleTextMouseDown = function (e) {
     const activeEditor = document.querySelector("textarea.svg-text-editor");
     if (activeEditor && activeEditor.contains(e.target)) {
@@ -1477,14 +1488,12 @@ const handleTextMouseDown = function (e) {
 };
 
 const handleTextMouseMove = function (e) {
-    // Keep lastMousePos in screen coordinates for other functions
     const svgRect = svg.getBoundingClientRect();
     lastMousePos = {
         x: e.clientX - svgRect.left, 
         y: e.clientY - svgRect.top
     };
 
-    // Handle cursor changes for text tool
     if (isTextToolActive) {
         svg.style.cursor = 'text';
     } else if (isSelectionToolActive) {
@@ -1496,12 +1505,9 @@ const handleTextMouseMove = function (e) {
         }
     }
 
-    // Check for frame containment while creating text
     if (isTextToolActive && !isDragging && !isResizing && !isRotating) {
-        // Get current mouse position for frame highlighting preview
         const { x, y } = getSVGCoordinates(e);
         
-        // Create temporary text bounds for frame checking
         const tempTextBounds = {
             x: x - 50,
             y: y - 20,
@@ -1526,19 +1532,16 @@ const handleTextMouseMove = function (e) {
 };
 
 const handleTextMouseUp = function (e) {
-    // Handle text deselection when clicking outside
     if (isSelectionToolActive) {
         const targetGroup = e.target.closest('g[data-type="text-group"]');
         const isResizeHandle = e.target.closest('.resize-handle');
         const isRotateAnchor = e.target.closest('.rotate-anchor');
         
-        // If we didn't click on text or its controls, deselect
         if (!targetGroup && !isResizeHandle && !isRotateAnchor && selectedElement) {
             deselectElement();
         }
     }
 
-    // Clear frame highlighting when done with text tool operations
     if (hoveredFrameText) {
         hoveredFrameText.removeHighlight();
         hoveredFrameText = null;
@@ -1548,7 +1551,6 @@ const handleTextMouseUp = function (e) {
 function updateAttachedArrows(textGroup) {
     if (!textGroup || textGroup.type !== 'text') return;
     
-    // Find all arrows attached to this text
     shapes.forEach(shape => {
         if (shape && shape.shapeName === 'arrow' && typeof shape.updateAttachments === 'function') {
             if ((shape.attachedToStart && shape.attachedToStart.shape === textGroup) ||
@@ -1748,7 +1750,6 @@ document.querySelectorAll('.textCodeSpan').forEach(span => {
         document.querySelectorAll('.textCodeSpan').forEach(el => el.classList.remove('selected'));
         span.classList.add('selected');
         codeEditor = span.getAttribute('data-id') === 'true';
-        // Optionally, update selected text element to code mode immediately
         if (selectedElement) {
             const textElement = selectedElement.querySelector('text');
             if (textElement) {

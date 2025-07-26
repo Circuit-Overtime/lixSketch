@@ -5,7 +5,7 @@ import aiohttp
 import time
 from tqdm.asyncio import tqdm_asyncio
 
-ICONS_FOLDER = 'all_icons/icons' #aws done, tech done, general done
+ICONS_FOLDER = 'all_icons/icons' 
 OUTPUT_JSON = 'metadata3.json'
 DONE_FILE = 'completed3.txt'
 API_URL = "https://text.pollinations.ai/openai"
