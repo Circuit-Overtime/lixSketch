@@ -43,7 +43,6 @@ let hoveredCodeFrame = null;
 
 setTextReferences(selectedCodeBlock, updateCodeSelectionFeedback, svg);
 
-// Text class to make it consistent with other shapes for frame functionality
 class CodeShape {
     constructor(groupElement) {
         this.group = groupElement;
@@ -1245,7 +1244,7 @@ function createCodeSelectionFeedback(groupElement) {
         });
     });
 
-    // Add rotation anchor
+    
     const rotationAnchorPos = { x: selX + selWidth / 2, y: selY - 30 };
     const rotationAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     rotationAnchor.setAttribute('cx', rotationAnchorPos.x);
@@ -2250,7 +2249,7 @@ const editorStyles = `
 }
 `;
 
-// Inject styles if they don't exist
+
 if (!document.getElementById('code-editor-styles')) {
     const styleSheet = document.createElement('style');
     styleSheet.id = 'code-editor-styles';
