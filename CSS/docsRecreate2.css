@@ -1,3 +1,7 @@
+*
+{
+    caret-color: #fff !important;
+}
 @font-face
 {
     font-family: 'lixCode';
@@ -45,6 +49,11 @@
     display: none;
 }
 
+.editor section 
+{
+    outline: none;
+    border: none;
+}
 
 
 
@@ -61,7 +70,12 @@
 }
 
 
-.editor section > h1[data-slate-node="element"]
+.editor section > h1[data-slate-node="element"],
+.editor section > h2[data-slate-node="element"],
+.editor section > h3[data-slate-node="element"],
+.editor section > h4[data-slate-node="element"],
+.editor section > h5[data-slate-node="element"],
+.editor section > h6[data-slate-node="element"]
 {
         
     font-size: 36px;
@@ -69,7 +83,30 @@
     margin: 0;
     padding: 0;
     margin-bottom: 30px;
+    font-family: "lixDocs";
 }
+.editor section > h2[data-slate-node="element"]
+{
+    font-size: 32px;
+}
+.editor section > h3[data-slate-node="element"]
+{
+    font-size: 28px;
+}
+.editor section > h4[data-slate-node="element"]
+{
+    font-size: 24px;
+}
+.editor section > h5[data-slate-node="element"]
+{
+    font-size: 20px;
+}
+.editor section > h6[data-slate-node="element"]
+{
+    font-size: 18px;
+}
+
+
 
 
 .editor section > p > span[data-slate-node="text"]
@@ -79,14 +116,68 @@
     line-height: 1.5;
     font-family: "lixDocs";
 }
+.editor section > p > span[data-slate-node="text"] > .data-slate-advertisement
+{
+    text-decoration: none;
+    pointer-events: none;
+    opacity: 0.5;
+    user-select: none;
+    color: #fff;
+}
+.editor section > p > span[data-slate-node="text"] > span[data-slate-leaf="true"]
+{
+    font-family: "lixCode";
+    font-size: 15px;
+    line-height: 1.5;
+}
 .editor section p 
 {
     margin-bottom: 20px;
+    outline: none;
+    border: none;
 }
 .editor section > p > span[data-slate-node="text"].bold
 {
-    color: #fff;
-    line-height: 1.5;
     font-family: "lixDocs";
     font-weight: bold;
+}
+.editor section > p > span[data-slate-node="text"].italic
+{
+    font-family: "lixDocs";
+    font-style: italic;
+}
+.editor section > p > span[data-slate-node="text"].inline_code
+{
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 30px;
+}
+.editor section > p > span[data-slate-node="text"].highlight
+{
+    background-color: rgba(63, 214, 3, 0.089);
+    color: #fff;
+    padding: 2px 4px;
+    border-radius: 4px;
+    display: inline;
+    height: 30px;
+    border: 1px solid #ffc;
+    box-shadow: 0 0 15px rgba(63, 214, 3, 0.089);
+}
+
+.editor section > p > span[data-slate-node="text"].underline
+{
+    text-decoration: underline;
+}
+.editor section > p > span[data-slate-node="text"].strikethrough
+{
+    text-decoration: line-through;
+}
+.editor section > p > span[data-slate-node="text"].link
+{
+    color: rgb(52, 156, 241);
+    cursor: pointer;
 }
