@@ -1,0 +1,92 @@
+@font-face
+{
+    font-family: 'lixCode';
+    src: url(../FONT/lixCode.ttf);
+    font-weight: normal;
+    font-size: normal;
+}
+@font-face
+{
+    font-family: 'lixDocs';
+    src: url(../FONT/lixDocs.ttf);
+    font-weight: normal;
+    font-size: normal;
+}
+.container 
+{
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: top;
+    background-color: #121212;
+}
+.editor 
+{
+    position: absolute;
+    max-height: 90%;
+    width: 80%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: transparent;
+    padding: 50px 120px;
+    box-sizing: border-box;
+    outline: none;
+    display: flex;
+    flex-direction: column;
+    border: none;
+}
+.editor::-webkit-scrollbar
+{
+    display: none;
+}
+
+
+
+
+.editor .headerSection > [data-slate-node="element"] 
+{
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: row;
+    color: #F6F6F6;
+    font-family: "lixDocs";
+    font-size: 26px;
+    margin-bottom: 30px;
+}
+
+
+.editor section > h1[data-slate-node="element"]
+{
+        
+    font-size: 36px;
+    color: #F6F6F6;
+    margin: 0;
+    padding: 0;
+    margin-bottom: 30px;
+}
+
+
+.editor section > p > span[data-slate-node="text"]
+{
+    color: #fff;
+    font-size: 15px;
+    line-height: 1.5;
+    font-family: "lixDocs";
+}
+.editor section p 
+{
+    margin-bottom: 20px;
+}
+.editor section > p > span[data-slate-node="text"].bold
+{
+    color: #fff;
+    line-height: 1.5;
+    font-family: "lixDocs";
+    font-weight: bold;
+}
