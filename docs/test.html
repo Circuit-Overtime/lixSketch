@@ -1,80 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>ContentEditable Arrow Navigation Demo</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-    }
-    [contenteditable="true"] > * {
-      outline: none;
-      padding: 4px;
-      margin: 6px 0;
-      border: 1px solid transparent;
-    }
-    [contenteditable="true"] > *:focus {
-      border: 1px dashed #aaa;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
 </head>
 <body>
+  <div class="container">
+    <div class="editor" id="editor" contenteditable="true" spellcheck="false">
+            <section class="initSection">
+                <h1> Welcome to Elixpo Sketch
+                    <span class="bold"> Bold</span>
+                    <span class="italic"> Italic</span>
+                    <span class="underline"> Underline</span>
+                    <span class="strikethrough"> Strikethrough</span>
+                    <span class="inline_code">Code</span>
+                    <span class="link">Link</span>
+                    <span class="highlight">highlight</span>
+                    
+                    
+                </h1>
+                <p>Elixpo Sketch is a Notion-like editor that allows you to create and edit documents with ease. This editor supports rich text formatting, code highlighting, and more. <span class="bold"> This part is bold</span> <span class="italic"> Italic part </span><span class="inline_code">code</span>
+                </p>
 
-<h2>Arrow Key Navigation Between Blocks</h2>
+                <pre><code class="code_block language-javascript hljs" data-highlighted="yes"><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"working"</span>);</code><i class="bx  bx-copy"></i> </pre>
 
-<div id="editor" contenteditable="true">
-  <span style="display: flex; align-items: center; gap: 10px"><h1>Heading 1</h1><h1>Another paragraph block.</h1></span>
-  <h2>Heading 2</h2>
-  <p>This is a paragraph.</p>
-  <p>Another paragraph block.</p>
+                <div class="horizontalSpacer">
+                    <div class="spacer"></div>
+                </div>
+
+                <ul>
+                    <li><span class="textContainer">
+                        <span>This is one text</span>
+                        <span class="bold"> This is bold</span>
+                        <span class="inline_code">This is inline code</span>
+                      </span>
+                <ul><li>fefefefef</li>
+                </ul>
+            </li>
+        </ul>
+
+        <ol>
+            <li><span class="textContainer">
+                <span>This is one text</span>
+                <span class="bold"> This is bold</span>
+                <span class="inline_code">This is inline code</span>
+              </span>
+              <ol><li>fefefefef</li>
+              </ol>
+            </li>
+        </ol>
+                  
+
+            </section>
+
+    </div>
 </div>
-
-<script>
-  const editor = document.getElementById('editor');
-
-  editor.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-
-    const sel = window.getSelection();
-    if (!sel.rangeCount) return;
-
-    const range = sel.getRangeAt(0);
-    const container = range.startContainer;
-    const offset = range.startOffset;
-
-    let currentBlock = container.nodeType === 1 ? container : container.parentNode;
-    while (currentBlock && currentBlock.parentNode !== editor) {
-      currentBlock = currentBlock.parentNode;
-    }
-
-    if (!currentBlock) return;
-
-    const moveCaret = (target, toStart = false) => {
-      const r = document.createRange();
-      const t = target.firstChild || target;
-      const length = t.textContent.length;
-      r.setStart(t, toStart ? 0 : length);
-      r.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(r);
-      e.preventDefault();
-    };
-
-    if (e.key === 'ArrowUp' && offset === 0) {
-      const prev = currentBlock.previousElementSibling;
-      if (prev) moveCaret(prev, false);
-    }
-
-    if (e.key === 'ArrowDown') {
-      const contentLen = container.textContent?.length || 0;
-      if (offset >= contentLen) {
-        const next = currentBlock.nextElementSibling;
-        if (next) moveCaret(next, true);
-      }
-    }
-  });
-</script>
-
 </body>
 </html>
