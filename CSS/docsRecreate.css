@@ -49,7 +49,6 @@
     gap: 5px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
-
 .editor section h1 
 {
     font-size: 26px;
@@ -87,19 +86,18 @@
 }
 
 .editor section h1 .inline_code {
-        font-family: 'lixCode', monospace;
-        font-size: 1em;
-        background-color: #242424;
-        border: 1px solid #666;
-        color: #ffffff;
-        padding: 2px 8px;
-        border-radius: 8px;
-        display: inline;
-        height: 30px;
-        line-height: 1;
-        vertical-align: center;
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 30px;
+    line-height: 1;
+    vertical-align: center;
 }
-
 
 .editor section h1 .link 
 {
@@ -121,6 +119,245 @@
     line-height: 1;
     vertical-align: center;
 }
+
+/* H2 */
+.editor section h2 
+{
+    font-size: 22px;
+    margin: 0;
+    font-weight: bold;
+    color: #ffffff;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    white-space: pre-wrap;
+    line-height: 20px;
+    gap: 5px;
+    align-items: top; 
+}
+.editor section h2 .bold { font-weight: bold; color: #ffffff; }
+.editor section h2 .italic { font-style: italic; color: #ffffff; }
+.editor section h2 .underline { text-decoration: underline; color: #ffffff; }
+.editor section h2 .strikethrough { text-decoration: line-through; color: #ffffff; }
+.editor section h2 .inline_code {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 23px;
+    line-height: 1;
+    vertical-align: center;
+}
+.editor section h2 .link { color: #1e90ff; text-decoration: none; }
+.editor section h2 .highlight {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #e8d4438c;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 23px;
+    line-height: 1;
+    vertical-align: center;
+}
+
+/* H3 */
+.editor section h3 
+{
+    font-size: 18px;
+    margin: 0;
+    font-weight: bold;
+    color: #ffffff;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    white-space: pre-wrap;
+    line-height: 20px;
+    gap: 5px;
+    align-items: top; 
+}
+.editor section h3 .bold { font-weight: bold; color: #ffffff; }
+.editor section h3 .italic { font-style: italic; color: #ffffff; }
+.editor section h3 .underline { text-decoration: underline; color: #ffffff; }
+.editor section h3 .strikethrough { text-decoration: line-through; color: #ffffff; }
+.editor section h3 .inline_code {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 21px;
+    line-height: 1;
+    vertical-align: center;
+}
+.editor section h3 .link { color: #1e90ff; text-decoration: none; }
+.editor section h3 .highlight {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #e8d4438c;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 21px;
+    line-height: 1;
+    vertical-align: center;
+}
+
+/* H4 */
+.editor section h4 
+{
+    font-size: 16px;
+    margin: 0;
+    font-weight: bold;
+    color: #ffffff;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    white-space: pre-wrap;
+    line-height: 20px;
+    gap: 5px;
+    align-items: top; 
+}
+.editor section h4 .bold { font-weight: bold; color: #ffffff; }
+.editor section h4 .italic { font-style: italic; color: #ffffff; }
+.editor section h4 .underline { text-decoration: underline; color: #ffffff; }
+.editor section h4 .strikethrough { text-decoration: line-through; color: #ffffff; }
+.editor section h4 .inline_code {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 21px;
+    line-height: 1;
+    vertical-align: center;
+}
+.editor section h4 .link { color: #1e90ff; text-decoration: none; }
+.editor section h4 .highlight {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #e8d4438c;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 21px;
+    line-height: 1;
+    vertical-align: center;
+}
+
+/* H5 */
+.editor section h5 
+{
+    font-size: 14px;
+    margin: 0;
+    font-weight: bold;
+    color: #ffffff;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    white-space: pre-wrap;
+    line-height: 20px;
+    gap: 5px;
+    align-items: top; 
+}
+.editor section h5 .bold { font-weight: bold; color: #ffffff; }
+.editor section h5 .italic { font-style: italic; color: #ffffff; }
+.editor section h5 .underline { text-decoration: underline; color: #ffffff; }
+.editor section h5 .strikethrough { text-decoration: line-through; color: #ffffff; }
+.editor section h5 .inline_code {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 17px;
+    line-height: 1;
+    vertical-align: center;
+}
+.editor section h5 .link { color: #1e90ff; text-decoration: none; }
+.editor section h5 .highlight {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #e8d4438c;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 17px;
+    line-height: 1;
+    vertical-align: center;
+}
+
+/* H6 */
+.editor section h6 
+{
+    font-size: 12px;
+    margin: 0;
+    font-weight: bold;
+    color: #ffffff;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    white-space: pre-wrap;
+    line-height: 20px;
+    gap: 5px;
+    align-items: top; 
+}
+.editor section h6 .bold { font-weight: bold; color: #ffffff; }
+.editor section h6 .italic { font-style: italic; color: #ffffff; }
+.editor section h6 .underline { text-decoration: underline; color: #ffffff; }
+.editor section h6 .strikethrough { text-decoration: line-through; color: #ffffff; }
+.editor section h6 .inline_code {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 15px;
+    line-height: 1;
+    vertical-align: center;
+}
+.editor section h6 .link { color: #1e90ff; text-decoration: none; }
+.editor section h6 .highlight {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #e8d4438c;
+    border: 1px solid #666;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    height: 15px;
+    line-height: 1;
+    vertical-align: center;
+}
+
+
+
+
 
 
 .editor section p 
@@ -312,3 +549,65 @@ ul, ol {
     vertical-align: middle;
   }
   
+
+.editor section blockquote {
+    margin: 0 0 0 20px;
+    padding: 12px 18px;
+    border-left: 4px solid #e8d443;
+    background: #232323;
+    color: #f5f5f5;
+    border-radius: 8px;
+    font-size: 1.05em;
+    font-style: italic;
+    box-sizing: border-box;
+    display: block;
+    position: relative;
+    line-height: 1.7;
+}
+
+.editor section blockquote .bold {
+    font-weight: bold;
+    color: #fff;
+}
+.editor section blockquote .italic {
+    font-style: italic;
+    color: #fff;
+}
+.editor section blockquote .underline {
+    text-decoration: underline;
+    color: #fff;
+}
+.editor section blockquote .strikethrough {
+    text-decoration: line-through;
+    color: #fff;
+}
+.editor section blockquote .inline_code {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #242424;
+    border: 1px solid #666;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    line-height: 1;
+    vertical-align: middle;
+    margin: 0 4px;
+}
+.editor section blockquote .link {
+    color: #1e90ff;
+    text-decoration: underline;
+}
+.editor section blockquote .highlight {
+    font-family: 'lixCode', monospace;
+    font-size: 1em;
+    background-color: #e8d4438c;
+    border: 1px solid #666;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline;
+    line-height: 1;
+    vertical-align: middle;
+    margin: 0 4px;
+}
