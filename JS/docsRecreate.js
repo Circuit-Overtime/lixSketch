@@ -78,7 +78,7 @@ function createCodeBlock(hexID) {
 
 function createHorizontalRule(hexID) {
     return `
-    <div data-slate-node="element" data-slate-void="true" class="divider isSelected">
+    <div id="divider_${hexID}" data-slate-node="element" data-slate-void="true" class="divider isSelected">
         <hr data-slate-node="element" data-slate-void="true" class="isSelected">
     </div>
     `;
