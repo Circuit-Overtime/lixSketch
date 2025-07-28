@@ -430,11 +430,10 @@
 {
     display: flex;
     flex-direction: row;
-    gap: 20px;
     justify-content: space-between;
     align-items: start;
-    padding: 0 10px;
-    border-radius: 12px;
+    padding: 5px 12px;
+    border-radius: 8px;
     box-sizing: border-box;
     background-color: #242424;
     border: 1px solid #666;
@@ -447,7 +446,7 @@
     padding: 5px 5px;
     margin-top: 10px;
 } 
-.editor section pre .code_block 
+.editor section pre code 
 {
     font-family: 'lixCode', monospace;
     font-size: 1em;
@@ -459,7 +458,7 @@
     overflow-x: auto;
     outline: none;
     border: none;
-    width: 100%;
+
 }
 
 .editor section .horizontalSpacer 
