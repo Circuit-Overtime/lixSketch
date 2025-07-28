@@ -187,7 +187,7 @@ function handleBlockFormatting(lineEl) {
       placeCaretAtStart(newDiv);
       return true;
     }
-    
+
     if (applyBlockStyle(lineEl, 'h1', /^#\s(.*)/, 0)) handled = true;
     else if (applyBlockStyle(lineEl, 'h2', /^##\s(.*)/, 0)) handled = true;
     else if (applyBlockStyle(lineEl, 'h3', /^###\s(.*)/, 0)) handled = true;
@@ -195,7 +195,7 @@ function handleBlockFormatting(lineEl) {
     else if (applyBlockStyle(lineEl, 'h5', /^#####\s(.*)/, 0)) handled = true;
     else if (applyBlockStyle(lineEl, 'h6', /^######\s(.*)/, 0)) handled = true;
     else if (applyBlockStyle(lineEl, 'blockquote', /^>\s(.*)/, 0)) handled = true;
-    
+
     else if ((text.startsWith('*\u00A0') || text.startsWith('-\u00A0')) && lineEl.tagName === 'DIV') {
       const ul = document.createElement('ul');
       const li = document.createElement('li');
@@ -223,101 +223,75 @@ function handleBlockFormatting(lineEl) {
 
 function escapeHtml(unsafe) {
   return unsafe
-    .replace(/&/g, "&") 
+    .replace(/&/g, "&")
     .replace(/</g, "<")
     .replace(/>/g, ">")
     .replace(/"/g, '"')
-    .replace(/'/g, "'"); 
+    .replace(/'/g, "'");
 }
 
-function applyInlineStylesToTextNode(textNode, savedRange) {
+function applyInlineStylesToTextNode(textNode) {
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
 
     const parent = textNode.parentNode;
     if (!parent || parent.tagName === 'CODE' || parent.tagName === 'PRE') return;
 
-    const styledClasses = ['bold', 'italic', 'underline', 'strike', 'mark', 'code-inline'];
-    if (parent.classList && styledClasses.some(cls => parent.classList.contains(cls))) return;
-
     const originalText = textNode.nodeValue;
-    let matched = false;
+    let newHtml = originalText;
+    let matchFound = false;
 
     const styleMap = [
-        { regex: /^\*\*(.+?)\*\*$/, className: 'bold' },
-        { regex: /^\*(?!\*)(.+?)\*$/, className: 'italic' },
-        { regex: /^__(?!_)(.+?)__$/, className: 'underline' },
-        { regex: /^_(?!_)(.+?)_$/, className: 'italic' },
-        { regex: /^~~(.+?)~~$/, className: 'strike' },
-        { regex: /^==(.+?)==$/, className: 'mark' },
-        { regex: /^`([^`\n]+?)`$/, className: 'code-inline' }
+        { regex: /\*\*(.+?)\*\*/g, tag: 'span', className: 'bold' },
+        { regex: /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, tag: 'span', className: 'italic' },
+        { regex: /__(?!_)(.+?)__(?!_)/g, tag: 'span', className: 'underline' },
+        { regex: /(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, tag: 'span', className: 'italic' },
+        { regex: /~~(.+?)~~/g, tag: 'span', className: 'strike' },
+        { regex: /==(.+?)==/g, tag: 'span', className: 'mark' },
+        { regex: /`([^`\n]+?)`/g, tag: 'span', className: 'code-inline' }
     ];
 
+    // Convert markers to HTML for all styles
     for (const style of styleMap) {
-        const match = originalText.match(style.regex);
-        if (match) {
-            matched = true;
-
-            if (style.className === 'code-inline') {
-                const span = document.createElement('span');
-                span.contentEditable = 'true';
-                span.className = 'code-inline-wrapper';
-
-                const codeSpan = document.createElement('span');
-                codeSpan.className = style.className;
-                codeSpan.textContent = match[1];
-                span.appendChild(codeSpan);
-
-                const spacer = document.createTextNode('\u200B');
-                span.appendChild(spacer);
-
-                parent.replaceChild(span, textNode);
-
-                const range = document.createRange();
-                range.setStart(spacer, 1);
-                range.collapse(true);
-
-                const sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-            } else {
-                const styledSpan = document.createElement('span');
-                styledSpan.className = style.className;
-                styledSpan.textContent = match[1];
-                parent.replaceChild(styledSpan, textNode);
-
-                if (savedRange) {
-                    placeCaretAtEnd(styledSpan);
-                }
-            }
-            break;
-        }
+        newHtml = newHtml.replace(style.regex, (match, p1) => {
+            matchFound = true;
+            return `<${style.tag} class="${style.className}">${escapeHtml(p1)}</${style.tag}>`;
+        });
     }
 
-    if (!matched) {
-        const nonInlineTags = ['DIV', 'P'];
-        if (nonInlineTags.includes(parent.tagName)) {
-            const span = document.createElement('span');
-            span.textContent = originalText;
-            parent.replaceChild(span, textNode);
-            if (savedRange) {
-                placeCaretAtEnd(span);
-            }
+    if (matchFound) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = newHtml;
+
+        // Replace the text node with the new HTML content
+        while (tempDiv.firstChild) {
+            parent.insertBefore(tempDiv.firstChild, textNode);
         }
+        parent.removeChild(textNode);
     }
 }
 
-function traverseAndApplyInlineStyles(node, savedRange) {
+
+function traverseAndApplyInlineStyles(node) {
   if (!node) return;
+
   if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'CODE' || node.tagName === 'PRE')) {
     return;
   }
 
-  if (node.nodeType === Node.TEXT_NODE) {
-    applyInlineStylesToTextNode(node, savedRange);
-  } else if (node.nodeType === Node.ELEMENT_NODE) {
-    Array.from(node.childNodes).forEach(child => {
-      traverseAndApplyInlineStyles(child, savedRange);
-    });
+  // Iterate over child nodes. Using Array.from to create a static copy
+  // because applyInlineStylesToTextNode might modify the children list.
+  const childNodes = Array.from(node.childNodes);
+  for (const child of childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      applyInlineStylesToTextNode(child);
+    } else if (child.nodeType === Node.ELEMENT_NODE) {
+      // Recursively apply to child elements unless they are already styled inline elements
+      // This prevents re-processing spans that are already part of an inline style
+      const styledClasses = ['bold', 'italic', 'underline', 'strike', 'mark', 'code-inline'];
+      if (!styledClasses.some(cls => child.classList.contains(cls))) {
+        traverseAndApplyInlineStyles(child);
+      }
+    }
   }
 }
 
@@ -325,16 +299,10 @@ function updateCodeBlockClasses(codeElement) {
   if (!codeElement) return;
   const result = hljs.highlightAuto(codeElement.textContent);
   codeElement.className = '';
-  if (Array.isArray(result.classes)) { 
+  if (Array.isArray(result.classes)) {
     result.classes.forEach(cls => codeElement.classList.add(cls));
   }
   codeElement.classList.add('hljs');
-}
-
-function checkAndClearEmptyInlineStyles(lineEl) {
-    if (!lineEl || lineEl.tagName === 'PRE' || lineEl.tagName === 'LI' || lineEl.tagName === 'HR') {
-        return false;
-    }
 }
 
 editor.addEventListener('input', (e) => {
@@ -353,26 +321,8 @@ editor.addEventListener('input', (e) => {
   }
 
   if (currentLine.tagName !== 'PRE') {
-    traverseAndApplyInlineStyles(currentLine, savedRange);
-    const codeInline = currentLine.querySelector('.code-inline');
-    if (codeInline && codeInline.parentElement === currentLine) {
-        const after = codeInline.nextSibling;
-        if (after && after.nodeType === Node.TEXT_NODE && after.textContent.trim() !== '') {
-            applyInlineStylesToTextNode(after);
-        }
-    }
-    checkAndClearEmptyInlineStyles(currentLine);
+    traverseAndApplyInlineStyles(currentLine);
 
-    if (codeInline && codeInline.nextSibling && codeInline.textContent.length > 0) {
-      const sel = window.getSelection();
-      if (sel.anchorNode === codeInline.firstChild || sel.anchorNode === codeInline) {
-        const range = document.createRange();
-        range.setStartAfter(codeInline);
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    }
     try {
       if (sel.rangeCount === 0 || !sel.containsNode(savedRange.startContainer, true)) {
         sel.removeAllRanges();
@@ -380,6 +330,7 @@ editor.addEventListener('input', (e) => {
       }
     } catch (err) {
       console.warn("Error restoring range after input/styling:", err);
+      // Fallback: if range restoration fails, place caret at the end of the current line
       placeCaretAtEnd(currentLine);
     }
   }
@@ -398,7 +349,7 @@ editor.addEventListener('keydown', (e) => {
 
   if(e.key === 'Backspace') {
     if (currentLine && currentLine.tagName !== 'LI') {
-      if (currentLine.textContent === '' || currentLine.innerHTML === '​') {
+      if (currentLine.textContent === '' || currentLine.innerHTML === '<br>') {
         e.preventDefault();
         const newDiv = createNewLineElement();
         editor.replaceChild(newDiv, currentLine);
@@ -410,7 +361,6 @@ editor.addEventListener('keydown', (e) => {
     if (currentLine && currentLine.tagName === 'DIV' && currentLine.parentElement?.tagName === 'LI' && currentLine.textContent.trim() === '') {
       e.preventDefault();
       const liParent = currentLine.parentElement;
-      const ulParent = liParent.parentElement;
 
       liParent.removeChild(currentLine);
       if (!liParent.hasChildNodes()) {
@@ -425,17 +375,16 @@ editor.addEventListener('keydown', (e) => {
         const ul = currentLine.parentElement;
         if (!ul || (ul.tagName !== 'UL' && ul.tagName !== 'OL')) return;
 
-        const isOnlyLi = ul.children.length === 1;
         const isEmpty = currentLine.textContent.trim() === '';
 
         if (isEmpty) {
             e.preventDefault();
 
-            if (ul.parentNode.tagName === 'LI') { // Nested list
+            if (ul.parentNode.tagName === 'LI') {
                 const parentLi = ul.parentNode;
-                ul.remove(); // Remove the empty inner list
-                placeCaretAtEnd(parentLi); // Place caret at the end of the parent LI
-            } else { // Top-level list
+                ul.remove();
+                placeCaretAtEnd(parentLi);
+            } else {
                 const newDiv = createNewLineElement();
                 ul.remove();
                 editor.insertBefore(newDiv, ul.nextSibling || null);
@@ -471,7 +420,7 @@ editor.addEventListener('keydown', (e) => {
       }
     }
   }
-  
+
   if (e.key === 'Enter') {
     e.preventDefault();
     enterPressCount++;
@@ -485,7 +434,7 @@ editor.addEventListener('keydown', (e) => {
     if (currentLine.tagName === 'LI') {
       const parentList = currentLine.parentNode;
       const isCaretAtStartOfLi = range.startOffset === 0 && range.startContainer === currentLine.firstChild;
-      const isLiEmpty = currentLine.textContent.trim() === '' && !currentLine.querySelector('br'); // Check if it's truly empty
+      const isLiEmpty = currentLine.textContent.trim() === '' && !currentLine.querySelector('br');
 
       if (isLiEmpty) {
         if (enterPressCount >= 2 || (isCaretAtStartOfLi && !currentLine.previousElementSibling)) {
@@ -495,7 +444,6 @@ editor.addEventListener('keydown', (e) => {
             if (parentList.parentNode.tagName === 'LI') {
               const grandParentLi = parentList.parentNode;
               parentList.remove();
-              // Insert new div after grandparent li, or ensure it's not removed
               editor.insertBefore(newDiv, grandParentLi.nextSibling || null);
               placeCaretAtStart(newDiv);
             } else {
@@ -504,7 +452,6 @@ editor.addEventListener('keydown', (e) => {
               placeCaretAtStart(newDiv);
             }
           } else {
-            // If other LI remain, just delete this one and move to next/prev LI
             const next = currentLine.nextElementSibling;
             const prev = currentLine.previousElementSibling;
             if (next) placeCaretAtStart(next);
@@ -704,15 +651,6 @@ editor.addEventListener('click', (e) => {
     }
   }
 });
-
-function ensureLineIsDefaultDiv(lineEl) {
-    if (lineEl && lineEl.tagName !== 'DIV' && lineEl.textContent.trim() === '') {
-        const newDiv = createNewLineElement();
-        replaceLine(lineEl, newDiv, 'start');
-        return true;
-    }
-    return false;
-}
 
 if (editor.children.length === 0 || editor.textContent.trim() === '') {
   editor.appendChild(createNewLineElement());

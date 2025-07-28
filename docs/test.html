@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ContentEditable Arrow Navigation Demo</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    [contenteditable="true"] > * {
+      outline: none;
+      padding: 4px;
+      margin: 6px 0;
+      border: 1px solid transparent;
+    }
+    [contenteditable="true"] > *:focus {
+      border: 1px dashed #aaa;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Arrow Key Navigation Between Blocks</h2>
+
+<div id="editor" contenteditable="true">
+  <span style="display: flex; align-items: center; gap: 10px"><h1>Heading 1</h1><h1>Another paragraph block.</h1></span>
+  <h2>Heading 2</h2>
+  <p>This is a paragraph.</p>
+  <p>Another paragraph block.</p>
+</div>
+
+<script>
+  const editor = document.getElementById('editor');
+
+  editor.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+
+    const range = sel.getRangeAt(0);
+    const container = range.startContainer;
+    const offset = range.startOffset;
+
+    let currentBlock = container.nodeType === 1 ? container : container.parentNode;
+    while (currentBlock && currentBlock.parentNode !== editor) {
+      currentBlock = currentBlock.parentNode;
+    }
+
+    if (!currentBlock) return;
+
+    const moveCaret = (target, toStart = false) => {
+      const r = document.createRange();
+      const t = target.firstChild || target;
+      const length = t.textContent.length;
+      r.setStart(t, toStart ? 0 : length);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      e.preventDefault();
+    };
+
+    if (e.key === 'ArrowUp' && offset === 0) {
+      const prev = currentBlock.previousElementSibling;
+      if (prev) moveCaret(prev, false);
+    }
+
+    if (e.key === 'ArrowDown') {
+      const contentLen = container.textContent?.length || 0;
+      if (offset >= contentLen) {
+        const next = currentBlock.nextElementSibling;
+        if (next) moveCaret(next, true);
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
