@@ -1,20 +1,45 @@
+
+
 hljs.highlightAll();
 const editor = document.getElementById('editor');
 
 const inlineStyleMap = [
-    { regex: /\*\*(.*?)\*\*/, className: 'bold' },
-    { regex: /\*(.*?)\*/, className: 'italic' },
-    { regex: /_(.*?)_/, className: 'italic' },
-    { regex: /~~(.*?)~~/, className: 'strikethrough' },
-    { regex: /__(.*?)__/, className: 'underline' },
-    { regex: /==(.*?)==/, className: 'highlight' },
-    { regex: /`(.*?)`/, className: 'inline-code' },
-    {
-        regex: /\[(.*?)\]\((.*?)\)/,
-        className: 'link',
-        isLink: true
-    }
+  {
+    regex: /(^|\s)\*\*(?!\s)(.+?)(?<!\s)\*\*(?=\s|$)/, 
+    className: 'bold'
+  },
+  {
+    regex: /(^|\s)\*(?!\s)([^*]+?)(?<!\s)\*(?=\s|$)/,  
+    className: 'italic'
+  },
+  {
+    regex: /(^|\s)_(?!\s)([^_]+?)(?<!\s)_(?=\s|$)/,   
+    className: 'italic'
+  },
+  {
+    regex: /(^|\s)~~(?!\s)(.+?)(?<!\s)~~(?=\s|$)/,     
+    className: 'strikethrough'
+  },
+  {
+    regex: /(^|\s)__(?!\s)(.+?)(?<!\s)__(?=\s|$)/,      
+    className: 'underline'
+  },
+  {
+    regex: /(^|\s)==(?!\s)(.+?)(?<!\s)==(?=\s|$)/,      
+    className: 'highlight'
+  },
+  {
+    regex: /(^|\s)`(?!\s)(.+?)(?<!\s)`(?=\s|$)/,       
+    className: 'inline_code'
+  },
+  {
+    regex: /(^|\s)\[(.+?)\]\((.+?)\)(?=\s|$)/,          
+    className: 'link',
+    isLink: true
+  }
 ];
+
+
 function createHashID(timeStamp = new Date()) {
     const headingLevel = typeof timeStamp === 'number' ? timeStamp : 1;
     const safeLevel = Math.min(6, Math.max(1, headingLevel));
@@ -46,55 +71,56 @@ function createParagraph(hexID) {
 
 
 function formatBlockStyles(leafSpan, text) {
-  if (text.match(/^(#{1,6})\s/)) {
-    const headingMatch = text.match(/^(#{1,6})\s/);
-    if (!headingMatch) return;
+  const headingRegex = /^\u2060*(#{1,6})[\u00A0\s]/;
+  const headingMatch = text.match(headingRegex);
 
-    const hashes = headingMatch[1];
-    const headingLevel = hashes.length;
-    const parentP = leafSpan.closest('p[data-slate-node="element"]');
-    const currentSection = parentP.closest('section');
+  if (!headingMatch) return;
 
-    const cleanedText = leafSpan.textContent
-      .replace(/\u200B/g, '')
-      .replace(headingMatch[0], ''); // Remove full match including space
-    leafSpan.textContent = cleanedText; // Update the leaf span text
-    const hexId = createHashID();
-    const newSectionNode = createNewSection(headingLevel, hexId);
+  console.log("Heading detected");
+  const hashes = headingMatch[1];
+  const headingLevel = hashes.length;
 
-    let newHeadingLeaf = null;
-    let newHeadingSpan = null;
+  const parentP = leafSpan.closest('p[data-slate-node="element"]');
+  const currentSection = parentP?.closest('section');
+  if (!currentSection) return;
 
-    if (editor.children.length === 1 && editor.firstElementChild === currentSection) {
-      currentSection.outerHTML = newSectionNode;
-      const updatedSection = editor.querySelector(`#section_${hexId}`);
-      newHeadingSpan = updatedSection.querySelector(`h${headingLevel} > span`);
-    } else {
-      editor.insertAdjacentHTML('beforeend', newSectionNode);
-      const lastSection = editor.querySelector('section:last-of-type');
-      newHeadingSpan = lastSection.querySelector(`h${headingLevel} > span`);
-    }
+  // Remove invisible characters and heading markdown
+  const cleanedText = leafSpan.textContent
+    .replace(/\u2060/g, '')              // Remove WORD JOINER
+    .replace(headingRegex, '');          // Remove heading pattern
+  leafSpan.textContent = cleanedText;
 
-    if (newHeadingSpan) {
-      // Apply inline formatting to the new <h*> span
-      newHeadingSpan.innerHTML = ''; // Clear placeholder
-      newHeadingSpan.textContent = cleanedText;
-      formatInlineStyles(newHeadingSpan);
+  const hexId = createHashID();
+  const newSectionNode = createNewSection(headingLevel, hexId);
 
-      // Move cursor to the end
-      const newLeaf = newHeadingSpan.querySelector('span[data-slate-leaf="true"]');
-      if (newLeaf) {
-        const range = document.createRange();
-        range.selectNodeContents(newLeaf);
-        range.collapse(false);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
+  let newHeadingSpan = null;
+
+  if (editor.children.length === 1 && editor.firstElementChild === currentSection) {
+    currentSection.outerHTML = newSectionNode;
+    const updatedSection = editor.querySelector(`#section_${hexId}`);
+    newHeadingSpan = updatedSection.querySelector(`h${headingLevel} > span`);
+  } else {
+    editor.insertAdjacentHTML('beforeend', newSectionNode);
+    const lastSection = editor.querySelector('section:last-of-type');
+    newHeadingSpan = lastSection.querySelector(`h${headingLevel} > span`);
+  }
+
+  if (newHeadingSpan) {
+    newHeadingSpan.innerHTML = ''; // Clear placeholder
+    newHeadingSpan.textContent = cleanedText;
+    formatInlineStyles(newHeadingSpan);
+
+    const newLeaf = newHeadingSpan.querySelector('span[data-slate-leaf="true"]');
+    if (newLeaf) {
+      const range = document.createRange();
+      range.selectNodeContents(newLeaf);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
   }
 }
-
 
 
 
@@ -173,27 +199,107 @@ function makeSpacer() {
     return span;
 }
 
+function createSpanAndInsert(blockParent, text, className, isFirst = false) {
+    text = text.replace(/\u200B/g, '').trim(); // clean up input
+    const hexID = createHashID();
+
+    const leftSpacer = `
+        <span id="left_spacer_inline_${hexID}" data-slate-node="text">
+            <span data-slate-leaf="true">&nbsp; </span>
+        </span>`;
+
+    const rightSpacer = `
+        <span id="right_spacer_inline_${hexID}" data-slate-node="text">
+            <span data-slate-leaf="true">&nbsp; </span>
+        </span>`;
+
+    const styledSpan = `
+        <span id="inline_${hexID}" data-slate-node="text" ${className ? `class="${className}"` : ''}>
+            <span data-slate-leaf="true">${text}</span>
+        </span>`;
+
+    // Insert spans in the right order
+    if (isFirst) {
+        blockParent.insertAdjacentHTML('beforeend', leftSpacer);
+    }
+
+    blockParent.insertAdjacentHTML('beforeend', styledSpan);
+    blockParent.insertAdjacentHTML('beforeend', rightSpacer);
+
+    // Set caret inside right spacer
+    const newSpan = blockParent.querySelector(`#right_spacer_inline_${hexID}`);
+    if (newSpan) {
+        const range = document.createRange();
+        range.selectNodeContents(newSpan);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+}
 
 editor.addEventListener('input', (event) => {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const node = selection.anchorNode;
-    const element = node?.nodeType === 3 ? node.parentElement : node;
-    const advertElement = document.querySelector('[data-slate-advertisement]');
-    if (advertElement) {
-        advertElement.parentElement.setAttribute('contenteditable', 'true');
-        advertElement.remove();
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+
+  const node = selection.anchorNode;
+  const element = node?.nodeType === 3 ? node.parentElement : node;
+
+  const advertElement = document.querySelector('[data-slate-advertisement]');
+  if (advertElement) {
+    advertElement.parentElement.setAttribute('contenteditable', 'true');
+    advertElement.remove();
+  }
+
+  if (element?.dataset?.slateLeaf === "true") {
+    const rawText = element.textContent;
+    const cleanText = rawText.replace(/\u200B/g, '').replace(/\u00A0/g, ' ');
+    const blockParent = element.closest('p, h1, h2, h3, h4, h5, h6');
+    if (!blockParent) return;
+
+    if (blockParent.tagName === 'P') {
+        for (const { regex, className, isLink } of inlineStyleMap) {
+        const match = cleanText.match(regex);
+        if (match) {
+            event.preventDefault();
+
+            const fullMatch = match[0];
+            let matchedText = match[2].trim();
+            matchedText = matchedText.replace(/\u200B/g, '').replace(/\u00A0/g, ' ');
+            const matchStart = cleanText.indexOf(fullMatch);
+            const matchEnd = matchStart + fullMatch.length;
+
+            const beforeText = cleanText.slice(0, matchStart);
+            const afterText = cleanText.slice(matchEnd);
+
+            
+            element.textContent = ' '; 
+
+            
+            if (beforeText.trim()) createSpanAndInsert(blockParent, beforeText, null);
+            isFirstElement = element === blockParent.firstElementChild;
+            if(isFirstElement)
+            {
+                createSpanAndInsert(blockParent, matchedText, className, true);
+            }
+            else 
+            {
+                createSpanAndInsert(blockParent, matchedText, className);
+            }
+            
+            if (afterText.trim()) createSpanAndInsert(blockParent, afterText, null);
+
+            break; 
+        }
+        }
+
+
+      formatBlockStyles(element, cleanText);
+      console.log("in p tag");
     }
-    if (element?.dataset?.slateLeaf === "true") {
-        const cleanText = element.textContent.replace(/\u200B/g, '');
-        const blockParent = element.closest('p, h1, h2, h3, h4, h5, h6');
-        if (!blockParent) return;
-        if (blockParent.tagName === 'P') {
-            formatBlockStyles(element, cleanText);
-            console.log("in p tag")
-        }        
-    }
+  }
 });
+
 
 editor.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
