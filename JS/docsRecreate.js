@@ -79,18 +79,27 @@ function createCodeBlock(hexID) {
 function createHorizontalRule(hexID) {
     return `
     <div data-slate-node="element" data-slate-void="true" class="divider isSelected">
-                <hr data-slate-node="element" data-slate-void="true" class="isSelected">
+        <hr data-slate-node="element" data-slate-void="true" class="isSelected">
     </div>
     `;
 }
 
-
+function createBlockquote(hexID) {
+    return `
+        <blockquote>
+            <span id="blockquote_${hexID}" data-slate-node="text">
+                <span data-slate-leaf="true">&nbsp;</span>
+            </span>
+        </blockquote>
+    `;
+}
 
 
 function formatBlockStyles(leafSpan, text) {
   const headingRegex = /^\u2060*(#{1,6})[\u00A0\s]/;
   const codeBlockRegex = /^\u2060*```[\u00A0\s]?$/;
   const horizontalRuleRegex = /^\u2060*---[\u00A0\s]?$/;
+  const blockquoteRegex = /^\u2060*>[\u00A0\s]?/;
   const headingMatch = text.match(headingRegex);
 
   if (headingMatch) 
@@ -219,6 +228,36 @@ else if (horizontalRuleRegex.test(text)) {
             }
         });
     }
+}
+
+else if (blockquoteRegex.test(text)) {
+    console.log("Blockquote detected");
+
+    const parentP = leafSpan.closest('p[data-slate-node="element"]');
+    const currentSection = leafSpan.closest('section');
+    if (!parentP || !currentSection) return;
+
+    const hexId = createHashID();
+    const blockquoteHTML = createBlockquote(hexId);
+
+    // Insert blockquote
+    currentSection.insertAdjacentHTML('beforeend', blockquoteHTML);
+    parentP.remove();
+
+    requestAnimationFrame(() => {
+        const newBlockquote = currentSection.querySelector(`blockquote`);
+        if (newBlockquote) {
+            const newLeaf = newBlockquote.querySelector('span[data-slate-leaf="true"]');
+            if (newLeaf) {
+                const range = document.createRange();
+                range.selectNodeContents(newLeaf);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+    });
 }
 }
 
