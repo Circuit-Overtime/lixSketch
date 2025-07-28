@@ -257,7 +257,7 @@ editor.addEventListener('input', (event) => {
     const blockParent = element.closest('p, h1, h2, h3, h4, h5, h6');
     if (!blockParent) return;
 
-    if (blockParent.tagName === 'P') {
+    if ((blockParent.tagName === 'P') || blockParent.tagName === 'H1' || blockParent.tagName === 'H2' || blockParent.tagName === 'H3' || blockParent.tagName === 'H4' || blockParent.tagName === 'H5' || blockParent.tagName === 'H6') {
         for (const { regex, className, isLink } of inlineStyleMap) {
         const match = cleanText.match(regex);
         if (match) {

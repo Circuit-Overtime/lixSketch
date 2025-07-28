@@ -136,18 +136,37 @@
     outline: none;
     border: none;
 }
-.editor section > p > span[data-slate-node="text"].bold
+.editor section > p > span[data-slate-node="text"].bold,
+.editor section > h1 > span[data-slate-node="text"].bold,
+.editor section > h2 > span[data-slate-node="text"].bold,
+.editor section > h3 > span[data-slate-node="text"].bold,
+.editor section > h4 > span[data-slate-node="text"].bold,
+.editor section > h5 > span[data-slate-node="text"].bold,
+.editor section > h6 > span[data-slate-node="text"].bold
 {
     font-family: "lixDocs";
     font-weight: bold;
 }
-.editor section > p > span[data-slate-node="text"].italic
+.editor section > p > span[data-slate-node="text"].italic,
+.editor section > h1 > span[data-slate-node="text"].italic,
+.editor section > h2 > span[data-slate-node="text"].italic,
+.editor section > h3 > span[data-slate-node="text"].italic,
+.editor section > h4 > span[data-slate-node="text"].italic,
+.editor section > h5 > span[data-slate-node="text"].italic,
+.editor section > h6 > span[data-slate-node="text"].italic
 {
     font-family: "lixDocs";
     font-style: italic;
 }
-.editor section > p > span[data-slate-node="text"].inline_code
+.editor section > p > span[data-slate-node="text"].inline_code,
+.editor section > h1 > span[data-slate-node="text"].inline_code,
+.editor section > h2 > span[data-slate-node="text"].inline_code,
+.editor section > h3 > span[data-slate-node="text"].inline_code,
+.editor section > h4 > span[data-slate-node="text"].inline_code,
+.editor section > h5 > span[data-slate-node="text"].inline_code,
+.editor section > h6 > span[data-slate-node="text"].inline_code
 {
+    font-family: "lixCode";
     background-color: #242424;
     border: 1px solid #666;
     color: #ffffff;
@@ -156,7 +175,15 @@
     display: inline;
     height: 30px;
 }
-.editor section > p > span[data-slate-node="text"].highlight
+
+.editor section > p > span[data-slate-node="text"].highlight,
+.editor section > h1 > span[data-slate-node="text"].highlight,
+.editor section > h2 > span[data-slate-node="text"].highlight,
+.editor section > h3 > span[data-slate-node="text"].highlight,
+.editor section > h4 > span[data-slate-node="text"].highlight,
+.editor section > h5 > span[data-slate-node="text"].highlight,
+.editor section > h6 > span[data-slate-node="text"].highlight
+
 {
     background-color: rgba(63, 214, 3, 0.089);
     color: #fff;
@@ -165,18 +192,39 @@
     display: inline;
     height: 30px;
     border: 1px solid #ffc;
+    margin-right: 20px;
+    margin-left: 20px;
     box-shadow: 0 0 15px rgba(63, 214, 3, 0.089);
 }
 
-.editor section > p > span[data-slate-node="text"].underline
+.editor section > p > span[data-slate-node="text"].underline,
+.editor section > h1 > span[data-slate-node="text"].underline,
+.editor section > h2 > span[data-slate-node="text"].underline,
+.editor section > h3 > span[data-slate-node="text"].underline,
+.editor section > h4 > span[data-slate-node="text"].underline,
+.editor section > h5 > span[data-slate-node="text"].underline,
+.editor section > h6 > span[data-slate-node="text"].underline
 {
     text-decoration: underline;
 }
-.editor section > p > span[data-slate-node="text"].strikethrough
+.editor section > p > span[data-slate-node="text"].strikethrough,
+.editor section > h1 > span[data-slate-node="text"].strikethrough,
+.editor section > h2 > span[data-slate-node="text"].strikethrough,
+.editor section > h3 > span[data-slate-node="text"].strikethrough,
+.editor section > h4 > span[data-slate-node="text"].strikethrough,
+.editor section > h5 > span[data-slate-node="text"].strikethrough,
+.editor section > h6 > span[data-slate-node="text"].strikethrough
 {
+    font-family: "lixDocs";
     text-decoration: line-through;
 }
-.editor section > p > span[data-slate-node="text"].link
+.editor section > p > span[data-slate-node="text"].link,
+.editor section > h1 > span[data-slate-node="text"].link,
+.editor section > h2 > span[data-slate-node="text"].link,
+.editor section > h3 > span[data-slate-node="text"].link,
+.editor section > h4 > span[data-slate-node="text"].link,
+.editor section > h5 > span[data-slate-node="text"].link,
+.editor section > h6 > span[data-slate-node="text"].link
 {
     color: rgb(52, 156, 241);
     cursor: pointer;
