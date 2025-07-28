@@ -76,12 +76,21 @@ function createCodeBlock(hexID) {
   `;
 }
 
+function createHorizontalRule(hexID) {
+    return `
+    <div data-slate-node="element" data-slate-void="true" class="divider isSelected">
+                <hr data-slate-node="element" data-slate-void="true" class="isSelected">
+    </div>
+    `;
+}
+
 
 
 
 function formatBlockStyles(leafSpan, text) {
   const headingRegex = /^\u2060*(#{1,6})[\u00A0\s]/;
   const codeBlockRegex = /^\u2060*```[\u00A0\s]?$/;
+  const horizontalRuleRegex = /^\u2060*---[\u00A0\s]?$/;
   const headingMatch = text.match(headingRegex);
 
   if (headingMatch) 
@@ -96,8 +105,8 @@ function formatBlockStyles(leafSpan, text) {
 
   // Remove invisible characters and heading markdown
   const cleanedText = leafSpan.textContent
-    .replace(/\u2060/g, '')              // Remove WORD JOINER
-    .replace(headingRegex, '');          // Remove heading pattern
+    .replace(/\u2060/g, '')              
+    .replace(headingRegex, '');          
   leafSpan.textContent = cleanedText;
 
   const hexId = createHashID();
@@ -171,8 +180,46 @@ function formatBlockStyles(leafSpan, text) {
 
 }
 
+else if (horizontalRuleRegex.test(text)) {
+    console.log("Horizontal rule detected");
 
-  
+    const parentP = leafSpan.closest('p[data-slate-node="element"]');
+    const currentSection = leafSpan.closest('section');
+    if (!parentP || !currentSection) return;
+
+    const hexId = createHashID();
+    const hrHTML = createHorizontalRule(hexId);
+
+    // Insert HR
+    currentSection.insertAdjacentHTML('beforeend', hrHTML);
+    parentP.remove();
+
+    // Create new paragraph after HR
+    const newParaId = createHashID();
+    const newParagraph = createParagraph(newParaId);
+    const temp = document.createElement('div');
+    temp.innerHTML = newParagraph;
+    const newP = temp.firstElementChild;
+
+    // Insert after HR
+    const newHr = currentSection.querySelector(`hr[data-slate-node="element"]`);
+    if (newHr) {
+        newHr.parentElement.insertAdjacentElement('afterend', newP);
+
+        // Set caret inside the new paragraph
+        requestAnimationFrame(() => {
+            const newLeaf = newP.querySelector('span[data-slate-leaf="true"]');
+            if (newLeaf) {
+                const range = document.createRange();
+                range.selectNodeContents(newLeaf);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        });
+    }
+}
 }
 
 
